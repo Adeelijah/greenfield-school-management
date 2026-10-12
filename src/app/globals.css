@@ -72,3 +72,19 @@
 @media(max-width:800px){.topbar{padding-left:69px}.academic-context{gap:10px}.context-field select{font-size:11px}.profile-trigger{gap:6px}}
 @media(max-width:580px){.topbar{padding:0 12px 0 62px;gap:6px}.academic-context{gap:7px;flex:1;min-width:0}.context-field>span{font-size:9px}.context-field select{font-size:10px;max-width:100%;padding-right:0}.context-divider{height:23px}.profile-trigger{padding:4px}.profile-avatar{width:33px;height:33px}.profile-copy,.profile-chevron{display:none}}
 @media(max-width:350px){.topbar{padding-left:58px}.academic-context{gap:4px}.context-field select{font-size:9px}.profile-avatar{width:29px;height:29px}}
+
+
+/* Greenfield branded academic dropdowns — approved compact control language */
+.context-field{position:relative;display:flex;flex-direction:column;gap:4px;min-width:0}
+.context-label{font-size:10px;font-weight:700;letter-spacing:.025em;color:#8b9b90}
+.context-select-trigger{display:inline-flex;align-items:center;justify-content:space-between;gap:9px;height:32px;min-height:32px;max-height:32px;width:100%;padding:0 10px;border:1px solid #dfe9e2;border-radius:9px;background:#fff;color:#244c37;font-size:12px;font-weight:700;white-space:nowrap;box-shadow:0 1px 2px rgba(18,54,34,.025);transition:border-color .15s,background .15s}
+.context-select-trigger:hover{background:#f6faf7;border-color:#bfd6c5}
+.context-select-trigger:focus-visible{outline:2px solid #08734d;outline-offset:2px}
+.context-select-trigger svg{color:#668576;flex:none;transition:transform .15s}
+.context-select-trigger svg.chevron-open{transform:rotate(180deg)}
+.context-options{position:absolute;top:calc(100% + 7px);left:0;z-index:45;min-width:max(100%,145px);max-height:220px;overflow-y:auto;padding:5px;background:#fff;border:1px solid #e2eae5;border-radius:10px;box-shadow:0 14px 35px rgba(17,48,29,.13)}
+.context-option{width:100%;display:flex;align-items:center;justify-content:space-between;gap:12px;text-align:left;padding:10px 11px;border:0;border-radius:7px;background:transparent;color:#3e5949;font-size:12px;white-space:nowrap}
+.context-option:hover,.context-option:focus-visible{background:#eef7f0;outline:none}
+.context-option.selected{background:#e9f5ec;color:#08734d;font-weight:750}
+.context-option svg{flex:none}
+@media(max-width:580px){.context-select-trigger{height:31px;min-height:31px;max-height:31px;padding:0 7px;gap:5px;font-size:10px}.context-select-trigger svg{width:12px}.context-options{min-width:max(100%,120px)}.context-option{font-size:11px;padding:10px 8px}}
