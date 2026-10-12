@@ -1,7 +1,8 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { Check, ChevronDown, Settings, UserRound } from 'lucide-react';
+import { Check, ChevronDown, LogOut, Settings, UserRound } from 'lucide-react';
+import { signOut } from '@/app/login/actions';
 
 type ContextDropdownProps={label:string;value:string;options:readonly string[];onChange:(value:string)=>void};
 function ContextDropdown({label,value,options,onChange}:ContextDropdownProps){
@@ -28,7 +29,7 @@ export function WorkspaceHeader(){
    <ContextDropdown label="Term" value={term} options={['First Term','Second Term','Third Term']} onChange={setTerm}/>
   </div>
   <div className="profile-control" ref={profileRef}><button type="button" className="profile-trigger" aria-expanded={profileOpen} aria-haspopup="menu" onClick={()=>setProfileOpen(v=>!v)}><span className="profile-avatar"><UserRound size={18}/></span><span className="profile-copy"><strong>School Administrator</strong><small>Administrator</small></span><ChevronDown size={15} className="profile-chevron"/></button>
-   {profileOpen&&<div className="profile-dropdown" role="menu"><div className="profile-dropdown-heading">Demo administrator account</div><Link role="menuitem" href="/modules/school-settings" onClick={()=>setProfileOpen(false)}><Settings size={16}/>School Settings</Link><p>Account management and sign-out will be available when authentication is implemented.</p></div>}
+   {profileOpen&&<div className="profile-dropdown" role="menu"><div className="profile-dropdown-heading">Demo administrator account</div><Link role="menuitem" href="/modules/school-settings" onClick={()=>setProfileOpen(false)}><Settings size={16}/>School Settings</Link><form action={signOut}><button type="submit" className="profile-signout"><LogOut size={16}/> Sign out</button></form><p>Staff roles and school memberships are not yet enforced. Demo content only.</p></div>}
   </div>
  </header>;
 }
