@@ -6,6 +6,7 @@ import { Menu, X } from 'lucide-react';
 import { BookOpen, CalendarDays, ChartColumn, ClipboardCheck, FileText, GraduationCap, LayoutDashboard, Receipt, Settings, ShieldCheck, Users, Wallet } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { moduleGroups, slugFor } from '@/lib/modules';
+import { WorkspaceHeader } from '@/components/workspace-header';
 
 const icons: Record<string, LucideIcon> = {
   Dashboard: LayoutDashboard, Students: Users, Admissions: FileText, Guardians: Users, Staff: Users,
@@ -24,6 +25,6 @@ export function AppShell({children}:{children:React.ReactNode}){
     <nav>{moduleGroups.map(g=><div key={g.title}><div className="nav-label">{g.title}</div>
       {g.items.map(name=>{const href=name==='Dashboard'?'/':'/modules/'+slugFor(name);const Icon=icons[name]||FileText;return <Link key={name} href={href} aria-current={pathname===href?'page':undefined} aria-label={name} title={name} className={'nav-item '+(pathname===href?'active':'')}><Icon size={18}/><span>{name}</span></Link>})}
     </div>)}</nav></aside>
-    <div className="workspace"><header className="topbar"><span className="session-label">2026/2027 Academic Session · First Term</span><strong className="administrator-label">School Administrator</strong></header><main className="content">{children}</main></div>
+    <div className="workspace"><WorkspaceHeader/><main className="content">{children}</main></div>
   </div>;
 }
