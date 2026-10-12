@@ -47,3 +47,28 @@
  .topbar .administrator-label{display:none}
 }
 @media(prefers-reduced-motion:reduce){.sidebar{transition:none}}
+
+
+/* Academic context and profile header */
+.topbar{gap:18px}
+.academic-context{display:flex;align-items:center;gap:15px;min-width:0}
+.context-field{display:flex;flex-direction:column;gap:4px;min-width:0}
+.context-field>span{font-size:10px;font-weight:700;letter-spacing:.025em;color:#8b9b90}
+.context-field select{appearance:auto;max-width:100%;background:transparent;border:0;color:#244c37;font-size:12px;font-weight:700;padding:2px 7px 2px 0;cursor:pointer;outline-offset:3px}
+.context-divider{width:1px;height:26px;background:var(--border);flex:none}
+.profile-control{position:relative;flex:none}
+.profile-trigger{display:flex;align-items:center;gap:10px;border:1px solid transparent;background:transparent;border-radius:11px;padding:5px 8px;color:var(--ink);text-align:left}
+.profile-trigger:hover,.profile-trigger[aria-expanded=true]{background:#f2f8f4;border-color:var(--border)}
+.profile-avatar{width:36px;height:36px;display:grid;place-items:center;border-radius:10px;background:#e8f5eb;color:var(--forest);flex:none}
+.profile-copy{display:flex;flex-direction:column;gap:3px}
+.profile-copy strong{font-size:12px;white-space:nowrap}
+.profile-copy small{font-size:10px;color:var(--muted)}
+.profile-chevron{color:#64786b}
+.profile-dropdown{position:absolute;z-index:40;right:0;top:calc(100% + 8px);width:265px;max-width:calc(100vw - 24px);background:#fff;border:1px solid var(--border);border-radius:12px;padding:8px;box-shadow:0 16px 38px rgba(15,42,24,.15)}
+.profile-dropdown-heading{font-size:11px;font-weight:800;padding:10px;color:#415d4b}
+.profile-dropdown a{display:flex;align-items:center;gap:9px;padding:10px;border-radius:8px;font-size:12px;color:var(--forest)}
+.profile-dropdown a:hover{background:#edf7f0}
+.profile-dropdown p{font-size:10px;color:var(--muted);line-height:1.6;padding:0 10px 6px;margin:4px 0}
+@media(max-width:800px){.topbar{padding-left:69px}.academic-context{gap:10px}.context-field select{font-size:11px}.profile-trigger{gap:6px}}
+@media(max-width:580px){.topbar{padding:0 12px 0 62px;gap:6px}.academic-context{gap:7px;flex:1;min-width:0}.context-field>span{font-size:9px}.context-field select{font-size:10px;max-width:100%;padding-right:0}.context-divider{height:23px}.profile-trigger{padding:4px}.profile-avatar{width:33px;height:33px}.profile-copy,.profile-chevron{display:none}}
+@media(max-width:350px){.topbar{padding-left:58px}.academic-context{gap:4px}.context-field select{font-size:9px}.profile-avatar{width:29px;height:29px}}
