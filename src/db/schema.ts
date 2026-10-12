@@ -1,4 +1,5 @@
-import { boolean, date, index, pgEnum, pgTable, text, timestamp, uniqueIndex, uuid, varchar } from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
+import { boolean, check, date, foreignKey, index, pgEnum, pgTable, text, timestamp, uniqueIndex, uuid, varchar } from 'drizzle-orm/pg-core';
 
 export const schoolRole = pgEnum('school_role', ['admin', 'teacher', 'bursar']);
 export const membershipStatus = pgEnum('membership_status', ['active', 'suspended']);
@@ -39,7 +40,7 @@ export const academicSessions = pgTable('academic_sessions',{
  startsOn: date('starts_on').notNull(),
  endsOn: date('ends_on').notNull(),
  isCurrent: boolean('is_current').default(false).notNull()
-},t=>[uniqueIndex('sessions_school_label_unique').on(t.schoolId,t.label)]);
+},t=>[uniqueIndex('sessions_school_label_unique').on(t.schoolId,t.label),uniqueIndex('sessions_school_id_id_unique').on(t.schoolId,t.id),uniqueIndex('sessions_one_current_per_school').on(t.schoolId).where(sql`${t.isCurrent} = true`),check('sessions_dates_valid',sql`${t.endsOn} >= ${t.startsOn}`)]);
 
 export const terms = pgTable('terms',{
  id: uuid('id').defaultRandom().primaryKey(),
@@ -49,7 +50,7 @@ export const terms = pgTable('terms',{
  startsOn: date('starts_on').notNull(),
  endsOn: date('ends_on').notNull(),
  isCurrent: boolean('is_current').default(false).notNull()
-},t=>[uniqueIndex('terms_session_name_unique').on(t.sessionId,t.name)]);
+},t=>[uniqueIndex('terms_session_name_unique').on(t.sessionId,t.name),foreignKey({columns:[t.schoolId,t.sessionId],foreignColumns:[academicSessions.schoolId,academicSessions.id],name:'terms_school_session_fk'}).onDelete('cascade'),uniqueIndex('terms_one_current_per_school').on(t.schoolId).where(sql`${t.isCurrent} = true`),check('terms_dates_valid',sql`${t.endsOn} >= ${t.startsOn}`)]);
 
 export const classes = pgTable('classes',{
  id: uuid('id').defaultRandom().primaryKey(),
@@ -57,7 +58,7 @@ export const classes = pgTable('classes',{
  name: varchar('name',{length:80}).notNull(),
  section: varchar('section',{length:40}).notNull(),
  createdAt: timestamp('created_at',{withTimezone:true}).defaultNow().notNull()
-},t=>[uniqueIndex('classes_school_name_unique').on(t.schoolId,t.name)]);
+},t=>[uniqueIndex('classes_school_name_unique').on(t.schoolId,t.name),uniqueIndex('classes_school_id_id_unique').on(t.schoolId,t.id)]);
 
 export const students = pgTable('students',{
  id: uuid('id').defaultRandom().primaryKey(),
@@ -68,7 +69,7 @@ export const students = pgTable('students',{
  dateOfBirth: date('date_of_birth'),
  status: enrollmentStatus('status').default('active').notNull(),
  createdAt: timestamp('created_at',{withTimezone:true}).defaultNow().notNull()
-},t=>[uniqueIndex('students_school_admission_unique').on(t.schoolId,t.admissionNumber),index('students_school_name_idx').on(t.schoolId,t.lastName)]);
+},t=>[uniqueIndex('students_school_admission_unique').on(t.schoolId,t.admissionNumber),uniqueIndex('students_school_id_id_unique').on(t.schoolId,t.id),index('students_school_name_idx').on(t.schoolId,t.lastName)]);
 
 export const guardians = pgTable('guardians',{
  id: uuid('id').defaultRandom().primaryKey(),
@@ -76,32 +77,33 @@ export const guardians = pgTable('guardians',{
  fullName: varchar('full_name',{length:180}).notNull(),
  phone: varchar('phone',{length:32}),
  email: varchar('email',{length:254})
-},t=>[index('guardians_school_idx').on(t.schoolId)]);
+},t=>[index('guardians_school_idx').on(t.schoolId),uniqueIndex('guardians_school_id_id_unique').on(t.schoolId,t.id)]);
 
 export const studentGuardians = pgTable('student_guardians',{
- studentId: uuid('student_id').notNull().references(()=>students.id,{onDelete:'cascade'}),
- guardianId: uuid('guardian_id').notNull().references(()=>guardians.id,{onDelete:'cascade'}),
+ schoolId: uuid('school_id').notNull().references(()=>schools.id,{onDelete:'cascade'}),
+ studentId: uuid('student_id').notNull(),
+ guardianId: uuid('guardian_id').notNull(),
  relationship: varchar('relationship',{length:50}).notNull(),
  isPrimary: boolean('is_primary').default(false).notNull()
-},t=>[uniqueIndex('student_guardian_unique').on(t.studentId,t.guardianId)]);
+},t=>[uniqueIndex('student_guardian_unique').on(t.studentId,t.guardianId),foreignKey({columns:[t.schoolId,t.studentId],foreignColumns:[students.schoolId,students.id],name:'student_guardians_school_student_fk'}).onDelete('cascade'),foreignKey({columns:[t.schoolId,t.guardianId],foreignColumns:[guardians.schoolId,guardians.id],name:'student_guardians_school_guardian_fk'}).onDelete('cascade')]);
 
 export const enrollments = pgTable('enrollments',{
  id: uuid('id').defaultRandom().primaryKey(),
  schoolId: uuid('school_id').notNull().references(()=>schools.id,{onDelete:'cascade'}),
- studentId: uuid('student_id').notNull().references(()=>students.id,{onDelete:'cascade'}),
- classId: uuid('class_id').notNull().references(()=>classes.id,{onDelete:'restrict'}),
- sessionId: uuid('session_id').notNull().references(()=>academicSessions.id,{onDelete:'restrict'}),
+ studentId: uuid('student_id').notNull(),
+ classId: uuid('class_id').notNull(),
+ sessionId: uuid('session_id').notNull(),
  status: enrollmentStatus('status').default('active').notNull()
-},t=>[uniqueIndex('enrollments_student_session_unique').on(t.studentId,t.sessionId),index('enrollments_class_session_idx').on(t.classId,t.sessionId)]);
+},t=>[uniqueIndex('enrollments_student_session_unique').on(t.studentId,t.sessionId),index('enrollments_class_session_idx').on(t.classId,t.sessionId),foreignKey({columns:[t.schoolId,t.studentId],foreignColumns:[students.schoolId,students.id],name:'enrollments_school_student_fk'}).onDelete('cascade'),foreignKey({columns:[t.schoolId,t.classId],foreignColumns:[classes.schoolId,classes.id],name:'enrollments_school_class_fk'}).onDelete('restrict'),foreignKey({columns:[t.schoolId,t.sessionId],foreignColumns:[academicSessions.schoolId,academicSessions.id],name:'enrollments_school_session_fk'}).onDelete('restrict')]);
 
 export const admissions = pgTable('admissions',{
  id: uuid('id').defaultRandom().primaryKey(),
  schoolId: uuid('school_id').notNull().references(()=>schools.id,{onDelete:'cascade'}),
  applicantName: varchar('applicant_name',{length:180}).notNull(),
- requestedClassId: uuid('requested_class_id').references(()=>classes.id,{onDelete:'set null'}),
+ requestedClassId: uuid('requested_class_id'),
  status: admissionStatus('status').default('draft').notNull(),
  submittedAt: timestamp('submitted_at',{withTimezone:true})
-},t=>[index('admissions_school_status_idx').on(t.schoolId,t.status)]);
+},t=>[index('admissions_school_status_idx').on(t.schoolId,t.status),foreignKey({columns:[t.schoolId,t.requestedClassId],foreignColumns:[classes.schoolId,classes.id],name:'admissions_school_class_fk'})]);
 
 export const auditEvents = pgTable('audit_events',{
  id: uuid('id').defaultRandom().primaryKey(),
