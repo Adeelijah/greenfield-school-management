@@ -88,3 +88,24 @@
 .context-option.selected{background:#e9f5ec;color:#08734d;font-weight:750}
 .context-option svg{flex:none}
 @media(max-width:580px){.context-select-trigger{height:31px;min-height:31px;max-height:31px;padding:0 7px;gap:5px;font-size:10px}.context-select-trigger svg{width:12px}.context-options{min-width:max(100%,120px)}.context-option{font-size:11px;padding:10px 8px}}
+
+
+/* Staff authentication */
+.auth-screen{min-height:100svh;display:grid;place-items:center;padding:28px 16px;background:radial-gradient(circle at 12% 10%,#e5f3e9,transparent 42%),linear-gradient(135deg,#f8faf8,#edf5ef)}
+.auth-card{width:min(100%,440px);background:#fff;border:1px solid #e2ebe5;border-radius:20px;padding:40px;box-shadow:0 24px 65px rgba(15,55,34,.09)}
+.auth-mark{height:52px;width:52px;display:grid;place-items:center;background:#e6f2e8;color:var(--forest);border-radius:15px;margin-bottom:25px}
+.auth-eyebrow{font-size:10px;letter-spacing:.16em;font-weight:800;color:var(--forest);margin:0 0 10px}
+.auth-card h1{font-size:31px;letter-spacing:-.045em;margin:0 0 10px}
+.auth-intro{font-size:13px;line-height:1.7;color:#6e8275;margin:0 0 28px}
+.auth-form{display:flex;flex-direction:column;gap:10px}
+.auth-form label{font-size:12px;font-weight:700;color:#2d4c3c}
+.auth-input-wrap{display:flex;align-items:center;gap:11px;border:1px solid #dbe6df;border-radius:10px;padding:0 13px;margin-bottom:9px;color:#82978a}
+.auth-input-wrap:focus-within{border-color:var(--forest);box-shadow:0 0 0 3px #e5f3e9}
+.auth-input-wrap input{border:0;outline:0;width:100%;min-width:0;height:46px;background:transparent;color:var(--ink);font-size:13px}
+.auth-submit{border:0;border-radius:10px;background:var(--forest);color:white;font-size:13px;font-weight:800;padding:15px;margin-top:7px}
+.auth-submit:hover{background:var(--forest-dark)}
+.auth-error{padding:12px;border-radius:9px;background:#fff1f1;color:#9b3030;font-size:12px}
+.auth-footnote{font-size:11px;line-height:1.7;color:#829387;text-align:center;margin:25px 0 0}
+.profile-dropdown .profile-signout{display:flex;align-items:center;gap:9px;width:100%;padding:10px;border:0;border-radius:8px;background:transparent;text-align:left;font-size:12px;color:#9b3030}
+.profile-dropdown .profile-signout:hover{background:#fff1f1}
+@media(max-width:480px){.auth-card{padding:29px 23px;border-radius:16px}.auth-card h1{font-size:27px}}
