@@ -1,5 +1,4 @@
-import { relations } from 'drizzle-orm';
-import { boolean, date, index, integer, pgEnum, pgTable, text, timestamp, uniqueIndex, uuid, varchar } from 'drizzle-orm/pg-core';
+import { boolean, date, index, pgEnum, pgTable, text, timestamp, uniqueIndex, uuid, varchar } from 'drizzle-orm/pg-core';
 
 export const schoolRole = pgEnum('school_role', ['admin', 'teacher', 'bursar']);
 export const membershipStatus = pgEnum('membership_status', ['active', 'suspended']);
@@ -116,4 +115,3 @@ export const auditEvents = pgTable('audit_events',{
 
 // Relations are intentionally deferred until access-control and cross-school
 // foreign-key integrity rules are finalized. Do not expose tables through APIs yet.
-void relations;
