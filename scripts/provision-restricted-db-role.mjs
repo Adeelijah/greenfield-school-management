@@ -39,7 +39,14 @@ export async function provisionRole(sql, password) {
   const state = await inspectProvisioningState(sql);
   if (state.exists) throw new Error('Role already exists; refusing to alter an existing role');
   if (!password || password.length < 24) throw new Error('Password is missing or too short');
-  await sql`CREATE ROLE greenfield_app LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS PASSWORD ${password}`;
+  // PostgreSQL role DDL cannot bind PASSWORD as $1. Ask PostgreSQL to
+  // quote the password using format('%L', ...), then execute the fixed DDL.
+  // Never log the generated DDL: it contains the credential.
+  const [statement] = await sql`SELECT format('CREATE ROLE greenfield_app LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS PASSWORD %L', ${password}) AS ddl`;
+  if (!statement?.ddl?.startsWith('CREATE ROLE greenfield_app LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS PASSWORD ')) {
+    throw new Error('Could not safely prepare role creation statement');
+  }
+  await sql.unsafe(statement.ddl);
   const verified = await inspectProvisioningState(sql);
   if (!verified.exists || !verified.roleDetails.rolcanlogin || verified.roleDetails.rolsuper ||
       verified.roleDetails.rolbypassrls || verified.roleDetails.rolcreatedb || verified.roleDetails.rolcreaterole ||
