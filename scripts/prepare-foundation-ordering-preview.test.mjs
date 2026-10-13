@@ -25,3 +25,11 @@ test('unique indexes precede all composite foreign keys', () => {
 test('refuses unexpected SQL additions rather than silently discarding them', () => {
   assert.throws(() => buildOrderedFoundation(source + '\nDROP TABLE schools;'), /Unexpected foundation statement inventory/);
 });
+
+test('rejects SQL hidden after an existing statement without a breakpoint', () => {
+  assert.throws(() => buildOrderedFoundation(source + '\nGRANT ALL ON ALL TABLES IN SCHEMA public TO PUBLIC;'), /Unexpected foundation statement inventory/);
+});
+
+test('rejects a statement missing its terminator', () => {
+  assert.throws(() => buildOrderedFoundation(source.replace(/;\s*$/, '')), /Unexpected foundation statement inventory/);
+});
