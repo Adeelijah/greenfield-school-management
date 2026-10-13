@@ -1,33 +1,61 @@
 import 'server-only';
-import { eq, and } from 'drizzle-orm';
-import { getDatabase } from '@/db/client';
-import { memberships, schoolUsers, schools } from '@/db/schema';
-import { getVerifiedAuthUser } from '@/server/auth/identity';
+import { createSupabaseServerClient } from '@/lib/supabase/server';
 
 export type SchoolRole = 'admin' | 'teacher' | 'bursar';
 export type SchoolAccess = { authUserId: string; schoolId: string; schoolName: string; role: SchoolRole };
 
+/**
+ * Resolve school membership through the signed-in user's Supabase JWT.
+ * Never use the privileged direct PostgreSQL connection for authorization.
+ *
+ * The SQL RLS review requires:
+ * - school_users: auth_user_id = auth.uid()
+ * - memberships: self-only through school_users
+ * - schools: active members only
+ *
+ * Fail closed on missing schema, missing policies, errors, or multiple schools.
+ */
 export async function getSchoolAccess(): Promise<SchoolAccess | null> {
-  const authUser = await getVerifiedAuthUser();
-  if (!authUser) return null;
-  // No implicit school creation, role assignment, or fallback authorization.
-  // Until migrations are applied, this deliberately returns no access.
   try {
-    const db = getDatabase();
-    const rows = await db.select({
-      schoolId: schools.id,
-      schoolName: schools.name,
-      role: memberships.role,
-    }).from(memberships)
-      .innerJoin(schoolUsers, eq(memberships.userId, schoolUsers.id))
-      .innerJoin(schools, eq(memberships.schoolId, schools.id))
-      .where(and(eq(schoolUsers.authUserId, authUser.id), eq(memberships.status, 'active')))
+    const supabase = await createSupabaseServerClient();
+    const { data: auth, error: authError } = await supabase.auth.getUser();
+    if (authError || !auth.user) return null;
+
+    const { data: schoolUser, error: userError } = await supabase
+      .from('school_users')
+      .select('id')
+      .eq('auth_user_id', auth.user.id)
+      .maybeSingle();
+
+    if (userError || !schoolUser) return null;
+
+    const { data: memberships, error: membershipError } = await supabase
+      .from('memberships')
+      .select('school_id, role')
+      .eq('user_id', schoolUser.id)
+      .eq('status', 'active')
       .limit(2);
-    // A user with multiple schools needs explicit selection; never pick a tenant arbitrarily.
-    if (rows.length !== 1) return null;
-    return { authUserId: authUser.id, ...rows[0] };
+
+    if (membershipError || !memberships || memberships.length !== 1) return null;
+
+    const membership = memberships[0];
+    if (!['admin', 'teacher', 'bursar'].includes(membership.role)) return null;
+
+    const { data: school, error: schoolError } = await supabase
+      .from('schools')
+      .select('id, name')
+      .eq('id', membership.school_id)
+      .maybeSingle();
+
+    if (schoolError || !school || school.id !== membership.school_id) return null;
+
+    return {
+      authUserId: auth.user.id,
+      schoolId: school.id,
+      schoolName: school.name,
+      role: membership.role as SchoolRole,
+    };
   } catch (error) {
-    // Fail closed. Never grant access if the schema or DB is unavailable.
     console.error('School authorization lookup failed', error instanceof Error ? error.name : 'unknown');
     return null;
   }
