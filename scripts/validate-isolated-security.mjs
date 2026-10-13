@@ -22,7 +22,7 @@ const uuids = {
 export function securityStatements(source) {
   const sql = source.split('\n').filter(line => !/^\s*--/.test(line)).join('\n');
   const statements = sql.split(';').map(s => s.trim()).filter(Boolean);
-  if (statements.length !== 43) throw new Error('Unexpected security review SQL statement count');
+  if (statements.length !== 35) throw new Error('Unexpected security review SQL statement count');
   if (statements.some(s => !/^(REVOKE|ALTER TABLE|CREATE POLICY|GRANT)/.test(s))) {
     throw new Error('Unexpected security SQL command');
   }
