@@ -16,7 +16,7 @@ export function buildOrderedFoundation(source) {
   const types = statements.filter(s => /^CREATE TYPE\b/.test(s));
   const indexes = statements.filter(s => /^CREATE (?:UNIQUE )?INDEX\b/.test(s));
   const foreignKeys = statements.filter(s => /^ALTER TABLE\b.*\bADD CONSTRAINT\b.*\bFOREIGN KEY\b/s.test(s));
-  if (types.length !== 4 || tables.length !== 12 || indexes.length !== 18 || foreignKeys.length !== 21 ||
+  if (types.length !== 4 || tables.length !== 12 || indexes.length !== 19 || foreignKeys.length !== 20 ||
       types.length + tables.length + indexes.length + foreignKeys.length !== statements.length) {
     throw new Error('Unexpected foundation statement inventory; refusing to produce reordered SQL');
   }
