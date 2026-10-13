@@ -62,3 +62,11 @@ test('diagnostics expose only safe categories and codes', () => {
     category: 'UNCLASSIFIED_CONNECTION_ERROR', code: 'UNAVAILABLE',
   });
 });
+
+test('classifies pooler XX000 errors without leaking server text', () => {
+  const message = 'Tenant or user not found: greenfield_app.private-project-reference';
+  const result = classifyConnectionError({ code: 'XX000', message });
+  assert.deepEqual(result, { category: 'POOLER_TENANT_OR_USERNAME_NOT_FOUND', code: 'XX000' });
+  assert.equal(JSON.stringify(result).includes('private-project-reference'), false);
+  assert.equal(classifyConnectionError({ code: 'XX000', message: 'unexpected sensitive server details' }).category, 'POOLER_OR_SERVER_INTERNAL_ERROR');
+});
