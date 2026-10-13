@@ -27,9 +27,12 @@ test('no browser write policies or write grants', () => {
 });
 
 test('no full student table grant or direct guardian/admissions grant', () => {
-  const grants = sql.split(';').map(s=>s.replace(/--[^\n]*/g,'').trim()).filter(s=>/^GRANT\s/i.test(s)).join(';');
-  assert.doesNotMatch(grants, /GRANT SELECT ON TABLE[\s\S]*public\.(students|guardians|student_guardians|enrollments|admissions|audit_events)/i);
-  const roster = grants.match(/GRANT SELECT \(([^)]+)\)\s+ON public\.students TO authenticated/i);
+  const grants = sql.split(';').map(s=>s.replace(/--[^\n]*/g,'').trim()).filter(s=>/^GRANT\s/i.test(s));
+  for (const grant of grants) {
+    assert.doesNotMatch(grant, /GRANT SELECT ON TABLE[\s\S]*public\.(students|guardians|student_guardians|enrollments|admissions|audit_events)/i);
+    assert.doesNotMatch(grant, /ON public\.(guardians|student_guardians|enrollments|admissions|audit_events)\b/i);
+  }
+  const roster = grants.join(';').match(/GRANT SELECT \(([^)]+)\)\s+ON public\.students TO authenticated/i);
   assert.ok(roster);
   assert.doesNotMatch(roster[1], /date_of_birth|created_at/);
 });
