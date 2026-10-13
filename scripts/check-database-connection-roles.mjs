@@ -2,6 +2,8 @@
 // Never logs credentials, hostnames, URLs, or query results containing user data.
 // Does not create roles, apply migrations or change database permissions.
 import postgres from 'postgres';
+import { pathToFileURL } from 'node:url';
+import { resolve } from 'node:path';
 import { config } from 'dotenv';
 config({ path: '.env.local', quiet: true });
 
@@ -38,7 +40,7 @@ async function inspect(url) {
   }
 }
 
-if (process.argv[1] && import.meta.url === new URL('file://' + process.argv[1].replace(/\\/g, '/')).href) {
+if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
   const app = await inspect(process.env.DATABASE_URL);
   const migration = await inspect(process.env.MIGRATION_DATABASE_URL);
   const result = {
