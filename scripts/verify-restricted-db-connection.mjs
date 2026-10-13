@@ -18,10 +18,37 @@ export function validateConnectionEnvironment(env) {
   return { hostname: url.hostname, port: url.port || '5432', database: decodeURIComponent(url.pathname.slice(1)) };
 }
 
+export function inspectConnectionShape(env) {
+  if (!env.MIGRATION_DATABASE_URL) throw new Error('MIGRATION_DATABASE_URL is required');
+  const url = new URL(env.MIGRATION_DATABASE_URL);
+  const hostname = url.hostname.toLowerCase();
+  const isPooler = hostname.endsWith('.pooler.supabase.com');
+  const isDirect = hostname.startsWith('db.') && hostname.endsWith('.supabase.co');
+  const username = decodeURIComponent(url.username);
+  const dot = username.indexOf('.');
+  return {
+    mode: 'LOCAL_CONNECTION_SHAPE',
+    connectionKind: isPooler ? 'SUPABASE_POOLER' : isDirect ? 'SUPABASE_DIRECT' : 'OTHER_OR_UNKNOWN',
+    port: url.port || '5432',
+    operatorUsernameHasProjectSuffix: dot > 0 && dot < username.length - 1,
+    operatorUsernameBaseIsPostgres: username === 'postgres' || username.startsWith('postgres.'),
+    restrictedUsernameNeedsReview: isPooler,
+    note: 'No hostname, project identifier, URL or password is printed. No database connection is made.',
+  };
+}
+
 export function makeRestrictedUrl(env) {
   validateConnectionEnvironment(env);
   const url = new URL(env.MIGRATION_DATABASE_URL);
-  url.username = ROLE;
+  const shape = inspectConnectionShape(env);
+  if (shape.connectionKind === 'SUPABASE_POOLER') {
+    const original = decodeURIComponent(url.username);
+    const suffix = original.startsWith('postgres.') ? original.slice('postgres.'.length) : '';
+    if (!suffix) throw new Error('Pooler operator username must have a project suffix; refusing to guess');
+    url.username = ROLE + '.' + suffix;
+  } else {
+    url.username = ROLE;
+  }
   url.password = env.GREENFIELD_APP_DB_PASSWORD;
   // Keep the existing host, port, database and SSL configuration.
   return url.toString();
@@ -116,7 +143,14 @@ export function classifyConnectionError(error) {
   return { category, code: /^[A-Z0-9_]{2,40}$/.test(code) ? code : 'UNAVAILABLE' };
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
+if (process.argv.includes('--connection-shape')) {
+  try {
+    console.log(JSON.stringify(inspectConnectionShape(process.env), null, 2));
+  } catch {
+    console.error('Connection shape inspection failed; no connection details printed.');
+    process.exitCode = 1;
+  }
+} else if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
   main().catch((error) => {
     console.error(JSON.stringify({ mode: 'RESTRICTED_CONNECTION_ERROR', ...classifyConnectionError(error), note: 'Error category uses allowlisted patterns. No raw server message, connection URL, password or query text is printed.' }, null, 2));
     process.exitCode = 1;
