@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { makeRestrictedUrl, validateConnectionEnvironment, verifyRestrictedConnection, classifyConnectionError } from './verify-restricted-db-connection.mjs';
+import { makeRestrictedUrl, validateConnectionEnvironment, verifyRestrictedConnection, classifyConnectionError, inspectConnectionShape } from './verify-restricted-db-connection.mjs';
 
 const env = {
   MIGRATION_DATABASE_URL: 'postgresql://postgres:operator-secret@db.example.com:5432/postgres?sslmode=require',
@@ -69,4 +69,23 @@ test('classifies pooler XX000 errors without leaking server text', () => {
   assert.deepEqual(result, { category: 'POOLER_TENANT_OR_USERNAME_NOT_FOUND', code: 'XX000' });
   assert.equal(JSON.stringify(result).includes('private-project-reference'), false);
   assert.equal(classifyConnectionError({ code: 'XX000', message: 'unexpected sensitive server details' }).category, 'POOLER_OR_SERVER_INTERNAL_ERROR');
+});
+
+test('pooler connection preserves tenant suffix without exposing it in diagnostics', () => {
+  const poolerEnv = {
+    ...env,
+    MIGRATION_DATABASE_URL: 'postgresql://postgres.project-ref@aws-0-us-east-1.pooler.supabase.com:5432/postgres?sslmode=require',
+  };
+  const shape = inspectConnectionShape(poolerEnv);
+  assert.equal(shape.connectionKind, 'SUPABASE_POOLER');
+  assert.equal(shape.operatorUsernameHasProjectSuffix, true);
+  assert.equal(JSON.stringify(shape).includes('project-ref'), false);
+  const restricted = new URL(makeRestrictedUrl(poolerEnv));
+  assert.equal(decodeURIComponent(restricted.username), 'greenfield_app.project-ref');
+  assert.equal(restricted.password, env.GREENFIELD_APP_DB_PASSWORD);
+});
+
+test('pooler URL without tenant suffix fails closed', () => {
+  const bad = { ...env, MIGRATION_DATABASE_URL: 'postgresql://postgres@aws-0-us-east-1.pooler.supabase.com:5432/postgres' };
+  assert.throws(() => makeRestrictedUrl(bad), /refusing to guess/);
 });
