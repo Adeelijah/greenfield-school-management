@@ -32,7 +32,7 @@ export async function auditRestrictedPrivilegeSurface(sql) {
       pg_catalog.pg_get_function_identity_arguments(p.oid) AS argument_types,
       p.prosecdef AS security_definer,
       pg_catalog.has_function_privilege(current_user, p.oid, 'EXECUTE') AS can_execute,
-      pg_catalog.has_function_privilege('PUBLIC', p.oid, 'EXECUTE') AS public_execute
+      EXISTS (SELECT 1 FROM pg_catalog.aclexplode(COALESCE(p.proacl, pg_catalog.acldefault('f', p.proowner))) acl WHERE acl.grantee = 0 AND acl.privilege_type = 'EXECUTE') AS public_execute
     FROM pg_catalog.pg_proc p
     JOIN pg_catalog.pg_namespace ns ON ns.oid = p.pronamespace
     WHERE ns.nspname = 'public'
