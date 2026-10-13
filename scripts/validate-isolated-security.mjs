@@ -29,6 +29,28 @@ export function securityStatements(source) {
   return statements;
 }
 
+
+export async function expectPermissionDenied(tx, statement, label) {
+  // A denied statement aborts the current PostgreSQL transaction until its
+  // savepoint is rolled back. Never suppress any error other than 42501.
+  await tx.unsafe('SAVEPOINT greenfield_negative_check');
+  let denied = false;
+  try {
+    await tx.unsafe(statement);
+  } catch (error) {
+    denied = error.code === '42501';
+    if (!denied) {
+      await tx.unsafe('ROLLBACK TO SAVEPOINT greenfield_negative_check');
+      await tx.unsafe('RELEASE SAVEPOINT greenfield_negative_check');
+      throw error;
+    }
+  }
+  await tx.unsafe('ROLLBACK TO SAVEPOINT greenfield_negative_check');
+  await tx.unsafe('RELEASE SAVEPOINT greenfield_negative_check');
+  if (!denied) throw new Error('Unexpectedly permitted: ' + label);
+  return label;
+}
+
 function assertEqual(actual, expected, label) {
   if (actual !== expected) throw new Error(label + ': expected ' + expected + ', got ' + actual);
 }
@@ -103,8 +125,20 @@ export async function validateLocalSecurity(sql) {
         has_table_privilege('authenticated','public.audit_events','SELECT') AS audit,
         has_table_privilege('authenticated','public.students','INSERT') AS student_write`);
       if (Object.values(privileges).some(Boolean)) throw new Error('Sensitive read or write privilege exposed');
+      // Phase 4E: test actual PostgreSQL denials, not only privilege metadata.
+      await tx`SELECT set_config('request.jwt.claim.sub',${uuids.admin},true)`;
+      const negativeChecks = [];
+      for (const [label, statement] of [
+        ['student date of birth read', 'SELECT date_of_birth FROM public.students'],
+        ['guardian read', 'SELECT * FROM public.guardians'],
+        ['admission read', 'SELECT * FROM public.admissions'],
+        ['audit read', 'SELECT * FROM public.audit_events'],
+        ['student insert', "INSERT INTO public.students (school_id,admission_number,first_name,last_name) VALUES ('11111111-1111-4111-8111-111111111111','BLOCKED','No','Write')"],
+        ['school update', "UPDATE public.schools SET name='Unauthorized' WHERE id='11111111-1111-4111-8111-111111111111'"],
+        ['student delete', "DELETE FROM public.students WHERE school_id='11111111-1111-4111-8111-111111111111'"]
+      ]) negativeChecks.push(await expectPermissionDenied(tx, statement, label));
       await tx.unsafe('RESET ROLE');
-      results = { mode: 'PHASE4D_LOCAL_RLS_ROLLBACK', rlsTables: rls.count, authForeignKey: fkCount.count, checks, restrictedPrivileges: privileges };
+      results = { mode: 'PHASE4D_LOCAL_RLS_ROLLBACK', rlsTables: rls.count, authForeignKey: fkCount.count, checks, restrictedPrivileges: privileges, negativeChecks };
       throw new Error(marker);
     });
   } catch (error) {
