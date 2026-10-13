@@ -103,12 +103,22 @@ export function classifyConnectionError(error) {
     'SELF_SIGNED_CERT_IN_CHAIN': 'TLS_CERTIFICATE_ERROR',
     'UNABLE_TO_VERIFY_LEAF_SIGNATURE': 'TLS_CERTIFICATE_ERROR',
   };
-  return { category: categories[code] || 'UNCLASSIFIED_CONNECTION_ERROR', code: /^[A-Z0-9_]{2,40}$/.test(code) ? code : 'UNAVAILABLE' };
+  // Only classify known phrases; never return raw server messages or connection details.
+  const message = typeof error?.message === 'string' ? error.message.toLowerCase() : '';
+  let category = categories[code] || 'UNCLASSIFIED_CONNECTION_ERROR';
+  if (code === 'XX000') {
+    if (/tenant or user not found|tenant.*not found|unknown tenant/.test(message)) category = 'POOLER_TENANT_OR_USERNAME_NOT_FOUND';
+    else if (/password authentication failed|invalid password|authentication failed/.test(message)) category = 'POOLER_AUTHENTICATION_REJECTED';
+    else if (/role .* does not exist|user .* does not exist/.test(message)) category = 'POOLER_ROLE_NOT_FOUND';
+    else if (/database .* does not exist/.test(message)) category = 'POOLER_DATABASE_NOT_FOUND';
+    else category = 'POOLER_OR_SERVER_INTERNAL_ERROR';
+  }
+  return { category, code: /^[A-Z0-9_]{2,40}$/.test(code) ? code : 'UNAVAILABLE' };
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
   main().catch((error) => {
-    console.error(JSON.stringify({ mode: 'RESTRICTED_CONNECTION_ERROR', ...classifyConnectionError(error), note: 'No connection URL, password, server message or query text is printed.' }, null, 2));
+    console.error(JSON.stringify({ mode: 'RESTRICTED_CONNECTION_ERROR', ...classifyConnectionError(error), note: 'Error category uses allowlisted patterns. No raw server message, connection URL, password or query text is printed.' }, null, 2));
     process.exitCode = 1;
   });
 }
