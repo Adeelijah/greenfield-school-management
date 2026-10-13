@@ -51,6 +51,7 @@ test('creates only a non-bypass login role after checks', async () => {
   assert.match(writes[0].statement, /CREATE ROLE greenfield_app LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS PASSWORD/);
   const formatQuery = queries.find(q => /^\s*SELECT format\(/.test(q.statement));
   assert.equal(formatQuery.values[0], 'x'.repeat(32));
+  assert.match(formatQuery.statement, /\?::text\) AS ddl/);
 });
 
 test('rejects unexpected inherited role memberships after creation', async () => {
