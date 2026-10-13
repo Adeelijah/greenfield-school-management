@@ -1,0 +1,39 @@
+-- GREENFIELD: RESTRICTED DIRECT DATABASE ROLE DESIGN (REVIEW ONLY)
+-- DO NOT EXECUTE. This is a proposed role/grant design, not a migration.
+-- Requires disposable test environment, reviewed credentials handling,
+-- explicit operator approval, and integration tests.
+--
+-- Use separate credentials:
+-- MIGRATION_DATABASE_URL: privileged postgres account (never app runtime)
+-- DATABASE_URL: dedicated LOGIN role greenfield_app, NOBYPASSRLS, NOSUPERUSER.
+--
+-- IMPORTANT: direct postgres.js queries do not automatically carry Supabase
+-- Auth JWT claims, and auth.uid() will be NULL without verified JWT context.
+-- The existing getSchoolAccess() now uses a cookie-scoped Supabase client;
+-- other direct database handlers MUST NOT treat this role as a replacement
+-- for user-scoped JWT authorization.
+--
+-- SQL BELOW IS DOCUMENTATION ONLY; no passwords are supplied or generated.
+-- Role creation and credential provisioning need a separate approved workflow.
+--
+-- CREATE ROLE greenfield_app LOGIN
+--   NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS;
+-- REVOKE ALL ON SCHEMA public FROM greenfield_app;
+-- GRANT USAGE ON SCHEMA public TO greenfield_app;
+--
+-- Intentionally NO SELECT/INSERT/UPDATE/DELETE on tenant data yet.
+-- Default deny prevents accidentally exposing children's records through
+-- getDatabase(). Every future server query needs an explicitly reviewed
+-- permission and verified school-scoped authorization.
+--
+-- Also audit privileges inherited from PUBLIC and any role memberships:
+-- role flags alone are not sufficient to establish least privilege.
+--
+-- Integration release gates:
+-- 1. Verify rolbypassrls=false and rolsuper=false with actual DATABASE_URL.
+-- 2. Verify no membership in privileged roles, no inherited broad grants.
+-- 3. Verify unauthorized SELECT on students/guardians is denied.
+-- 4. Verify Supabase JWT-scoped school membership and RLS via PostgREST.
+-- 5. Verify server routes cannot accept client-supplied schoolId as authority.
+-- 6. Verify migrations/bootstrap only use operator credentials.
+-- 7. Verify rollback, backups, role ownership and revocation.
