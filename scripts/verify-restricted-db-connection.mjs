@@ -87,9 +87,28 @@ async function main() {
   }
 }
 
+export function classifyConnectionError(error) {
+  const code = typeof error?.code === 'string' ? error.code : '';
+  const categories = {
+    '28P01': 'AUTHENTICATION_REJECTED',
+    '28000': 'AUTHORIZATION_REJECTED',
+    '42501': 'INSUFFICIENT_PRIVILEGE',
+    '3D000': 'DATABASE_NOT_FOUND',
+    'ENOTFOUND': 'DNS_RESOLUTION_FAILED',
+    'EAI_AGAIN': 'DNS_RESOLUTION_FAILED',
+    'ECONNREFUSED': 'CONNECTION_REFUSED',
+    'ETIMEDOUT': 'CONNECTION_TIMEOUT',
+    'CONNECT_TIMEOUT': 'CONNECTION_TIMEOUT',
+    'ECONNRESET': 'CONNECTION_INTERRUPTED',
+    'SELF_SIGNED_CERT_IN_CHAIN': 'TLS_CERTIFICATE_ERROR',
+    'UNABLE_TO_VERIFY_LEAF_SIGNATURE': 'TLS_CERTIFICATE_ERROR',
+  };
+  return { category: categories[code] || 'UNCLASSIFIED_CONNECTION_ERROR', code: /^[A-Z0-9_]{2,40}$/.test(code) ? code : 'UNAVAILABLE' };
+}
+
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
-  main().catch(() => {
-    console.error('Restricted connection verification failed. Check connection settings and role credentials locally; no credentials were printed.');
+  main().catch((error) => {
+    console.error(JSON.stringify({ mode: 'RESTRICTED_CONNECTION_ERROR', ...classifyConnectionError(error), note: 'No connection URL, password, server message or query text is printed.' }, null, 2));
     process.exitCode = 1;
   });
 }
