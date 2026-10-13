@@ -12,6 +12,14 @@ export function splitStatements(source) {
 
 export function buildOrderedFoundation(source) {
   const statements = splitStatements(source);
+  // Foundation SQL has one statement per breakpoint. Reject embedded or trailing SQL
+  // even when it is appended after a valid statement's final semicolon.
+  for (const statement of statements) {
+    const withoutComments = statement.replace(/^\s*--[^\n]*(?:\n|$)/gm, '').trim();
+    if (!/;\s*$/.test(withoutComments) || (withoutComments.match(/;/g) ?? []).length !== 1) {
+      throw new Error('Unexpected foundation statement inventory; refusing to produce reordered SQL');
+    }
+  }
   const tables = statements.filter(s => /^CREATE TABLE\b/.test(s));
   const types = statements.filter(s => /^CREATE TYPE\b/.test(s));
   const indexes = statements.filter(s => /^CREATE (?:UNIQUE )?INDEX\b/.test(s));
