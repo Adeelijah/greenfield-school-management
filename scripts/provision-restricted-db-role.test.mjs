@@ -12,11 +12,14 @@ function mockSql(existing = false, memberships = []) {
       rolbypassrls: false, rolcreatedb: false, rolcreaterole: false, rolreplication: false,
     }] : []);
     if (/^\s*SELECT parent\.rolname/.test(statement)) return Promise.resolve(memberships);
-    if (/^\s*CREATE ROLE/.test(statement)) {
-      existing = true;
-      return Promise.resolve([]);
-    }
+    if (/^\s*SELECT format\(/.test(statement)) return Promise.resolve([{ ddl: `CREATE ROLE greenfield_app LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS PASSWORD 'redacted'` }]);
     throw new Error('Unexpected SQL statement');
+  };
+  sql.unsafe = (statement) => {
+    queries.push({ statement, values: [] });
+    if (!/^CREATE ROLE greenfield_app LOGIN NOSUPERUSER/.test(statement)) throw new Error('Unexpected unsafe statement');
+    existing = true;
+    return Promise.resolve([]);
   };
   return { sql, queries };
 }
@@ -46,7 +49,8 @@ test('creates only a non-bypass login role after checks', async () => {
   const writes = queries.filter(q => /^\s*(CREATE|ALTER|GRANT|INSERT|UPDATE|DELETE)/.test(q.statement));
   assert.equal(writes.length, 1);
   assert.match(writes[0].statement, /CREATE ROLE greenfield_app LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS PASSWORD/);
-  assert.equal(writes[0].values[0], 'x'.repeat(32));
+  const formatQuery = queries.find(q => /^\s*SELECT format\(/.test(q.statement));
+  assert.equal(formatQuery.values[0], 'x'.repeat(32));
 });
 
 test('rejects unexpected inherited role memberships after creation', async () => {
