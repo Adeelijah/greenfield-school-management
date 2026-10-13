@@ -42,7 +42,7 @@ export async function provisionRole(sql, password) {
   // PostgreSQL role DDL cannot bind PASSWORD as $1. Ask PostgreSQL to
   // quote the password using format('%L', ...), then execute the fixed DDL.
   // Never log the generated DDL: it contains the credential.
-  const [statement] = await sql`SELECT format('CREATE ROLE greenfield_app LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS PASSWORD %L', ${password}) AS ddl`;
+  const [statement] = await sql`SELECT format('CREATE ROLE greenfield_app LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS PASSWORD %L', ${password}::text) AS ddl`;
   if (!statement?.ddl?.startsWith('CREATE ROLE greenfield_app LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS PASSWORD ')) {
     throw new Error('Could not safely prepare role creation statement');
   }
