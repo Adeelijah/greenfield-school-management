@@ -30,7 +30,7 @@ export async function inspectProvisioningState(sql) {
     JOIN pg_catalog.pg_roles member ON member.oid = am.member
     JOIN pg_catalog.pg_roles parent ON parent.oid = am.roleid
     WHERE member.rolname = ${ROLE}`;
-  return { exists: Boolean(role), role: role ?? null, memberships: membership };
+  return { exists: Boolean(role), roleDetails: role ?? null, memberships: membership };
 }
 
 export async function provisionRole(sql, password) {
@@ -41,9 +41,9 @@ export async function provisionRole(sql, password) {
   if (!password || password.length < 24) throw new Error('Password is missing or too short');
   await sql`CREATE ROLE greenfield_app LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS PASSWORD ${password}`;
   const verified = await inspectProvisioningState(sql);
-  if (!verified.exists || !verified.role.rolcanlogin || verified.role.rolsuper ||
-      verified.role.rolbypassrls || verified.role.rolcreatedb || verified.role.rolcreaterole ||
-      verified.role.rolreplication || verified.memberships.length !== 0) {
+  if (!verified.exists || !verified.roleDetails.rolcanlogin || verified.roleDetails.rolsuper ||
+      verified.roleDetails.rolbypassrls || verified.roleDetails.rolcreatedb || verified.roleDetails.rolcreaterole ||
+      verified.roleDetails.rolreplication || verified.memberships.length !== 0) {
     throw new Error('Created role did not pass post-provisioning checks; stop and investigate');
   }
   return { created: true, role: ROLE, verifiedFlags: true, memberships: 0 };
