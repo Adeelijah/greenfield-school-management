@@ -43,14 +43,20 @@ async function main() {
   const sql = postgres(url, { max: 1, prepare: false, connect_timeout: 5 });
   try {
     const before = await inspect(sql);
-    if (before.database_name !== expectedDatabase || before.public_tables !== 0 ||
-        before.public_foreign_keys !== 0 || before.journal !== null) {
-      throw new Error('Database is not empty; refusing migration');
+    const clean = before.public_tables === 0 && before.public_foreign_keys === 0 && before.journal === null;
+    const alreadyMigrated = before.public_tables === 12 && before.public_foreign_keys === 20 &&
+      before.journal === 'drizzle.__drizzle_migrations';
+    if (before.database_name !== expectedDatabase || (!clean && !alreadyMigrated)) {
+      throw new Error('Unexpected database state; refusing migration');
+    }
+    if (alreadyMigrated) {
+      const [existing] = await sql.unsafe('SELECT count(*)::int AS count FROM drizzle.__drizzle_migrations');
+      if (existing.count !== 1) throw new Error('Unexpected existing migration journal count');
     }
     const db = drizzle(sql);
     await migrate(db, { migrationsFolder: folder });
     const after = await inspect(sql);
-    if (after.public_tables !== 12 || after.public_foreign_keys !== 20 || after.journal !== '__drizzle_migrations') {
+    if (after.public_tables !== 12 || after.public_foreign_keys !== 20 || after.journal !== 'drizzle.__drizzle_migrations') {
       throw new Error('Unexpected schema after migration');
     }
     const [journal] = await sql.unsafe('SELECT count(*)::int AS count FROM drizzle.__drizzle_migrations');
@@ -61,7 +67,7 @@ async function main() {
     console.log(JSON.stringify({
       mode: 'PHASE4F_LOCAL_DRIZZLE_MIGRATION_RUNNER',
       database: expectedDatabase,
-      before: { publicTables: before.public_tables, migrationJournal: before.journal },
+      before: { publicTables: before.public_tables, migrationJournal: before.journal, alreadyMigrated },
       after: { publicTables: after.public_tables, publicForeignKeys: after.public_foreign_keys, publicIndexes: after.public_indexes },
       journalEntries: journal.count,
       journalEntriesAfterRerun: rerun.count,
