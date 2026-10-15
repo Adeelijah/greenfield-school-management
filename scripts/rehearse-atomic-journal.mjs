@@ -8,6 +8,7 @@ import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { validateDisposableTarget, inspectFoundationStatements } from './validate-isolated-foundation.mjs';
 import { securityStatements } from './validate-isolated-security.mjs';
+import { securityAssertionSql, assertSecurityRow } from './staging-security-assertions.mjs';
 
 config({ path: '.env.local', quiet: true });
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -62,6 +63,8 @@ async function apply(tx, fail) {
     has_column_privilege('authenticated','public.students','date_of_birth','SELECT') AS dob_read`);
   assert(checks.rls === 12 && checks.policies === 7 && checks.fk === 1 &&
     !checks.anon_read && !checks.auth_write && !checks.dob_read, 'Security assertions failed');
+  const [securityRow] = await tx.unsafe(securityAssertionSql());
+  assertSecurityRow(securityRow);
   // Mirror the installed Drizzle migrator's journal schema and values.
   await tx`INSERT INTO drizzle.__drizzle_migrations (hash, created_at) VALUES (${migrations[0].hash}, ${migrations[0].folderMillis})`;
   return checks;
