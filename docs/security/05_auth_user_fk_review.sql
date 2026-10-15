@@ -1,6 +1,6 @@
 -- REVIEW-ONLY POST-FOUNDATION CHANGE — DO NOT EXECUTE YET.
 -- Requires a previously applied Greenfield initial schema and Supabase auth.users.
--- Apply only after RLS/grants/bootstrap implementation and staging acceptance tests.
+-- For the initial empty staging deployment, the locally rehearsed atomic order is:\n-- foundation -> this Auth FK -> RLS/grants -> assertions -> Drizzle journal.\n-- This review file must not be applied separately. Staging acceptance tests follow\n-- an explicitly approved atomic deployment, before enabling users.
 -- This SQL deliberately does not create, alter or drop auth.users.
 --
 -- Preconditions:
