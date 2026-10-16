@@ -47,6 +47,48 @@ export function validateOfflinePackage() {
     assertions.includes('has_sequence_privilege') &&
     assertions.includes('required_table_reads_ok') &&
     assertions.includes('required_student_columns_ok'), 'Effective privilege assertions incomplete');
+  // The offline transaction inventory must include the assertion query
+  // after security changes and before the migration journal.
+  const inventory = JSON.parse(
+    read('docs/security/generated/phase4f11-transaction-inventory.json')
+  );
+  const expectedStages = [
+    ['foundation',55],
+    ['auth_foreign_key',1],
+    ['security',35],
+    ['effective_privilege_assertions',1],
+    ['migration_journal',1]
+  ];
+  requireTrue(
+    JSON.stringify(inventory.stages?.map(s => [s.name,s.statements])) ===
+      JSON.stringify(expectedStages),
+    'Transaction stage count or ordering mismatch'
+  );
+  const expectedInventoryStages = [
+    ...Array(55).fill('foundation'),
+    'auth_foreign_key',
+    ...Array(35).fill('security'),
+    'effective_privilege_assertions'
+  ];
+  requireTrue(
+    JSON.stringify(inventory.statementInventory?.map(s => s.stage)) ===
+      JSON.stringify(expectedInventoryStages),
+    'Transaction statement ordering mismatch'
+  );
+  const assertionEntry = inventory.statementInventory.at(-1);
+  requireTrue(
+    assertionEntry.ordinal === 1 &&
+      assertionEntry.sha256 === sha(assertions),
+    'Security assertion fingerprint mismatch'
+  );
+  requireTrue(
+    inventory.securityAssertionsStatus ===
+      'OFFLINE_INVENTORIED_NOT_REMOTE_TESTED' &&
+      inventory.executionEnabled === false &&
+      inventory.remoteConnectionsMade === false &&
+      inventory.deploymentAuthorized === false,
+    'Transaction inventory safety metadata mismatch'
+  );
   // Deliberately ensure a failing assertion row cannot be treated as approved.
   let rejected = false;
   try { assertSecurityRow({}); } catch { rejected = true; }

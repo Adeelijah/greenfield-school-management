@@ -5,6 +5,7 @@ import { createHash } from 'node:crypto';
 import { readMigrationFiles } from 'drizzle-orm/migrator';
 import { inspectFoundationStatements } from './validate-isolated-foundation.mjs';
 import { securityStatements } from './validate-isolated-security.mjs';
+import { securityAssertionSql } from './staging-security-assertions.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const read = p => readFileSync(resolve(root,p),'utf8');
@@ -14,7 +15,7 @@ const baselinePath = 'docs/security/generated/staging-baseline/0000_broad_slayba
 const expectedHash = 'c8f61c5f702ae6ebad9cc2950edb1d4a288eb2a2613281cdc612167b711cba62';
 const stages = [
   ['foundation',55], ['auth_foreign_key',1], ['security',35],
-  ['effective_privilege_assertions',0], ['migration_journal',1]
+  ['effective_privilege_assertions',1], ['migration_journal',1]
 ];
 
 function main() {
@@ -40,7 +41,8 @@ function main() {
   const inventory = [
     ...foundation.map((sql,i)=>({stage:'foundation',ordinal:i+1,sha256:sha(sql)})),
     {stage:'auth_foreign_key',ordinal:1,sha256:sha(fk[0])},
-    ...security.map((sql,i)=>({stage:'security',ordinal:i+1,sha256:sha(sql) }))
+    ...security.map((sql,i)=>({stage:'security',ordinal:i+1,sha256:sha(sql) })),
+    {stage:'effective_privilege_assertions',ordinal:1,sha256:sha(securityAssertionSql())}
   ];
   const result = {
     mode:'PHASE4F11_NON_EXECUTABLE_COMPILER',
@@ -50,7 +52,7 @@ function main() {
     journal:{hash:migration[0].hash,createdAt:migration[0].folderMillis},
     stages:stages.map(([name,statements])=>({name,statements})),
     statementInventory:inventory,
-    securityAssertionsStatus:'NOT IMPLEMENTED FOR SUPABASE',
+    securityAssertionsStatus:'OFFLINE_INVENTORIED_NOT_REMOTE_TESTED',
     projectIdentityStatus:'OPERATOR VERIFICATION REQUIRED',
     backupAndRecoveryStatus:'NOT APPROVED',
     executionEnabled:false,
