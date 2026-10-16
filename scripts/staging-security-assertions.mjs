@@ -1,4 +1,4 @@
-// Phase 4F.12: reusable, read-only PostgreSQL catalog assertions.
+// Phase 4F.12/4F.16: reusable, read-only PostgreSQL catalog assertions.
 // Does not connect to any database, execute SQL, or authorize deployment.
 export const GREENFIELD_TABLES = Object.freeze([
   'schools','school_users','memberships','academic_sessions','terms','classes',
@@ -53,7 +53,8 @@ table_access AS (
     has_table_privilege(role_name, format('public.%I',t.name),'DELETE') AS can_delete,
     has_table_privilege(role_name, format('public.%I',t.name),'TRUNCATE') AS can_truncate,
     has_table_privilege(role_name, format('public.%I',t.name),'REFERENCES') AS can_reference,
-    has_table_privilege(role_name, format('public.%I',t.name),'TRIGGER') AS can_trigger
+    has_table_privilege(role_name, format('public.%I',t.name),'TRIGGER') AS can_trigger,
+    has_table_privilege(role_name, format('public.%I',t.name),'MAINTAIN') AS can_maintain
   FROM expected_tables t CROSS JOIN (VALUES ('anon'),('authenticated')) roles(role_name)
 ),
 column_access AS (
@@ -64,6 +65,10 @@ column_access AS (
   FROM actual_tables t JOIN pg_attribute a ON a.attrelid=t.oid
   CROSS JOIN (VALUES ('anon'),('authenticated')) roles(role_name)
   WHERE a.attnum>0 AND NOT a.attisdropped
+),
+public_functions AS (
+  SELECT p.oid FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
+  WHERE n.nspname='public'
 ),
 sequence_access AS (
   SELECT c.relname, roles.role_name,
@@ -88,7 +93,7 @@ SELECT
  ) AS policy_modes_ok,
  NOT EXISTS (
    SELECT 1 FROM table_access WHERE
-     can_insert OR can_update OR can_delete OR can_truncate OR can_reference OR can_trigger
+     can_insert OR can_update OR can_delete OR can_truncate OR can_reference OR can_trigger OR can_maintain
      OR (role_name='anon' AND can_select)
      OR (role_name='authenticated' AND name NOT IN (${READABLE_TABLES.map(x=>`'${x}'`).join(',')}) AND can_select)
  ) AS table_grants_ok,
@@ -99,6 +104,7 @@ SELECT
        NOT (table_name IN (${READABLE_TABLES.map(x=>`'${x}'`).join(',')})
          OR (table_name='students' AND column_name IN (${STUDENT_COLUMNS.map(x=>`'${x}'`).join(',')}))))
  ) AS column_grants_ok,
+ (SELECT count(*)=0 FROM public_functions) AS public_functions_ok,
  NOT EXISTS (SELECT 1 FROM sequence_access WHERE can_use OR can_select OR can_update) AS sequences_ok,
  (SELECT count(*)=1 FROM pg_constraint WHERE conname='school_users_auth_user_id_auth_users_id_fk'
    AND contype='f' AND conrelid='public.school_users'::regclass
@@ -108,7 +114,7 @@ SELECT
 
 export function assertSecurityRow(row) {
   const keys=['tables_ok','policy_names_ok','policy_modes_ok','table_grants_ok',
-    'column_grants_ok','sequences_ok','auth_fk_ok'];
+    'column_grants_ok','public_functions_ok','sequences_ok','auth_fk_ok'];
   if (!row || keys.some(key=>row[key]!==true)) {
     throw new Error('Security assertions failed: '+keys.filter(key=>row?.[key]!==true).join(', '));
   }
