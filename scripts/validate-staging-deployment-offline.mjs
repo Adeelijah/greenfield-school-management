@@ -15,6 +15,50 @@ const requireTrue = (value, message) => { if (!value) throw new Error(message); 
 const expectedHash = 'c8f61c5f702ae6ebad9cc2950edb1d4a288eb2a2613281cdc612167b711cba62';
 const baselinePath = 'docs/security/generated/staging-baseline/0000_broad_slayback.sql';
 
+export function validateStatementFingerprints(inventory, foundation, fk, security, assertions) {
+  const expected = [
+    ...foundation.map((sql, index) => ({
+      stage: 'foundation',
+      ordinal: index + 1,
+      sha256: sha(sql)
+    })),
+    {
+      stage: 'auth_foreign_key',
+      ordinal: 1,
+      sha256: sha(fk)
+    },
+    ...security.map((sql, index) => ({
+      stage: 'security',
+      ordinal: index + 1,
+      sha256: sha(sql)
+    })),
+    {
+      stage: 'effective_privilege_assertions',
+      ordinal: 1,
+      sha256: sha(assertions)
+    }
+  ];
+
+  requireTrue(
+    Array.isArray(inventory?.statementInventory) &&
+    inventory.statementInventory.length === expected.length,
+    'Transaction statement fingerprint count mismatch'
+  );
+
+  for (let index = 0; index < expected.length; index++) {
+    const actual = inventory.statementInventory[index];
+    const wanted = expected[index];
+
+    requireTrue(
+      actual?.stage === wanted.stage &&
+      actual?.ordinal === wanted.ordinal &&
+      actual?.sha256 === wanted.sha256,
+      'Transaction statement fingerprint mismatch at entry ' + (index + 1)
+    );
+  }
+
+  return expected.length;
+}
 export function validateOfflinePackage() {
   requireTrue(existsSync(resolve(root, baselinePath)), 'Generated local baseline missing');
   const baseline = read(baselinePath);
@@ -51,6 +95,13 @@ export function validateOfflinePackage() {
   // after security changes and before the migration journal.
   const inventory = JSON.parse(
     read('docs/security/generated/phase4f11-transaction-inventory.json')
+  );
+  validateStatementFingerprints(
+    inventory,
+    foundation,
+    fk[0],
+    security,
+    assertions
   );
   const expectedStages = [
     ['foundation',55],
