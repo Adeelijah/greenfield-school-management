@@ -44,7 +44,9 @@ export function validateOfflinePackage() {
   const assertions = securityAssertionSql();
   requireTrue(assertions.includes('public_functions_ok') && assertions.includes('can_maintain') &&
     assertions.includes('has_table_privilege') && assertions.includes('has_column_privilege') &&
-    assertions.includes('has_sequence_privilege'), 'Effective privilege assertions incomplete');
+    assertions.includes('has_sequence_privilege') &&
+    assertions.includes('required_table_reads_ok') &&
+    assertions.includes('required_student_columns_ok'), 'Effective privilege assertions incomplete');
   // Deliberately ensure a failing assertion row cannot be treated as approved.
   let rejected = false;
   try { assertSecurityRow({}); } catch { rejected = true; }

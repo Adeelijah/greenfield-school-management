@@ -98,12 +98,32 @@ SELECT
      OR (role_name='authenticated' AND name NOT IN (${READABLE_TABLES.map(x=>`'${x}'`).join(',')}) AND can_select)
  ) AS table_grants_ok,
  NOT EXISTS (
+   SELECT 1 FROM table_access
+   WHERE role_name='authenticated'
+     AND name IN (${READABLE_TABLES.map(x=>`'${x}'`).join(',')})
+     AND can_select IS DISTINCT FROM TRUE
+ ) AND (SELECT count(*) FROM table_access
+        WHERE role_name='authenticated'
+          AND name IN (${READABLE_TABLES.map(x=>`'${x}'`).join(',')})) = ${READABLE_TABLES.length}
+   AS required_table_reads_ok,
+ NOT EXISTS (
    SELECT 1 FROM column_access WHERE
      can_insert OR can_update OR (role_name='anon' AND can_select)
      OR (role_name='authenticated' AND can_select AND
        NOT (table_name IN (${READABLE_TABLES.map(x=>`'${x}'`).join(',')})
          OR (table_name='students' AND column_name IN (${STUDENT_COLUMNS.map(x=>`'${x}'`).join(',')}))))
  ) AS column_grants_ok,
+ NOT EXISTS (
+   SELECT 1 FROM column_access
+   WHERE role_name='authenticated'
+     AND table_name='students'
+     AND column_name IN (${STUDENT_COLUMNS.map(x=>`'${x}'`).join(',')})
+     AND can_select IS DISTINCT FROM TRUE
+ ) AND (SELECT count(*) FROM column_access
+        WHERE role_name='authenticated'
+          AND table_name='students'
+          AND column_name IN (${STUDENT_COLUMNS.map(x=>`'${x}'`).join(',')})) = ${STUDENT_COLUMNS.length}
+   AS required_student_columns_ok,
  (SELECT count(*)=0 FROM public_functions) AS public_functions_ok,
  NOT EXISTS (SELECT 1 FROM sequence_access WHERE can_use OR can_select OR can_update) AS sequences_ok,
  (SELECT count(*)=1 FROM pg_constraint WHERE conname='school_users_auth_user_id_auth_users_id_fk'
@@ -114,7 +134,7 @@ SELECT
 
 export function assertSecurityRow(row) {
   const keys=['tables_ok','policy_names_ok','policy_modes_ok','table_grants_ok',
-    'column_grants_ok','public_functions_ok','sequences_ok','auth_fk_ok'];
+    'column_grants_ok','required_table_reads_ok','required_student_columns_ok','public_functions_ok','sequences_ok','auth_fk_ok'];
   if (!row || keys.some(key=>row[key]!==true)) {
     throw new Error('Security assertions failed: '+keys.filter(key=>row?.[key]!==true).join(', '));
   }
