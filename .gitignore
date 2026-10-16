@@ -6,3 +6,11 @@ out/
 !.env.example
 *.tsbuildinfo
 .DS_Store
+
+# Local database backups and recovery archives
+*.dump
+*.backup
+*.7z
+/backups/
+/backup/
+/recovery-artifacts/
