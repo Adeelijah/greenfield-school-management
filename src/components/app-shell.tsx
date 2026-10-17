@@ -17,9 +17,10 @@ const icons: Record<string, LucideIcon> = {
 };
 export function AppShell({children}:{children:React.ReactNode}){
   const pathname=usePathname();
-  const [menuOpen,setMenuOpen]=useState(false);
-  useEffect(()=>{setMenuOpen(false)},[pathname]);
-  useEffect(()=>{if(!menuOpen)return;const onKey=(e:KeyboardEvent)=>{if(e.key==='Escape')setMenuOpen(false)};document.addEventListener('keydown',onKey);return()=>document.removeEventListener('keydown',onKey)},[menuOpen]);
+  const [openMenuPath,setOpenMenuPath]=useState<string|null>(null);
+  const menuOpen=openMenuPath===pathname;
+  const setMenuOpen=(open:boolean)=>setOpenMenuPath(open?pathname:null);
+  useEffect(()=>{if(!menuOpen)return;const onKey=(e:KeyboardEvent)=>{if(e.key==='Escape')setOpenMenuPath(null)};document.addEventListener('keydown',onKey);return()=>document.removeEventListener('keydown',onKey)},[menuOpen]);
   return <div className="app"><button className="mobile-menu-button" aria-label="Open navigation" aria-expanded={menuOpen} aria-controls="school-navigation" onClick={()=>setMenuOpen(true)}><Menu size={21}/></button>{menuOpen&&<button className="nav-backdrop" aria-label="Close navigation" onClick={()=>setMenuOpen(false)}/>}<aside id="school-navigation" className={"sidebar"+(menuOpen?" sidebar-open":"")} aria-label="Main navigation"><button className="mobile-close-button" aria-label="Close navigation" onClick={()=>setMenuOpen(false)}><X size={20}/></button>
     <div className="brand"><span className="crest"><GraduationCap size={24}/></span><div className="brand-copy"><strong>Greenfield Academy</strong><br/><small>Nurturing Brighter Futures</small></div></div>
     <nav>{moduleGroups.map(g=><div key={g.title}><div className="nav-label">{g.title}</div>
