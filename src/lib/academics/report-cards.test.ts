@@ -53,3 +53,11 @@ test('Creche observations remain descriptive rather than numeric totals', () => 
   assert.equal(outcome.card.subjects[0]?.result.total, null);
   assert.match(outcome.card.subjects[0]?.result.grade ?? '', /Consistent/);
 });
+
+test('duplicate active enrollment in a session fails closed rather than producing a grade', () => {
+  const outcome = prepareReportCard(initialAssessment, request);
+  assert.equal(outcome.ok, true);
+  if (!outcome.ok) return;
+  assert.equal(outcome.card.status, 'incomplete');
+  assert.ok(outcome.card.subjects.every(s => !s.complete));
+});
