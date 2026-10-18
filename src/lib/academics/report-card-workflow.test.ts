@@ -2,7 +2,6 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 // @ts-expect-error Node runner requires the source extension.
 import { planReportTransition, type ReportRecord, type ReportActor, type ReportCommand } from './report-card-workflow.ts';
-// @ts-expect-error Node runner requires the source extension.
 import type { ReportCardDraft } from './report-cards.ts';
 
 const record: ReportRecord = {schoolId:'school',studentId:'student',classId:'class',sessionId:'session',termId:'term',stage:'draft',version:1,assessmentVersion:5,submittedBy:null,approvedBy:null,publishedAt:null,returnReason:null};
