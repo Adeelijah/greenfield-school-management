@@ -4,7 +4,7 @@ import { planReportTransition, type ReportAudit, type ReportCommand, type Report
 import { planReportWrite, type ReportStoredReceipt } from './report-card-persistence-policy.ts';
 import type { ReportCardDraft } from './report-cards.ts';
 
-export type MemoryReport = { id:string; record:ReportRecord; projection:ReportCardDraft; context:ReportTrustedContext };
+export type MemoryReport = { id:string; record:ReportRecord; projection:ReportCardDraft; contexts:ReportTrustedContext[] };
 export type MemoryRelease = {schoolId:string;reportId:string;version:number;publishedAt:string};
 export type MemoryState = {reports:MemoryReport[];audits:ReportAudit[];receipts:ReportStoredReceipt[];releases:MemoryRelease[]};
 export type MemoryOperation = {schoolId:string;reportId:string;actorMembershipId:string;fingerprint:string;command:ReportCommand;occurredAt:string};
@@ -24,15 +24,16 @@ export class ReportMemoryStore {
   const matches=draft.reports.filter(r=>r.id===operation.reportId && r.record.schoolId===operation.schoolId);
   if(matches.length!==1)return fail('not_found','School-scoped report not found or ambiguous.');
   const report=matches[0]!;
-  const membership=report.context.membership;
-  if (!membership || membership.id!==operation.actorMembershipId || membership.schoolId!==operation.schoolId) return fail('forbidden','Actor must match the stored verified membership.');
+  const contexts=report.contexts.filter(c=>c.membership?.id===operation.actorMembershipId && c.membership.schoolId===operation.schoolId);
+  if(contexts.length!==1)return fail('forbidden','Exactly one stored verified membership context is required.');
+  const context=contexts[0]!;
   const write=planReportWrite({
    schoolId:operation.schoolId,reportId:operation.reportId,actorMembershipId:operation.actorMembershipId,
    operationKey:operation.command.idempotencyKey,fingerprint:operation.fingerprint,expectedVersion:operation.command.expectedVersion
   },{schoolId:report.record.schoolId,id:report.id,version:report.record.version},draft.receipts);
   if(!write.ok)return fail(write.code,'Idempotency or version precondition failed.');
   if(write.kind==='replay')return {ok:true,kind:'replay',version:write.resultingVersion};
-  const preflight=preflightReportTransition(report.context,report.record,report.projection,operation.command);
+  const preflight=preflightReportTransition(context,report.record,report.projection,operation.command);
   if(!preflight.ok)return fail(preflight.code,preflight.message);
   const decision=planReportTransition(report.record,report.projection,preflight.actor,operation.command,operation.occurredAt);
   if(!decision.ok)return fail(decision.code,decision.message);
