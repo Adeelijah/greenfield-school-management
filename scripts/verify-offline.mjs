@@ -22,6 +22,7 @@ const tests = [
   'src/lib/admissions/admissions.test.ts',
   'src/lib/students/registration.test.ts',
   'src/lib/academics/calendar-assessments.test.ts',
+  'src/lib/academics/report-cards.test.ts',
   'src/components/greenfield-date-picker-layout.test.ts',
 ];
 
