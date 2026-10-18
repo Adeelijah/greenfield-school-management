@@ -32,6 +32,7 @@ Scope: source inspection of `src/app/globals.css`, `src/components/app-shell.tsx
 
 - **Pass B started (source-level only):** Academic Operations and Admissions panels now use shared `--border`, `--radius`, `--surface`, and `--shadow` tokens. Primary-action and active-tab backgrounds in Academic Operations and Admissions, and the Calendar primary action, now use `--forest` instead of `#27623e`.
 - These are deliberate visual changes and **have not been rendered or tested** in this GitHub-only session. They must be compared against the approved dashboard and student controls before sign-off.
+- **Preview parity improved:** three isolated preview builders now import a shared `scripts/greenfield-preview-tokens.mjs` string matching the original global tokens. The preview background uses `--canvas` instead of its prior hard-coded value. The new module is static and contains no credentials or network calls. Source fetch verified imports and substitutions, but execution/rendering is not yet verified.
 - Cross-module CSS imports, shared tab extraction, and text-size/accessibility audit remain open.
 
 ## Release blockers
