@@ -1,4 +1,5 @@
-import { prepareResults, type AssessmentSnapshot, type PreparedResult } from './calendar-assessments';
+// @ts-expect-error Node's type-stripping runner requires the explicit source extension.
+import { prepareResults, type AssessmentSnapshot, type PreparedResult } from './calendar-assessments.ts';
 
 /** Pure, offline report-card projection. Not an authorization or publication endpoint. */
 export type ReportCardRequest = { schoolId: string; studentId: string; classId: string; sessionId: string; termId: string };
