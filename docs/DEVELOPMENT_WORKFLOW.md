@@ -2,6 +2,10 @@
 
 This workflow accelerates offline development without treating a preview or a schema draft as production-ready. `AGENTS.md` supplies the standing project rules. The current completion priorities are in `ROADMAP.md`.
 
+## UI design consistency gate
+
+Before editing UI, read `docs/DESIGN_SYSTEM.md` and `docs/UI_CONSISTENCY_AUDIT.md`. Start from the original AppShell/dashboard and existing shared dropdown/date-picker. Avoid new module-specific button, panel, tab or color systems without documenting the reason. Do not claim visual approval from source inspection alone. Compare desktop and 320/375/390/768px in isolated previews using actual components; capture and review differences before broad CSS consolidation.
+
 ## Execute one milestone
 
 1. State the user-visible outcome, acceptance examples, boundaries and security impact. Inspect `git status --short`, relevant source, tests and docs. Record pre-existing modified/untracked paths without assigning ownership by assumption.

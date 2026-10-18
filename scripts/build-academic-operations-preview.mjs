@@ -1,3 +1,4 @@
+import { greenfieldPreviewTokens } from './greenfield-preview-tokens.mjs';
 // Builds a self-contained file:// preview from real Greenfield React components.
 // Uses only the repository's already-installed esbuild package; no server/network.
 import { build } from 'esbuild';
@@ -64,9 +65,9 @@ const html = `<!doctype html>
   <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-${scriptHash}'; style-src 'unsafe-inline'; img-src data:; font-src data:; connect-src 'none'; form-action 'none'; base-uri 'none'">
   <title>Greenfield Academic Operations — Offline Preview</title>
   <style>${styles}
-    :root{--forest:#27623e;--forest-dark:#174b30;--ink:#173d2b;--muted:#718078;--border:#e3ebe5;--surface:#fff;--radius:14px;--shadow:0 4px 16px rgba(27,64,40,.035)}
-    *{box-sizing:border-box}html,body{margin:0;min-height:100%;font-family:Arial,Helvetica,sans-serif;background:#f6f9f7;color:var(--ink)}
-    button,input,select{font:inherit}.offline-frame{width:min(1440px,100%);min-height:100vh;margin:0 auto;padding:24px 30px}.offline-heading{margin:0 0 12px;color:#607467;font-size:11px;line-height:1.5}
+    ${greenfieldPreviewTokens}
+    *{box-sizing:border-box}html,body{margin:0;min-height:100%;font-family:Inter,'Segoe UI',Arial,sans-serif;background:var(--canvas);color:var(--ink)}
+    button,input,select,textarea{font:inherit}.offline-frame{width:min(1440px,100%);min-height:100vh;margin:0 auto;padding:24px 30px}.offline-heading{margin:0 0 12px;color:#607467;font-size:11px;line-height:1.5}
     @media(max-width:640px){.offline-frame{padding:14px 12px}.offline-heading{font-size:10px}}
   </style>
 </head>

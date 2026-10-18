@@ -2,7 +2,7 @@
 
 ## Project and scope
 
-Greenfield is a Next.js 16 App Router, React 19, TypeScript, Tailwind CSS 4 school-management application. Supabase SSR provides authentication; Drizzle describes PostgreSQL tables. The shared design system lives in `src/app/globals.css` and `src/components`. The academic scope is **Creche, Nursery, and Primary only**. A school chooses Primary 5 or Primary 6 as its final level; levels and sections are independent.
+Greenfield is a Next.js 16 App Router, React 19, TypeScript, Tailwind CSS 4 school-management application. Supabase SSR provides authentication; Drizzle describes PostgreSQL tables. The shared design system lives in `src/app/globals.css` and `src/components`; read `docs/DESIGN_SYSTEM.md` and `docs/UI_CONSISTENCY_AUDIT.md` before UI work. The design baseline is source-grounded but still requires visual sign-off. The academic scope is **Creche, Nursery, and Primary only**. A school chooses Primary 5 or Primary 6 as its final level; levels and sections are independent.
 
 The proposed deployment model is a separate PostgreSQL database per school installation. This is **pending verification**, not evidence that any deployment enforces it. Keep `school_id` on records, validate school-scoped relationships, and use tenant isolation even under a separate-database model.
 
