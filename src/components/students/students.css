@@ -3,9 +3,9 @@
 .students-workspace{display:grid;gap:18px}
 .students-workspace .page-heading{margin-bottom:0}
 .students-section-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:20px}
-.students-section-head h2{font-size:16px;margin:0 0 7px}
+.students-section-head h2{font-size:15px;letter-spacing:-.02em;margin:0 0 7px;color:var(--ink)}
 .students-section-head p,.students-form-foot p{font-size:12px;line-height:1.65;color:var(--muted);margin:0}
-.students-chip{font-size:11px;font-weight:700;color:var(--forest);background:#eaf5ee;padding:7px 11px;border-radius:20px;white-space:nowrap}
+.students-chip{font-size:11px;font-weight:700;color:var(--forest);background:#e9f5ec;padding:7px 11px;border-radius:8px;white-space:nowrap}
 .students-toolbar{display:flex;gap:12px;flex-wrap:wrap}
 .students-search{flex:1;min-width:210px}
 .students-search input,.students-filter select,.students-fields input{min-height:42px;width:100%;padding:10px 12px;border:1px solid #dce7df;border-radius:9px;background:#fff;color:var(--ink);font-size:12px}
@@ -13,7 +13,7 @@
 .students-filter{display:flex;align-items:center;gap:9px;color:#415d4b;font-size:12px;font-weight:700}
 .students-filter select{min-width:155px}
 .students-empty{text-align:center;border-top:1px solid var(--border);margin-top:20px;padding:42px 12px}
-.students-empty-symbol{display:grid;place-items:center;margin:0 auto 16px;width:52px;height:52px;background:#eaf5ee;border-radius:14px;color:var(--forest);font-size:32px}
+.students-empty-symbol{display:grid;place-items:center;margin:0 auto 16px;width:52px;height:52px;background:#e9f5ec;border-radius:var(--radius);color:var(--forest);font-size:32px}
 .students-empty h3{font-size:15px;margin:0 0 8px}
 .students-empty p{font-size:12px;line-height:1.7;color:var(--muted);max-width:390px;margin:0 auto}
 .students-link{border:0;background:transparent;color:var(--forest);font-size:12px;font-weight:700;padding:8px;cursor:pointer}
