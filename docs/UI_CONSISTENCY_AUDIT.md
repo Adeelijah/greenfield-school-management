@@ -28,6 +28,12 @@ Scope: source inspection of `src/app/globals.css`, `src/components/app-shell.tsx
 - **Pass C:** unify tabs/status/empty states where genuinely reusable.
 - **Pass D:** remove cross-module stylesheet dependencies and add design showcase using real components.
 
+## Implementation progress
+
+- **Pass B started (source-level only):** Academic Operations and Admissions panels now use shared `--border`, `--radius`, `--surface`, and `--shadow` tokens. Primary-action and active-tab backgrounds in Academic Operations and Admissions, and the Calendar primary action, now use `--forest` instead of `#27623e`.
+- These are deliberate visual changes and **have not been rendered or tested** in this GitHub-only session. They must be compared against the approved dashboard and student controls before sign-off.
+- Cross-module CSS imports, shared tab extraction, and text-size/accessibility audit remain open.
+
 ## Release blockers
 
 No visual sign-off of the design-system showcase, no cross-module screenshot comparison, and no independent TypeScript/ESLint/offline test run in this GitHub-only review. Do not label the consolidation completed until these checks are satisfied.
