@@ -35,6 +35,10 @@ Scope: source inspection of `src/app/globals.css`, `src/components/app-shell.tsx
 - **Preview parity improved:** three isolated preview builders now import a shared `scripts/greenfield-preview-tokens.mjs` string matching the original global tokens. The preview background uses `--canvas` instead of its prior hard-coded value. The new module is static and contains no credentials or network calls. Source fetch verified imports and substitutions, but execution/rendering is not yet verified.
 - Cross-module CSS imports, shared tab extraction, and text-size/accessibility audit remain open.
 
+## Screenshot review and typography corrections (2026-10-18)
+
+User-supplied 390px mobile and desktop screenshots of Calendar & Assessments show that the isolated preview typography and spacing still diverged from the established application. Root cause verified in source: all three preview builders used `Arial,Helvetica,sans-serif` while the app shell uses `Inter, Segoe UI, Arial, sans-serif`. All three builders now match the app font stack (using installed fonts; no external font fetch). Calendar headings, cards, tabs and calendar borders now use the established shared tokens and page heading scale. Academic Operations and Admissions typography and muted text colors have also been normalized. These edits are committed but **require a new offline run and screenshots**; the earlier passing 132 tests predate these edits.
+
 ## Release blockers
 
 No visual sign-off of the design-system showcase, no cross-module screenshot comparison, and no independent TypeScript/ESLint/offline test run in this GitHub-only review. Do not label the consolidation completed until these checks are satisfied.
