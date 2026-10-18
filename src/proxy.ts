@@ -2,6 +2,12 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
 
 export async function proxy(request: NextRequest) {
+  if (
+    process.env.NODE_ENV === 'development' &&
+    request.nextUrl.pathname === '/dev-preview/students'
+  ) {
+    return NextResponse.next({ request });
+  }
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   if (!url || !key) throw new Error('Supabase public URL and anon key must be configured');

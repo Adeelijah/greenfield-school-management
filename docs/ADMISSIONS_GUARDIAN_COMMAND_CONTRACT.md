@@ -1,0 +1,46 @@
+# Admissions and guardian command contract
+
+Status: offline application logic and fictional preview only. No admissions or guardian handler is connected to persistence. No database, SQL, migration, authentication, grant, or RLS behavior is changed by this milestone.
+
+## Existing structures reused
+
+The Drizzle source already describes `admissions`, `guardians`, `student_guardians`, `students`, `enrollments`, `classes`, `academic_levels`, `academic_sections`, `memberships`, and `audit_events`. Admissions reuses `studentRegistrationSchema` for name, admission-number, and date-of-birth rules, and `validateClassStructure` for Creche/Nursery/Primary progression and the configurable Primary 5/6 final level. Guardian relationships remain independent of academic level/section placement.
+
+The current database schema is not sufficient to persist this contract. Its `admission_status` enum is `draft`, `submitted`, `reviewing`, `accepted`, and `declined`; it has no `waitlisted`, and the review UI's `approved`/`rejected` values need an approved mapping. `admissions` stores only `applicant_name`, optional `requested_class_id`, status and submission time: it has no normalized student details, requested level, guardian links, decision notes/history, reviewer, version, or onboarding reference. `student_guardians.relationship` is an unconstrained string with `is_primary`; it has no emergency-contact flag, relationship version/history, or database constraint for exactly one primary guardian. Existing `guardians.phone` and `email` are nullable and have no school-scoped contact uniqueness. Do not infer persistence readiness from the current table declarations or execute the review SQL drafts.
+
+## Pure command and trusted context boundary
+
+`src/lib/admissions/admissions.ts` defines discriminated commands for applicant registration, review-status changes, approve/reject/waitlist decisions, approved-applicant onboarding, guardian contact creation/update, and student-guardian relationship changes. A command carries an operation ID and, when it changes an existing record, an expected application, guardian, or student version. It does not accept a school or role claim. Runtime checks reject forged school, role, or membership claims, including nested payload claims.
+
+`VerifiedAdmissionContext` contains a verified actor and trusted operation timestamp; it is a contract for a **trusted server adapter**, not a browser DTO. Before calling this pure logic, a future handler must authenticate the user, resolve exactly one active school membership, derive the school from that membership, supply trusted server/database time, and load all referenced rows with school predicates. The current contract allows only an active school admin to view or mutate full applicant and guardian data. Teachers and bursars are denied. This is a conservative proposal consistent with the lifecycle profile boundary; any teacher access to admissions requires product/security review. UI checks are not authorization.
+
+The command function checks tenant ownership, record status, role, class/level match, active session, input validity, guardian contact identity, duplicates, expected versions, existing student/admission-number collisions, and idempotency before returning a new state. Rejections return no state mutation. The offline adapter is immutable: one result state includes its changes, audit event, and idempotency record, or the caller receives a failure and retains the old state. A future HTTP/server handler must never serialize the full snapshot back to a user; it must return only a reviewed, minimal result DTO.
+
+## Admissions rules
+
+- Supported levels and stages are Creche, Nursery and Primary. The academic structure validator must pass; Primary years must be contiguous from Primary 1 through the configured final Primary 5 or 6. The configured final year must agree with the structure's final level.
+- An active class must belong to the same school and requested level. Approving and onboarding revalidate the proposed class against the current structure.
+- New applications require student details, a valid requested level and proposed class, at least one guardian contact method, a supported relationship (`parent`, `legal_guardian`, `other`), and exactly one primary applicant guardian.
+- A duplicate open/approved/waitlisted application or an existing same-school student identity is rejected. A rejected application is retained in history and does not itself block a later re-application; a matching current student still blocks it.
+- Only `submitted`/`waitlisted` applications can enter review through the allowed status transitions. Final outcomes are only available from `reviewing`, require a note, and are terminal. Only `approved` applicants can be onboarded.
+- Onboarding uses the reviewed class and an active same-school session, validates through the existing student-registration schema, and rejects admission-number, student identity, deterministic student-ID, and enrollment collisions. One student, one enrollment for the selected session, copied guardian links, application linkage, audit event, and idempotency record are returned as one in-memory result. It never creates a second student/enrollment on retry.
+
+## Guardian rules
+
+- Contact records and all linked student/application rows must belong to the trusted school. Contact matching normalizes phone digits and lower-cases email; matching one contact with a conflicting name or second contact is a conflict rather than an implicit merge.
+- A school guardian must have a name and at least one valid phone/email. Creating or editing a guardian rejects a contact that belongs to another guardian in that school.
+- A student may have multiple active guardians and a guardian may be linked to multiple siblings. An active guardian/student pair cannot be duplicated. Relationship values are `parent`, `legal_guardian`, and `other`.
+- Exactly one active primary guardian is required for a student. Selecting a new primary clears the old primary as a versioned relationship transition; removing the only primary is rejected. Emergency contact is a separate designation and may coexist with primary status.
+- Relationship changes append a minimal prior-state record before replacing the active link. Guardian contact and relationship changes generate audit events. Audit events contain actor, school, operation, entity IDs and state/action only; they exclude names, contact data, notes and raw payloads.
+
+## Idempotency, concurrency and future transaction adapter
+
+The `operationId` is school-scoped in the preview state. A stable recursively key-sorted command fingerprint returns the original audit event for an identical retry; reusing the ID with changed content fails. Existing-record updates require optimistic versions. A mismatch rejects stale work. The client does not choose server-generated persistent IDs; preview IDs are only deterministic fixtures. The pure command function receives trusted operation time explicitly so fixture tests do not depend on the machine clock; a server adapter should use a transaction-consistent timestamp.
+
+`AdmissionPersistenceAdapter` and `AdmissionTransactionPort` are type contracts, not implementations. A future PostgreSQL adapter should authenticate and derive membership before entering a transaction, then lock the school's structure/version, the applicant or student, and referenced guardian rows in stable ID order. Inside the same transaction it must reload all client-referenced IDs with tenant predicates, check operation fingerprint and expected versions, rerun pure validation, write decision/onboarding/guardian records and append the minimal audit event. Constraints should backstop active student/guardian pairs, the approved one-primary rule, school-scoped idempotency, admission numbers and one enrollment per student/session. Contact duplicates need normalized transactional checks; do not add a unique phone/email index until legitimate shared family contacts and normalization rules are resolved. On any write or audit failure, roll back all writes. Actor identity and created/updated timestamps must come from trusted server/database context.
+
+Before persistence, resolve the admission-status/schema mapping, applicant and decision-history model, guardian-to-applicant relation, guardian contact uniqueness policy (including shared family numbers), one-primary constraint, emergency-contact storage, relationship history/retention, identifier generation, duplicate/reapplication policy, and exact admin/teacher/bursar read and write permissions. Then prepare reviewed forward-only schema/RLS/grant proposals and test them in an authorized isolated database. This milestone does not edit or execute the Step 494 SQL drafts.
+
+## Verification limits
+
+Tests in `src/lib/admissions/admissions.test.ts` use fictional in-memory records. They verify transitions, role boundaries, school scope, duplicate checks, placement, contact/link integrity, primary-guardian behavior, onboarding collisions, versions, idempotency and minimal audit creation. They do not verify a transaction adapter, database constraints, migrations, RLS, grants, real authentication, or browser rendering.

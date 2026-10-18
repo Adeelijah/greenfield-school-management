@@ -1,0 +1,283 @@
+.class-structure-page {
+  display: grid;
+  gap: 20px;
+  width: min(100%, 1100px);
+  margin: 0 auto;
+  padding: 24px 16px 48px;
+  min-width: 0;
+}
+
+.class-structure-header,
+.class-structure-section-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.class-structure-header h1 {
+  margin: 6px 0;
+  font-size: clamp(25px, 3vw, 34px);
+  letter-spacing: -.04em;
+}
+
+.class-structure-header p,
+.class-structure-section-head p,
+.class-structure-setting p {
+  color: #728077;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.class-structure-eyebrow {
+  color: #46775a;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.class-structure-pill,
+.class-structure-count,
+.class-structure-final {
+  display: inline-flex;
+  align-items: center;
+  white-space: nowrap;
+  border-radius: 999px;
+  padding: 6px 10px;
+  background: #eef5ef;
+  color: #42694c;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.class-structure-notice {
+  padding: 14px 16px;
+  border-radius: 12px;
+  border: 1px solid #e0e9e1;
+  background: #f6faf6;
+  color: #526d59;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.class-structure-panel {
+  min-width: 0;
+  border: 1px solid #e7ece8;
+  border-radius: 18px;
+  background: #fff;
+  padding: 24px;
+}
+
+.class-structure-section-head h2 {
+  margin: 0 0 5px;
+  font-size: 17px;
+  letter-spacing: -.02em;
+}
+
+.class-structure-section-head p {
+  margin: 0;
+}
+
+.class-structure-list {
+  display: grid;
+  gap: 10px;
+  margin-top: 22px;
+}
+
+.class-structure-item {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid #e7ece8;
+  border-radius: 12px;
+  background: #fcfdfc;
+}
+
+.class-structure-order {
+  display: grid;
+  place-items: center;
+  flex: 0 0 30px;
+  height: 30px;
+  border-radius: 9px;
+  background: #edf3ee;
+  color: #57705d;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.class-structure-name {
+  flex: 1;
+  min-width: 0;
+}
+
+.class-structure-sections {
+  flex: 1 1 210px;
+  min-width: 0;
+  color: #65756a;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.class-structure-section-row {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.class-structure-section-row input { flex: 1; }
+.class-structure-sections button {
+  min-height: 34px;
+  margin-top: 6px;
+  padding: 0 10px;
+  border: 1px solid #dfe7e0;
+  border-radius: 9px;
+  background: #fff;
+  color: #425e49;
+  cursor: pointer;
+}
+
+.class-structure-name label,
+.class-structure-add label,
+.class-structure-setting label {
+  display: block;
+  margin-bottom: 7px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #65756a;
+}
+
+.class-structure-page input,
+.class-structure-page select {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  height: 42px;
+  padding: 0 12px;
+  border: 1px solid #dfe7e0;
+  border-radius: 9px;
+  background: white;
+  color: #26372a;
+  font: inherit;
+  font-size: 13px;
+}
+
+.class-structure-row-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.class-structure-row-actions button {
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 1px solid #e1e8e2;
+  border-radius: 9px;
+  background: #fff;
+  color: #425e49;
+  cursor: pointer;
+}
+
+.class-structure-row-actions button:disabled {
+  opacity: .3;
+  cursor: not-allowed;
+}
+
+.class-structure-row-actions .class-structure-remove {
+  color: #a64b4b;
+}
+
+.class-structure-add {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 12px;
+  margin-top: 22px;
+  padding-top: 20px;
+  border-top: 1px solid #edf0ed;
+}
+
+.class-structure-add button,
+.class-structure-footer button {
+  min-height: 42px;
+  padding: 0 18px;
+  border: 0;
+  border-radius: 9px;
+  background: #326c46;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.class-structure-add button:disabled,
+.class-structure-footer button:disabled {
+  background: #e8ede9;
+  color: #87938a;
+  cursor: not-allowed;
+}
+
+.class-structure-setting {
+  max-width: 520px;
+  margin-top: 20px;
+}
+
+.class-structure-errors {
+  margin: 20px 0;
+  color: #a04343;
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.class-structure-footer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+.class-structure-feedback {
+  margin-top: 14px;
+  color: #426e4c;
+  font-size: 13px;
+}
+
+@media (max-width: 640px) {
+  .class-structure-page {
+    padding: 16px 12px 36px;
+    gap: 14px;
+  }
+
+  .class-structure-panel {
+    padding: 18px 14px;
+    border-radius: 14px;
+  }
+
+  .class-structure-header {
+    flex-direction: column;
+  }
+
+  .class-structure-item {
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .class-structure-name {
+    flex-basis: calc(100% - 54px);
+  }
+
+  .class-structure-sections { flex-basis: 100%; }
+
+  .class-structure-final {
+    margin-left: 40px;
+  }
+
+  .class-structure-row-actions {
+    margin-left: auto;
+  }
+
+  .class-structure-add {
+    grid-template-columns: 1fr;
+  }
+}

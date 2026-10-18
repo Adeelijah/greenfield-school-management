@@ -1,0 +1,404 @@
+.student-exits-page {
+  width: min(100%, 1080px);
+  margin: 0 auto;
+  padding: 28px 18px 56px;
+  display: grid;
+  gap: 20px;
+  min-width: 0;
+}
+
+.student-exits-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.student-exits-header h1 {
+  margin: 6px 0;
+  font-size: clamp(26px, 3vw, 35px);
+  letter-spacing: -.04em;
+}
+
+.student-exits-header p,
+.student-exits-panel-heading p,
+.student-exits-history-item p {
+  margin: 6px 0 0;
+  font-size: 13px;
+  color: #738077;
+  line-height: 1.6;
+}
+
+.student-exits-eyebrow {
+  font-size: 12px;
+  font-weight: 700;
+  color: #4b7658;
+}
+
+.student-exits-tag {
+  display: inline-flex;
+  flex-shrink: 0;
+  padding: 7px 11px;
+  border-radius: 999px;
+  background: #eef5ef;
+  color: #476a50;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.student-exits-notice {
+  padding: 15px 17px;
+  border-radius: 12px;
+  border: 1px solid #dfe9e0;
+  background: #f5faf6;
+  color: #52705a;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.student-exits-panel {
+  padding: 26px;
+  border: 1px solid #e6ece7;
+  border-radius: 18px;
+  background: #fff;
+  min-width: 0;
+}
+
+.student-exits-panel-heading h2 {
+  font-size: 18px;
+  letter-spacing: -.02em;
+  margin: 0;
+}
+
+.student-exits-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+  margin-top: 25px;
+}
+
+.student-exits-field {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.student-exits-field span {
+  color: #56685b;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.student-exits-field input,
+.student-exits-field select,
+.student-exits-field textarea {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  border: 1px solid #dfe7e0;
+  border-radius: 10px;
+  background: #fff;
+  color: #26372a;
+  padding: 11px 12px;
+  font: inherit;
+  font-size: 13px;
+}
+
+.student-exits-field input,
+.student-exits-field select {
+  min-height: 44px;
+}
+
+.student-exits-field textarea {
+  resize: vertical;
+}
+
+.student-exits-wide {
+  grid-column: 1 / -1;
+}
+
+.student-exits-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-top: 24px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: #45584a;
+}
+
+.student-exits-check input {
+  width: 16px;
+  height: 16px;
+  margin-top: 3px;
+  flex-shrink: 0;
+}
+
+.student-exits-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 24px;
+}
+
+.student-exits-actions button {
+  border: 0;
+  border-radius: 10px;
+  padding: 12px 18px;
+  min-height: 44px;
+  background: #326c46;
+  color: white;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.student-exits-actions button.secondary {
+  background: #eef3ef;
+  color: #42634b;
+}
+
+.student-exits-actions button:disabled {
+  background: #e8ede9;
+  color: #89968c;
+  cursor: not-allowed;
+}
+
+.student-exits-errors {
+  margin-top: 16px;
+  color: #a44444;
+  font-size: 13px;
+  line-height: 1.8;
+}
+
+.student-exits-summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+  margin: 24px 0 0;
+}
+
+.student-exits-summary div {
+  min-width: 0;
+  padding: 15px;
+  background: #f8faf8;
+  border-radius: 10px;
+}
+
+.student-exits-summary dt {
+  font-size: 11px;
+  color: #748176;
+  margin-bottom: 7px;
+}
+
+.student-exits-summary dd {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: #2b3b2e;
+  overflow-wrap: anywhere;
+}
+
+.student-exits-history {
+  display: grid;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+.student-exits-history-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 15px;
+  border: 1px solid #e7ece8;
+  border-radius: 12px;
+}
+
+.student-exits-history-item strong {
+  font-size: 13px;
+}
+
+@media (max-width: 640px) {
+  .student-exits-page {
+    padding: 16px 12px 36px;
+    gap: 14px;
+  }
+
+  .student-exits-header {
+    flex-direction: column;
+  }
+
+  .student-exits-panel {
+    padding: 18px 14px;
+    border-radius: 14px;
+  }
+
+  .student-exits-fields,
+  .student-exits-summary {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .student-exits-history-item {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
+
+/* Student Exit dropdown alignment v2 */
+
+/* Consistent two-column form layout */
+.student-exits-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+  gap: 22px 18px;
+}
+
+.student-exits-fields > .student-exits-field {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+}
+
+.student-exits-fields > .student-exits-wide {
+  grid-column: 1 / -1;
+}
+
+/* Match the shared dropdown to ordinary form fields */
+.student-exits-fields .greenfield-dropdown {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+}
+
+.student-exits-fields .greenfield-dropdown-label {
+  display: block;
+  width: 100%;
+  margin: 0;
+  color: #56685b;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+.student-exits-fields .greenfield-dropdown-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  padding: 10px 13px;
+  border: 1px solid #dfe7e0;
+  border-radius: 10px;
+  background: #fff;
+  color: #26372a;
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.student-exits-fields .greenfield-dropdown-trigger > span {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.student-exits-fields .greenfield-dropdown-trigger > svg {
+  flex-shrink: 0;
+}
+
+/* Floating menu, positioned within its own field */
+.student-exits-fields .greenfield-dropdown-options {
+  position: absolute;
+  z-index: 100;
+  top: calc(100% + 5px);
+  left: 0;
+  right: 0;
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  max-height: 240px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 5px;
+  border: 1px solid #dfe7e0;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 12px 30px rgba(25, 50, 30, .12);
+}
+
+/* Option buttons must not inherit trigger styling */
+.student-exits-fields .greenfield-dropdown-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 40px;
+  padding: 9px 11px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #304536;
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.student-exits-fields .greenfield-dropdown-option > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.student-exits-fields .greenfield-dropdown-option:hover,
+.student-exits-fields .greenfield-dropdown-option.selected {
+  background: #eef5ef;
+  color: #326c46;
+}
+
+.student-exits-fields .greenfield-dropdown-option > svg {
+  flex-shrink: 0;
+}
+
+/* Prevent clipping of floating menus */
+.student-exits-panel,
+.student-exits-fields,
+.student-exits-field {
+  overflow: visible;
+}
+
+/* Consistent mobile behaviour */
+@media (max-width: 640px) {
+  .student-exits-fields {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 18px;
+  }
+
+  .student-exits-fields > .student-exits-field {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .student-exits-fields .greenfield-dropdown,
+  .student-exits-fields .greenfield-dropdown-trigger,
+  .student-exits-fields .greenfield-dropdown-options {
+    width: 100%;
+    max-width: 100%;
+  }
+}

@@ -1,19 +1,49 @@
-# Greenfield Academy implementation roadmap
+# Greenfield completion roadmap
 
-## Phase 1 — Foundation
-- [x] Next.js, TypeScript, Tailwind application scaffold
-- [x] Responsive dashboard and design tokens
-- [ ] Accessible working navigation and automated tests
-- [ ] Authentication, role permissions and database migrations
+Status reflects repository code and offline checks, not a deployed installation. A route or component is not a completed feature until its authorization, data flow, persistence (when required), and relevant QA are verified. Scope is Creche, Nursery and Primary only, with Primary 5 or Primary 6 as the school's final level. Separate PostgreSQL databases per school are the proposed deployment model, pending operational verification.
 
-## Phase 2 — Core records
-Students, guardians, admissions, classes, staff and subject assignments.
+| Area | Current evidence | Status |
+| --- | --- | --- |
+| App shell and navigation | Next.js/React/Tailwind shell, dashboard and module links in `src/app` and `src/components` | Implemented UI foundation; dashboard metrics/events are fictional, other module routes mostly placeholders |
+| Authentication | Supabase SSR clients, verified `getUser`, login action, proxy and active-membership gate in `src/server/auth` | Source implementation exists; real JWT, session and deployment behavior unverified |
+| Student registration and directory | Pure registration validation and a school-filtered server read path; active Students route renders `StudentWorkspace` with preview data | Partial; read path is unwired, teacher assignment restriction is not enforced by that read path, no registration persistence |
+| Student profile and lifecycle | Profile, enrollment, promotion, repetition, graduation, transfer and exit preview components; fictional fixtures and pure tests | Preview-only; user approved offline visual preview, no persistent workflow or verified live authorization |
+| Lifecycle command foundation | Typed pure commands, verified-context prechecks, transaction/audit plans and fictional tests in `src/lib/students/lifecycle-commands.ts` | Offline business logic verified; no production server adapter, persistence or real authentication |
+| Lifecycle transaction simulation | `src/lib/students/lifecycle-memory-adapter.ts` applies command plans to cloned fictional state with audit, idempotency and rollback tests | Offline simulation verified; not PostgreSQL transaction, RLS, grant or live auth evidence |
+| Academic structure | Independent levels/sections, Primary 5/6 final-year validation and editor; pure tests | Preview-only; Step 494 schema additions are proposed and unexecuted |
+| Academic operations foundation | Pure school-scoped teacher/class/session assignments, subject catalog and level/class/teacher-subject links; responsive preview components and offline tests | Offline preview/business-rule milestone only; relies on server-verified memberships in future integration, no persistence or live identity |
+| Attendance | Roster derived from active session enrollments, excludes completed/graduated/withdrawn records, assignment-bound teacher checks and duplicate student/date validation | Offline preview/business-rule milestone only; no persistence, live identity, or browser QA |
+| Database foundation | Drizzle foundation schema and journaled `0000` source; Step 494 additions and review SQL | Source/draft only; actual applied database state unknown, no lifecycle migration executed |
+| Security drafts | Auth/RLS/grant documentation and offline static tests in `docs/security` and `scripts` | Review artifacts, not proof of applied policies or restricted DB role |
+| Admissions and guardians | `src/lib/admissions/admissions.ts` pure typed commands; fictional applicant/guardian fixtures; responsive workspaces and standalone offline preview; offline tests for decisions, tenant/role checks, guardian links, onboarding, idempotency and versions | Offline command/UI foundation verified; no persistent admissions/guardian model, handlers, live authorization, or browser inspection. Existing schema lacks waitlist and decision history, normalized applicant/guardian links, guardian emergency flags/history, versions and primary uniqueness |
+| Staff and subjects | School-scoped assignment/subject validators, fictional fixtures and responsive Academic Operations preview | Offline foundation verified; no persistence, live membership/assignment reads, or browser inspection |
+| Academic calendar | School-specific sessions, ordered non-overlapping first/second/third terms, calendar/list views, event create/edit/cancel, and pure school-admin planning | Offline domain and static preview foundation; no persistence, live auth, or browser inspection |
+| Assessment configuration, score entry and results | Weighted CA/exam/other components, school-defined numeric grade bands, Creche observational rubric, enrollment-derived eligibility, assignment-bound teacher entry, result preparation/review/finalization | Offline domain/tests and static preview foundation; no score persistence, report-card publication, live auth, or browser inspection |
+| Fees, invoices, payments, receipts, finance reports | Module names/routes and fictional dashboard metric | Missing domain model, permissions, reconciliation and persistence |
+| Academic/attendance reports and settings/users | Module names/routes | Mostly missing; no verified management workflows |
 
-## Phase 3 — Operations
-Attendance, assessments, results and developmental grading.
+## Priority 0 — security and data readiness gate
 
-## Phase 4 — Finance and reporting
-Fee structures, invoices, manual payments, receipts and reports.
+Before any real student data or persistence: approve the Step 494 [schema/security review](STUDENT_LIFECYCLE_STEP_494_REVIEW.md), [forward-only DDL draft](security/10_lifecycle_schema_review.sql), and [RLS/grants proposal](security/11_lifecycle_rls_grants_review.sql). These SQL files are **unexecuted drafts**. Resolve actual deployed migration/policy state, direct application role ownership and `BYPASSRLS`, trusted school context, least-privilege grants, teacher assignment authorization, audit immutability/retention, enrollment status transitions, and ambiguous class backfill. Verify one-school-per-database provisioning and two-school isolation tests in an explicitly authorized isolated database. No live integration can be considered complete until those gates pass.
 
-## Architecture
-Shared source code, independent deployment and PostgreSQL database per school. No secrets or real student records in Git.
+## Priority 1 — offline command foundation completed
+
+The [Step 496 command contract](STUDENT_LIFECYCLE_COMMAND_CONTRACT.md) now covers initial enrollment/class placement, teacher proposals and admin finalization, promotion/repetition/graduation, transfer/early exit and re-admission. Offline tests cover Primary 5/6, independent sections, cross-school denial, stale/duplicate commands, audit plans and retained history. It is not wired to a handler or database. Structure editing and student registration remain separate preview/domain concerns; they are not falsely counted as Step 496 commands.
+
+The next offline milestone has added a fake in-memory transaction adapter and contract tests around the Step 496 port. It demonstrates optimistic-version failure, atomic audit rollback, idempotent replay, teacher assignment checks, completed enrollment history, and deterministic conflicting outcomes. It remains separate from Drizzle and Supabase. Before any real adapter, resolve the Priority 0 database/security decisions and the missing historical enrollment status and student version storage.
+
+The Step 495 [schema/transaction reconciliation](STUDENT_LIFECYCLE_STEP_495_RECONCILIATION.md) prepares review-only forward-only proposals for `completed` enrollment state, persistent student version, school-wide idempotency, audit linkage/immutability, atomic lifecycle transactions, and trusted runtime role/RLS context. No SQL is executed. Attendance was advanced as an independent offline-first module milestone; its code is not coupled to lifecycle schema work.
+
+## Priority 2 — authorized lifecycle integration
+
+After the Priority 0 decisions and explicit approval: review and apply forward-only migrations in an isolated environment; verify real grants/RLS/JWT/transaction behavior; then add read-only school-scoped APIs, registration/guardian/structure writes, enrollment writes, and lifecycle finalization one operation at a time. Every finalized change needs an atomic audit record, idempotency, concurrency protection and rollback tests. Connect preview UI only after the corresponding server operation is accepted. Do not infer readiness from offline tests alone.
+
+## Priority 3 — remaining school operations
+
+Admissions and Guardian Management now have a pure offline command layer and memory-only workspace. Before server integration, resolve the schema/status/history and guardian relationship gaps in [the admissions/guardian contract](ADMISSIONS_GUARDIAN_COMMAND_CONTRACT.md), then return to Priority 0 for verified tenant context, migrations, grants/RLS and audit design. The Academic Operations foundation includes class/session assignments, subject links, assignment-bound attendance and now an offline calendar/assessment/results contract. These areas still need trusted server context, persistent adapters, reviewed authorization/audit, schema reconciliation and browser inspection. Next product priorities are finance operations under a separately reviewed bursar policy, followed by academic/attendance reports and administration settings once underlying records are trustworthy.
+
+The [Academic Calendar and Assessment contract](ACADEMIC_CALENDAR_ASSESSMENTS_COMMAND_CONTRACT.md) documents the new pure planners, result calculations, audit/idempotency preconditions and future adapter boundary. The standalone preview is generated with `scripts/build-calendar-assessments-preview.mjs`; it bundles real local components and styles into a CSP-restricted HTML file in the OS temp folder.
+
+## Production readiness
+
+Require verified auth/session recovery, school provisioning, tenant isolation, database role/grant/RLS tests, migration/recovery procedures, least-privilege backups, observability, audit retention, accessibility and responsive browser QA, data privacy review, and operational incident/rollback plans. Existing security and staging documents are review material; their presence alone does not establish deployment readiness.

@@ -1,12 +1,14 @@
 import { requireSchoolAccess } from '@/server/auth/require-school-access';
 import Link from 'next/link';
+import { StudentWorkspace } from '@/components/students/student-workspace';
 import { notFound } from 'next/navigation';
 import { AppShell } from '@/components/app-shell';
 import { findModule, moduleDescriptions, moduleNames, slugFor } from '@/lib/modules';
 export function generateStaticParams(){return moduleNames.filter(name=>name!=='Dashboard').map(name=>({slug:slugFor(name)}))}
 export default async function ModulePage({params}:{params:Promise<{slug:string}>}){
- await requireSchoolAccess();
+ const access = await requireSchoolAccess();
  const {slug}=await params;const name=findModule(slug);if(!name||name==='Dashboard')notFound();
+ if(name==='Students')return <AppShell><StudentWorkspace canRegister={access.role==='admin'}/></AppShell>;
  return <AppShell><div className="page-heading"><div><h1>{name}</h1><p>{moduleDescriptions[name]}</p></div></div>
  <section className="card" style={{maxWidth:780}}>
  <h2>{name} workspace</h2>
