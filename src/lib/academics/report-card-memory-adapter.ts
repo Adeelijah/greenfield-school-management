@@ -1,8 +1,8 @@
 // Offline-only transaction simulator. No database, authentication, network or parent portal.
-import { preflightReportTransition, type ReportTrustedContext } from './report-card-preflight.ts';
-import { planReportTransition, type ReportAudit, type ReportCommand, type ReportRecord } from './report-card-workflow.ts';
-import { planReportWrite, type ReportStoredReceipt } from './report-card-persistence-policy.ts';
-import type { ReportCardDraft } from './report-cards.ts';
+import { preflightReportTransition, type ReportTrustedContext } from './report-card-preflight';
+import { planReportTransition, type ReportAudit, type ReportCommand, type ReportRecord } from './report-card-workflow';
+import { planReportWrite, type ReportStoredReceipt } from './report-card-persistence-policy';
+import type { ReportCardDraft } from './report-cards';
 
 export type MemoryReport = { id:string; record:ReportRecord; projection:ReportCardDraft; contexts:ReportTrustedContext[] };
 export type MemoryRelease = {schoolId:string;reportId:string;version:number;publishedAt:string};
