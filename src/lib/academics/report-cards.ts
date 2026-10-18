@@ -1,4 +1,4 @@
-import { prepareResults, type AssessmentSnapshot, type PreparedResult } from './calendar-assessments.ts';
+import { prepareResults, type AssessmentSnapshot, type PreparedResult } from './calendar-assessments';
 
 /** Pure, offline report-card projection. Not an authorization or publication endpoint. */
 export type ReportCardRequest = { schoolId: string; studentId: string; classId: string; sessionId: string; termId: string };
