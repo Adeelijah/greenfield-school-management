@@ -66,8 +66,8 @@ const html = `<!doctype html>
   <title>Greenfield Academic Operations — Offline Preview</title>
   <style>${styles}
     ${greenfieldPreviewTokens}
-    *{box-sizing:border-box}html,body{margin:0;min-height:100%;font-family:Arial,Helvetica,sans-serif;background:var(--canvas);color:var(--ink)}
-    button,input,select{font:inherit}.offline-frame{width:min(1440px,100%);min-height:100vh;margin:0 auto;padding:24px 30px}.offline-heading{margin:0 0 12px;color:#607467;font-size:11px;line-height:1.5}
+    *{box-sizing:border-box}html,body{margin:0;min-height:100%;font-family:Inter,'Segoe UI',Arial,sans-serif;background:var(--canvas);color:var(--ink)}
+    button,input,select,textarea{font:inherit}.offline-frame{width:min(1440px,100%);min-height:100vh;margin:0 auto;padding:24px 30px}.offline-heading{margin:0 0 12px;color:#607467;font-size:11px;line-height:1.5}
     @media(max-width:640px){.offline-frame{padding:14px 12px}.offline-heading{font-size:10px}}
   </style>
 </head>
