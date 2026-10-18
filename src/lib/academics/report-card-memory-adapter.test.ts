@@ -35,7 +35,7 @@ test('same operation replays but reused key with different fingerprint conflicts
 test('stale competing action cannot both update report',()=>{
  const store=new ReportMemoryStore(state());
  assert.equal(store.apply(op('submit','teacher',1)).ok,true);
- assert.equal(store.apply(op('submit','teacher',1)).kind,'replay');
+ assert.deepEqual(store.apply(op('submit','teacher',1)),{ok:true,kind:'replay',version:2});
  assert.equal(store.apply({...op('submit','teacher',1),command:{...op('submit','teacher',1).command,idempotencyKey:'new-operation'} }).ok,false);
  assert.equal(store.snapshot().reports[0]!.record.version,2);
 });
