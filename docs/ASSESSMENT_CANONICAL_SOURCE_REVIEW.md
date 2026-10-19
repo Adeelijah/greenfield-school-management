@@ -27,3 +27,7 @@ This is content verification, not authentication or an electronic signature. Cur
 Thirteen new pure tests cover complete two-student and multi-subject scopes, shared default config, canonical ordering, decimal scale, source/placement changes, incomplete scores, enrollment conflicts, forged hashes/results, review/finalization binding, observational output and getters. The expected full offline count is 272. All 44 selected pure tests and tracked whitespace checks passed here. Full TypeScript/ESLint require the installed project environment; no dependencies or SQL were installed/executed here.
 
 After that gate passes, implement a schema-faithful transaction-scoped complete loader, decode all selected columns, and integrate content verification with actual immutable source/finalization JSONB in the disposable PostgreSQL harness. Existing synthetic minimal manifests must remain insufficient for the new verifier. No existing production data is to be backfilled or trusted automatically. Then reconcile enrollment and snapshot references for the schema-faithful report writer.
+
+## Subsequent verification
+
+The user confirmed the complete offline gate passed with all 272 tests. The next prepared SQL integration is documented in `ASSESSMENT_POSTGRES_CANONICAL_READER.md`; its new PostgreSQL assertions still require execution in the user's disposable database.
