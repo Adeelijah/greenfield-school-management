@@ -12,6 +12,7 @@ const tests = [
   'scripts/assessment-disposable-security-plan.test.mjs',
   'scripts/report-release-disposable-guards.test.mjs',
   'scripts/disposable-session-rendezvous.test.mjs',
+  'scripts/disposable-login-plan.test.mjs',
   'src/components/academics/class-structure.test.ts',
   'src/components/students/academic-progression.test.ts',
   'src/components/students/class-assignment-validation.test.ts',
