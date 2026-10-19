@@ -34,6 +34,7 @@ const tests = [
   'src/lib/academics/report-card-trusted-source.test.ts',
   'src/lib/academics/report-card-authoritative-read.test.ts',
   'src/lib/academics/report-card-postgres-disposable-read-adapter.test.ts',
+  'src/lib/academics/report-card-postgres-disposable-trusted-transaction.test.ts',
   'src/lib/academics/report-card-transaction-port.test.ts',
   'src/components/greenfield-date-picker-layout.test.ts',
 ];
