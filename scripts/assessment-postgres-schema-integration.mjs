@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import { readFixtureRelationalAssessment } from '../src/lib/academics/assessment-postgres-fixture-source-reader.ts';
 import { randomBytes, randomUUID, createHash } from 'node:crypto';
 import { loadFixtureCompleteAssessment, readFixtureVerifiedCanonicalAssessment } from '../src/lib/academics/assessment-postgres-canonical-reader.ts';
+import { executeFixtureCanonicalReportCommand } from '../src/lib/academics/report-card-postgres-canonical-writer.ts';
+import { buildApprovedReportSnapshot } from '../src/lib/academics/report-card-approved-snapshot.ts';
 import { canonicalizeSnapshotValue } from '../src/lib/academics/report-card-canonical-snapshot.ts';
 import postgres from 'postgres';
 import { assessmentWriteGuardDDL } from './lib/assessment-disposable-write-guards.mjs';
@@ -258,13 +260,14 @@ if (!url || process.env.REPORT_CARD_TEST_CONFIRM !== 'DISPOSABLE_REPORT_CARD_TES
   const readCanonical = () => client.begin(tx => readFixtureVerifiedCanonicalAssessment(wrap(tx), schema, scopeSelector, verifyIdentity));
   // Fixture sealing always takes the EXCLUSIVE discovery gate before touching
   // scores or invoking candidate reads; never upgrade a shared read transaction.
+  let expectedPupilCount = 2;
   const seal = (bad = null) => client.begin(async tx => {
    const bound = wrap(tx);
    await bound.unsafe(guards.readGate.replace('FOR SHARE', 'FOR UPDATE'));
    await bound.unsafe('UPDATE ' + table('assessment_scores') + ' SET version=version+1 WHERE id=$1::uuid', [editableScore]);
    const loaded = await loadFixtureCompleteAssessment(bound, schema, scopeSelector, verifyIdentity);
    assert.equal(loaded.ok, true, JSON.stringify(loaded));
-   assert.equal(loaded.input.students.length, 2);
+   assert.equal(loaded.input.students.length, expectedPupilCount);
    const sourceId = randomUUID();
    await insert(bound, 'assessment_source_versions', { id: sourceId, school_id: ids.school, scope_id: ids.scope, revision: loaded.input.scope.revision,
     source_manifest: bad === 'manifest' ? { fixture: true } : JSON.parse(loaded.materialized.manifest.canonicalJson), content_hash: loaded.materialized.manifest.sha256 });
@@ -392,6 +395,111 @@ if (!url || process.env.REPORT_CARD_TEST_CONFIRM !== 'DISPOSABLE_REPORT_CARD_TES
    await expectError('P0001', () => sql.unsafe('TRUNCATE ' + table(name) + ' CASCADE'));
   }
   console.log('PASS: report binding publication rolls back on receipt collision, retries once and preserves append-only records');
+
+  // Actual fixture adapter, distinct from the earlier scripted binding helper.
+  const writerPupils = [];
+  for (let i=0; i<5; i++) {
+   const pupil = { studentId:randomUUID(),enrollmentId:randomUUID(),reportId:randomUUID() };
+   await insert(sql,'students',{ id:pupil.studentId,school_id:ids.school,admission_number:'FICTION-WRITER-'+i,first_name:'Fictional',last_name:'Writer-'+i });
+   await insert(sql,'enrollments',{ id:pupil.enrollmentId,school_id:ids.school,student_id:pupil.studentId,class_id:ids.class,session_id:ids.session });
+   await insert(sql,'assessment_scores',{ ...scoreRow,id:randomUUID(),roster_id:nextRoster,enrollment_id:pupil.enrollmentId,student_id:pupil.studentId,numeric_score:'75.0000' });
+   writerPupils.push(pupil);
+  }
+  expectedPupilCount = 7;
+  const writerSource = await seal(), writerRevision = (await revisions())[ids.scope];
+  for (const pupil of writerPupils) await insert(sql,'report_cards',{ ...reportRow,id:pupil.reportId,enrollment_id:pupil.enrollmentId,student_id:pupil.studentId,assessment_source_version_id:writerSource,assessment_revision:writerRevision,stage:'submitted',version:2,approved_by:null });
+  const adminAuth = (await sql.unsafe('SELECT auth_user_id FROM '+table('school_users')+' WHERE id=$1::uuid',[ids.adminUser]))[0].auth_user_id;
+  const writerDb = { ...sql,begin: callback => client.begin(tx => callback(wrap(tx))) };
+  const runWriter = (command,auth=adminAuth) => executeFixtureCanonicalReportCommand(writerDb,schema,command,async()=>({authUserId:auth}));
+  const approveCommand = (pupil,key) => ({reportId:pupil.reportId,action:'approve',expectedVersion:2,operationKey:key});
+  const publishCommand = (pupil,key) => ({reportId:pupil.reportId,action:'publish',expectedVersion:3,operationKey:key});
+  const reportCount = async (name,pupil) => (await sql.unsafe('SELECT count(*)::int AS n FROM '+table(name)+' WHERE report_id=$1::uuid',[pupil.reportId]))[0].n;
+  const firstWriter = writerPupils[0], firstApprove = approveCommand(firstWriter,'canonical-approve-1'), firstPublish = publishCommand(firstWriter,'canonical-publish-1');
+  const approvals = await Promise.all([runWriter(firstApprove),runWriter(firstApprove)]);
+  assert.equal(approvals.every(r=>r.ok),true,JSON.stringify(approvals)); assert.deepEqual(approvals.map(r=>r.kind).sort(),['applied','replay']);
+  assert.equal(await reportCount('report_card_snapshots',firstWriter),1);
+  assert.deepEqual(await runWriter({...firstApprove,expectedVersion:3}),{ok:false,code:'idempotency_conflict'});
+  const publications = await Promise.all([runWriter(firstPublish),runWriter(firstPublish)]);
+  assert.equal(publications.every(r=>r.ok),true,JSON.stringify(publications)); assert.deepEqual(publications.map(r=>r.kind).sort(),['applied','replay']);
+  assert.equal(publications[0].snapshotId,approvals[0].snapshotId); assert.equal(await reportCount('report_card_releases',firstWriter),1);
+  const storedApproved = (await sql.unsafe('SELECT canonical_payload FROM '+table('report_card_snapshots')+' WHERE id=$1::uuid',[approvals[0].snapshotId]))[0].canonical_payload;
+  assert.equal(storedApproved.format,'greenfield.report-card.approved-snapshot.v1'); assert.equal(storedApproved.subjects[0].result.total,'75.00');
+  assert.equal(JSON.stringify(storedApproved).includes(canonicalEnrollment),false);
+  console.log('PASS: actual canonical report writer serializes approval/publication, replays and pins one pupil snapshot');
+
+  const retryApproval = writerPupils[1], retryApproveCommand = approveCommand(retryApproval,'canonical-approve-retry');
+  assert.deepEqual(await runWriter(retryApproveCommand,authUser),{ok:false,code:'forbidden'});
+  await sql.unsafe('UPDATE '+table('memberships')+" SET status='suspended' WHERE id=$1::uuid",[ids.admin]);
+  try { assert.deepEqual(await runWriter(retryApproveCommand),{ok:false,code:'forbidden'}); }
+  finally { await sql.unsafe('UPDATE '+table('memberships')+" SET status='active' WHERE id=$1::uuid",[ids.admin]); }
+  await sql.unsafe('UPDATE '+table('report_cards')+' SET assessment_source_version_id=$2::uuid,assessment_revision=1 WHERE id=$1::uuid',[retryApproval.reportId,ids.source]);
+  assert.deepEqual(await runWriter(retryApproveCommand),{ok:false,code:'stale_source'});
+  await sql.unsafe('UPDATE '+table('report_cards')+' SET assessment_source_version_id=$2::uuid,assessment_revision=$3 WHERE id=$1::uuid',[retryApproval.reportId,writerSource,writerRevision]);
+  assert.equal(await reportCount('report_card_snapshots',retryApproval),0);
+  console.log('PASS: canonical report writer rejects teacher, suspended actor and stale pinned source without writes');
+
+  await sql.unsafe('CREATE FUNCTION '+table('fixture_fail_report_writer')+"() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.report_id::text = TG_ARGV[0] THEN RAISE EXCEPTION 'injected canonical report fixture failure' USING ERRCODE='P0001'; END IF; RETURN NEW; END $$");
+  const failWriter = (name,pupil) => sql.unsafe('CREATE TRIGGER fixture_fail_writer_insert BEFORE INSERT ON '+table(name)+' FOR EACH ROW EXECUTE FUNCTION '+table('fixture_fail_report_writer')+"('"+pupil.reportId+"')");
+  const clearWriterFailure = name => sql.unsafe('DROP TRIGGER fixture_fail_writer_insert ON '+table(name));
+  for (const name of ['report_card_snapshots','report_card_audit','report_card_operation_receipts']) {
+   await failWriter(name,retryApproval);
+   try { assert.deepEqual(await runWriter(retryApproveCommand),{ok:false,code:'transaction_failed'}); }
+   finally { await clearWriterFailure(name); }
+   const state = (await sql.unsafe('SELECT stage,version FROM '+table('report_cards')+' WHERE id=$1::uuid',[retryApproval.reportId]))[0];
+   assert.equal(state.stage,'submitted'); assert.equal(state.version,2);
+   for (const relation of ['report_card_snapshots','report_card_audit','report_card_operation_receipts']) assert.equal(await reportCount(relation,retryApproval),0);
+  }
+  assert.equal((await runWriter(retryApproveCommand)).ok,true);
+  assert.equal((await runWriter(retryApproveCommand)).kind,'replay');
+  console.log('PASS: canonical approval rolls back snapshot/audit/receipt errors and retries the same operation key');
+
+  const retryPublication = writerPupils[2], retryPublishCommand = publishCommand(retryPublication,'canonical-publish-retry');
+  const approvedForRetry = await runWriter(approveCommand(retryPublication,'canonical-approve-publish-retry')); assert.equal(approvedForRetry.ok,true,JSON.stringify(approvedForRetry));
+  for (const name of ['report_card_releases','report_card_operation_receipts']) {
+   await failWriter(name,retryPublication);
+   try { assert.deepEqual(await runWriter(retryPublishCommand),{ok:false,code:'transaction_failed'}); }
+   finally { await clearWriterFailure(name); }
+   const state = (await sql.unsafe('SELECT stage,version FROM '+table('report_cards')+' WHERE id=$1::uuid',[retryPublication.reportId]))[0];
+   assert.equal(state.stage,'approved'); assert.equal(state.version,3); assert.equal(await reportCount('report_card_releases',retryPublication),0);
+   assert.equal(await reportCount('report_card_audit',retryPublication),1); assert.equal(await reportCount('report_card_operation_receipts',retryPublication),1);
+  }
+  const publishedForRetry = await runWriter(retryPublishCommand); assert.equal(publishedForRetry.ok,true,JSON.stringify(publishedForRetry));
+  assert.equal(publishedForRetry.snapshotId,approvedForRetry.snapshotId); assert.equal((await runWriter(retryPublishCommand)).kind,'replay'); assert.equal(await reportCount('report_card_releases',retryPublication),1);
+  console.log('PASS: canonical publication rolls back release/receipt errors and reuses the approved snapshot on retry');
+
+  const tamperPupil = writerPupils[3], tamperDocs = await readCanonical(); assert.equal(tamperDocs.ok,true,JSON.stringify(tamperDocs));
+  const tamperBinding = {id:tamperPupil.reportId,schoolId:ids.school,enrollmentId:tamperPupil.enrollmentId,studentId:tamperPupil.studentId,classId:ids.class,sessionId:ids.session,termId:ids.term,assessmentScopeId:ids.scope,assessmentSourceVersionId:writerSource,assessmentRevision:writerRevision,approvedVersion:3,submittedBy:ids.teacher,approvedBy:ids.admin,approvedAt:new Date().toISOString()};
+  const intended = buildApprovedReportSnapshot(tamperBinding,tamperDocs.documents); assert.equal(intended.ok,true,JSON.stringify(intended));
+  const poisoned = JSON.parse(intended.snapshot.canonicalJson); poisoned.subjects[0].result.total='100.00';
+  await insert(sql,'report_card_snapshots',{...reportSnapshotRow,id:randomUUID(),report_id:tamperPupil.reportId,enrollment_id:tamperPupil.enrollmentId,assessment_source_version_id:writerSource,assessment_revision:writerRevision,source_versions:intended.snapshot.sourceVersions,canonical_payload:poisoned,content_hash:createHash('sha256').update(canonicalizeSnapshotValue(poisoned)).digest('hex')});
+  await sql.unsafe('UPDATE '+table('report_cards')+" SET stage='approved',version=3,approved_by=$2::uuid WHERE id=$1::uuid",[tamperPupil.reportId,ids.admin]);
+  assert.deepEqual(await runWriter(publishCommand(tamperPupil,'canonical-tamper-publish')),{ok:false,code:'snapshot_mismatch'});
+  assert.equal(await reportCount('report_card_releases',tamperPupil),0);
+  // Force the actual writer to pause after its report update, while its source
+  // and authority locks are still held, then attempt a competing score edit.
+  const barrierPupil = writerPupils[4], barrierCommand = approveCommand(barrierPupil,'canonical-barrier-approve');
+  const barrierKey = randomBytes(4).readUInt32BE(0) % 1000000000;
+  await sql.unsafe('CREATE FUNCTION '+table('fixture_report_writer_barrier')+"() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.report_id::text = TG_ARGV[0] THEN PERFORM pg_advisory_xact_lock(TG_ARGV[1]::bigint); END IF; RETURN NEW; END $$");
+  await sql.unsafe('CREATE TRIGGER fixture_writer_barrier BEFORE INSERT ON '+table('report_card_audit')+' FOR EACH ROW EXECUTE FUNCTION '+table('fixture_report_writer_barrier')+"('"+barrierPupil.reportId+"','"+barrierKey+"')");
+  let pendingWriter;
+  await client.begin(async control => {
+   await wrap(control).unsafe('SELECT pg_advisory_xact_lock($1::bigint)',[barrierKey]);
+   pendingWriter = runWriter(barrierCommand);
+   let waiting = false;
+   for (let attempt=0; attempt<100; attempt++) {
+    const locks = await sql.unsafe("SELECT count(*)::int AS n FROM pg_locks WHERE locktype='advisory' AND classid=0 AND objid=$1::oid AND NOT granted",[barrierKey]);
+    if (locks[0].n>0) {waiting=true;break;} await new Promise(resolve=>setTimeout(resolve,20));
+   }
+   assert.equal(waiting,true,'canonical writer did not reach audit barrier');
+   await expectError('55P03',()=>boundedWrite(other=>other.unsafe('UPDATE '+table('assessment_scores')+' SET version=version+1 WHERE id=$1::uuid',[canonicalScore])));
+  });
+  const completedWriter = await pendingWriter; assert.equal(completedWriter.ok,true,JSON.stringify(completedWriter));
+  await sql.unsafe('DROP TRIGGER fixture_writer_barrier ON '+table('report_card_audit'));
+  await sql.unsafe('UPDATE '+table('assessment_scores')+' SET version=version+1 WHERE id=$1::uuid',[canonicalScore]);
+  assert.deepEqual(await runWriter(publishCommand(barrierPupil,'canonical-stale-publish')),{ok:false,code:'incomplete_source'});
+  assert.equal((await runWriter(barrierCommand)).kind,'replay'); assert.equal(await reportCount('report_card_releases',barrierPupil),0);
+  console.log('PASS: actual writer rejects forged snapshots, blocks interleaved source edits and preserves historical replay');
+
 
 
 
