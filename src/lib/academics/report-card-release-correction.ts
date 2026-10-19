@@ -22,7 +22,7 @@ export function normalizeReleaseCorrectionCommand(raw:unknown):ReleaseCorrection
  const allowed=['action','reportId','releaseId','expectedVersion','operationKey','reason'];
  if(Reflect.ownKeys(raw).length!==allowed.length || Reflect.ownKeys(raw).some(key=>typeof key!=='string'||!allowed.includes(key)||!('value' in descriptors[key]!)))return null;
  const row=raw as Record<string,unknown>;
- if(row.action!=='revoke'||!text(row.reportId)||!text(row.releaseId)||!positive(row.expectedVersion)||!text(row.operationKey)||row.operationKey.length>200||typeof row.reason!=='string'||!row.reason.trim()||row.reason.trim().length>2000)return null;
+ if(row.action!=='revoke'||!text(row.reportId)||!text(row.releaseId)||!positive(row.expectedVersion)||!text(row.operationKey)||row.operationKey.length>128||typeof row.reason!=='string'||!row.reason.trim()||row.reason.trim().length>2000)return null;
  return {action:'revoke',reportId:row.reportId,releaseId:row.releaseId,expectedVersion:row.expectedVersion,operationKey:row.operationKey,reason:row.reason.trim()};
 }
 export function planReleaseCorrection(report:CorrectionReport, releases:readonly CorrectionRelease[], snapshot:CorrectionSnapshot,
