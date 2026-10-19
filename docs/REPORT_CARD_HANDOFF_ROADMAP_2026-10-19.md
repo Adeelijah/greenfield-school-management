@@ -7,7 +7,7 @@
 1. Read `AGENTS.md` and `docs/DEVELOPMENT_WORKFLOW.md`; honor approval gates, no secret inspection, no Supabase/production DB changes.
 2. Review `docs/REPORT_CARD_DISPOSABLE_ADAPTER_REVIEW.md`, `docs/REPORT_CARD_DISPOSABLE_POSTGRES_TESTS.md`, `docs/REPORT_CARD_MIGRATION_READINESS_REVIEW.md`, `docs/REPORT_CARD_RLS_REVIEW.md`, and `docs/REPORT_CARD_TRANSACTION_PORT_REVIEW.md`.
 3. Inspect the latest `report-cards-foundation` commit and working tree before edits. Do not assume local uncommitted changes are safe to overwrite.
-4. The JSONB failure was resolved in commit `3d7f54c`; all six original integration groups passed in the user’s local run. Continue Phase A with the expanded negative and failure/retry cases, which still require local PostgreSQL verification.
+4. The JSONB failure was resolved in commit `3d7f54c`; all 11 expanded integration groups subsequently passed in the user’s local run. Continue Phase B authoritative source-read integration.
 
 ## Project context
 
@@ -34,14 +34,11 @@ Greenfield is a Next.js 16 / React 19 / TypeScript / Tailwind 4 / Supabase SSR A
 - The user ran the adapter integration harness after commit `3d7f54c` and reported **all six original integration groups passing** on 2026-10-19. JSONB fixture/source round trips and report/audit writes, concurrent submissions, duplicate-key replay, cross-school membership rejection, receipt rollback, and approval/publication serialization passed.
 - The user then cleared the disposable database environment and temporary password variables.
 - The earlier `not_found` and JSONB string/object failures are historical, not current blockers. Preserve explicit text parameter binding and JSONB type/round-trip assertions.
-- Expanded Phase A tests now cover denial without writes, receipt conflicts, audit/release failures, and retry/replay after rollback. These new PostgreSQL cases are **not yet verified**.
+- Expanded Phase A tests now cover denial without writes, receipt conflicts, audit/release failures, and retry/replay after rollback. The user subsequently confirmed **all 11 PostgreSQL groups passed**, along with the full offline gate: TypeScript, ESLint (one unrelated unused-import warning), 189 tests and whitespace.
 
-## Immediate next task: finish Phase A verification
+## Current task: Phase B authoritative read coordinator
 
-1. Review the expanded harness, then run safe offline checks.
-2. Obtain commit/push approval under `AGENTS.md` before publishing this expanded batch unless already explicitly authorized.
-3. The user reruns the harness against the same separate local disposable PostgreSQL database only. Do not infer execution from a committed test script.
-4. After those tests pass, proceed to Phase B authoritative academic reads. Production authentication, enrollment/source reads, immutable snapshots, RLS and guardian authorization remain unimplemented or unverified by this harness.
+Phase A passed in the user’s local disposable database. Phase B now has an isolated, offline-tested read coordinator (`report-card-authoritative-read.ts`) and a transaction-bound read port. It derives school/actor scope from verified-identity and membership methods, recomputes the projection, validates enrollment/finalized source bindings and checks revision drift. This is **not a live SQL/auth adapter** and is not wired to routes or the transaction writer. Next: implement and test the trusted read adapter and lock ordering in an approved disposable environment; production authentication, immutable snapshots, RLS and guardian authorization remain pending.
 
 ### Local run instructions (Windows PowerShell)
 
@@ -66,9 +63,9 @@ Never paste the password or connection URL into chat. Scripts must enforce dispo
 
 ## Roadmap to production-ready Report Cards
 
-### Phase A — Complete isolated adapter tests (CURRENT, EXPANDED VERIFICATION PENDING)
+### Phase A — Complete isolated adapter tests (USER-VERIFIED COMPLETE)
 - JSONB fixture read failure resolved; original six integration groups passed locally.
-- Confirm expanded `executeReportTransaction` integration suite against disposable PostgreSQL.
+- Expanded `executeReportTransaction` integration suite confirmed: all 11 groups passed in the user’s disposable PostgreSQL run.
 - Add negative tests for cross-school report IDs, invalid actor/assignment, stale assessment revision, invalid stage, failed audit/release insert and receipt conflict.
 - Verify atomicity and idempotency after real transaction failures.
 **Exit:** reproducible passing integration suite, no production DB changes.
@@ -119,4 +116,4 @@ Beyond Report Cards, check actual implementation status before claiming these co
 - Do not inspect `.env` or credentials; do not use actual student data.
 - Do not connect to Supabase/production DB, apply migrations, deploy, or change live auth/RLS without explicit authorization.
 - Check `AGENTS.md` for commit/push approval and validation requirements.
-- **First action in the next chat:** inspect the latest integration script and expanded-test verification status; preserve the resolved JSONB fix and proceed through the phases above.
+- **First action in the next chat:** inspect the Phase B read coordinator and review document; preserve the passing Phase A tests and continue the trusted read adapter and lock-order work.
