@@ -13,6 +13,7 @@ import { canonicalizeSnapshotValue } from './report-card-canonical-snapshot.ts';
 export type RevokeReportOutcome={ok:true;kind:'applied'|'replay';action:'revoke';reportId:string;releaseId:string;snapshotId:string;snapshotReportVersion:number;version:number;stage:'draft';revokedAt:string}|{ok:false;code:string};
 class RevokeAbort extends Error {readonly code:string;constructor(code:string){super(code);this.code=code;}}
 const abort=(code:string):never=>{throw new RevokeAbort(code);};
+const receiptObject=(value:unknown):value is Record<string,unknown>=>value!==null&&typeof value==='object'&&!Array.isArray(value);
 const timestamp=(value:unknown):string|null=>{
  if(value===null)return null;
  if(value instanceof Date && Number.isFinite(value.getTime()))return value.toISOString();
@@ -48,7 +49,8 @@ export async function executeFixtureReportRevocation(db:SqlDatabase,schema:strin
   if(pins.length!==1)return abort('invalid_snapshot');const pin=pins[0]!;
   const snapshot:CorrectionSnapshot={id:d.textField(pin.id),schoolId:d.textField(pin.schoolId),reportId:d.textField(pin.reportId),reportVersion:d.integerField(pin.reportVersion),enrollmentId:d.textField(pin.enrollmentId),assessmentScopeId:d.textField(pin.assessmentScopeId),assessmentSourceVersionId:d.textField(pin.assessmentSourceVersionId),assessmentRevision:d.integerField(pin.assessmentRevision)};
   if(receipt){
-   const outcome=d.decoded(receipt.outcome),version=d.integerField(receipt.resultingVersion);
+   const outcome=receipt.outcome,version=d.integerField(receipt.resultingVersion);
+   if(!receiptObject(outcome))return abort('invalid_receipt');
    if(outcome.ok!==true||outcome.kind!=='applied'||outcome.action!=='revoke'||outcome.stage!=='draft'||outcome.reportId!==report.id||outcome.releaseId!==release.id||outcome.snapshotId!==snapshot.id||outcome.snapshotReportVersion!==snapshot.reportVersion||outcome.version!==version||version!==command.expectedVersion+1||version>report.version||release.reportVersion!==command.expectedVersion||release.snapshotReportVersion!==command.expectedVersion-1||!release.revokedAt||outcome.revokedAt!==release.revokedAt)return abort('invalid_receipt');
    const audit=await tx.unsafe('SELECT id FROM '+table('report_card_audit')+" WHERE school_id=$1::uuid AND report_id=$2::uuid AND release_id=$3::uuid AND actor_membership_id=$4::uuid AND action='revoke' AND before_version=$5 AND after_version=$6 AND snapshot_id=$7::uuid AND snapshot_report_version=$8 AND reason=$9::text AND occurred_at=$10::timestamptz FOR SHARE",[schoolId,report.id,release.id,actorId,command.expectedVersion,version,snapshot.id,snapshot.reportVersion,command.reason,release.revokedAt]);
    if(audit.length!==1)return abort('invalid_receipt');
