@@ -69,3 +69,12 @@ test('invalid raw commands stop before verified identity and suspended actors ca
  assert.deepEqual(await executeFixtureReportRevocation(f.db,schema,{...f.command,schoolId:'forged'},async()=>{called=true;return null;}),{ok:false,code:'invalid'});assert.equal(called,false);
  assert.equal((await f.revoke()).ok,true);f.tables.memberships!.find(r=>r.id==='admin')!.status='suspended';assert.deepEqual(await f.revoke(),{ok:false,code:'forbidden'});
 });
+
+test('a restaged fixture must restore the exact publication timestamp before revocation',async()=>{
+ const f=await fixture(),original=f.tables.report_cards![0]!.publishedAt;
+ f.tables.report_cards![0]!.publishedAt='2000-01-01T00:00:00.000Z';
+ const damaged=structuredClone(f.tables);
+ assert.deepEqual(await f.revoke(),{ok:false,code:'invalid_release'});assert.deepEqual(f.tables,damaged);
+ f.tables.report_cards![0]!.publishedAt=original;
+ const restored=await f.revoke();assert.equal(restored.ok,true,JSON.stringify(restored));
+});
