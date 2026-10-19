@@ -106,5 +106,23 @@ test('return reason is persisted in audit and constrained independently of mutab
  assert.ok(cfg(proposal.proposedReportAudit).columns.some(c=>c.name==='reason'));
  const check=cfg(proposal.proposedReportAudit).checks.find(c=>c.name==='report_audit_reason_valid');assert.ok(check);
  const expression=new PgDialect().sqlToQuery(check.value).sql;
- assert.ok(expression.includes("= 'return'"));assert.ok(expression.includes('IS NOT NULL'));assert.ok(expression.includes("<> 'return'"));
+ assert.ok(expression.includes("IN ('return','revoke')"));assert.ok(expression.includes('IS NOT NULL'));assert.ok(expression.includes("NOT IN ('return','revoke')"));
+});
+
+test('revoke audit pins the exact historical release, snapshot and published version',()=>{
+ const ref=reference(proposal.proposedReportAudit,'report_audit_exact_release_fk');
+ assert.deepEqual(ref.columns.map(c=>c.name),['school_id','report_id','release_id','snapshot_id','snapshot_report_version','before_version']);
+ assert.deepEqual(ref.foreignColumns.map(c=>c.name),['school_id','report_id','id','snapshot_id','snapshot_report_version','report_version']);
+ assert.ok(indexes(proposal.proposedReportReleases).includes('report_releases_audit_target_unique'));
+});
+test('each release has one revoke audit and only revoke events carry a release ID',()=>{
+ assert.ok(indexes(proposal.proposedReportAudit).includes('report_audit_revoke_release_unique'));
+ assert.ok(checks(proposal.proposedReportAudit).includes('report_audit_release_binding_valid'));
+ assert.ok(proposal.proposedReportAction.enumValues.includes('revoke'));
+});
+test('revocation reason, published-to-draft stages and approved snapshot version are constrained',()=>{
+ const expressions=Object.fromEntries(cfg(proposal.proposedReportAudit).checks.map(c=>[c.name,new PgDialect().sqlToQuery(c.value).sql]));
+ assert.ok(expressions.report_audit_reason_valid?.includes('BETWEEN 1 AND 2000'));
+ assert.ok(expressions.report_audit_stage_transition_valid?.includes("= 'revoke'"));
+ assert.ok(expressions.report_audit_snapshot_binding_valid?.includes('"before_version"'));
 });
