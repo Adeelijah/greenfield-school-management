@@ -12,6 +12,7 @@ const tests = [
   'src/components/students/promotion-validation.test.ts',
   'src/components/students/student-exit-validation.test.ts',
   'src/db/lifecycle-schema.test.ts',
+  'src/db/report-cards-schema.proposal.test.ts',
   'src/lib/students/lifecycle-authorization.test.ts',
   'src/lib/students/lifecycle-commands.test.ts',
   'src/lib/students/lifecycle-memory-adapter.test.ts',
