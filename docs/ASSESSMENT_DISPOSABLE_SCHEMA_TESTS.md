@@ -50,3 +50,8 @@ The harness requires both the explicit confirmation token and a loopback URL for
 ## Status
 
 The user confirmed the preceding source-policy milestone passed the full offline gate with 236 tests. New helper/harness scripts pass JavaScript syntax checks; 90 existing scoped domain tests pass locally. The three new dependency-backed emitter tests and all seven PostgreSQL groups remain unverified until run with the user's installed dependencies and disposable database. Production schema, migration configuration and generated migrations are unchanged.
+
+
+## Verified baseline and write-guard follow-up
+
+The user ran the baseline: all 239 offline tests and seven PostgreSQL groups passed on 2026-10-19. `ASSESSMENT_DISPOSABLE_WRITE_GUARDS.md` describes a subsequent fixture-only source invalidation protocol with four offline tests and five additional pending PostgreSQL groups (twelve groups total). The protocol adds BEFORE STATEMENT gating, transaction/scope revision deduplication, enrollment transfer fan-out and shared-gate phantom checks. It remains a candidate fixture design, not production permissions or full report-adapter phantom safety.
