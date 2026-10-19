@@ -129,6 +129,12 @@ The user additionally instructed: “when the tests pass, go ahead and work on t
 
 User confirmed 251 offline tests and all fifteen schema-faithful assessment PostgreSQL groups passed on 2026-10-19. The relational reader milestone is verified in the disposable environment.
 
-Next prepared boundary: `assessment-relational-recalculation.ts` recomputes a selected subject from validated numeric text or observational keys. Exact rational arithmetic, single half-up rounding, sorted grade bands and optional-component semantics are documented in `ASSESSMENT_RELATIONAL_RECALCULATION.md`. Eight new pure tests raise the expected full offline count to 259; full TypeScript/ESLint remain pending the user environment. No SQL or integration harness changed in this batch.
+Next prepared boundary: `assessment-relational-recalculation.ts` recomputes a selected subject from validated numeric text or observational keys. Exact rational arithmetic, single half-up rounding, sorted grade bands and optional-component semantics are documented in `ASSESSMENT_RELATIONAL_RECALCULATION.md`. The user subsequently confirmed the full offline gate passed with all 259 tests. No SQL or integration harness changed in this batch.
 
 Continue after the offline gate passes: carry complete enrollment/placement, score-row IDs, config revisions and canonical source manifest content/hash through a schema-faithful bundle; verify complete scope-wide canonical provenance and immutable finalized results. Do not equate a per-student recalculation with the existing scope-wide manifest or enable report publication. Then reconcile real report/snapshot bindings and compose the schema-faithful writer.
+
+## Latest continuation — canonical complete-source content
+
+The user confirmed all 259 offline tests passed. `assessment-canonical-source.ts` now prepares versioned complete-scope source manifests and freshly recalculated per-subject finalized documents, with strict canonical JSON/SHA-256 verification of persisted content and exact source/review/finalization bindings. Thirteen new pure tests raise the expected offline count to 272. This batch does not change SQL or connect to any database. See `ASSESSMENT_CANONICAL_SOURCE_REVIEW.md` for the completeness contract and remaining authority boundary.
+
+Next after offline verification: implement the transaction-scoped schema-faithful complete SQL loader and round-trip real complete manifests/finalizations through JSONB in the disposable harness. The existing selected-student reader and synthetic minimal manifest data are not sufficient for this verifier. Continue into real report/snapshot bindings only after complete-loader provenance and lock tests pass.
