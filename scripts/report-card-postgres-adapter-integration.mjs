@@ -61,6 +61,19 @@ if(process.env.REPORT_CARD_TEST_CONFIRM!=='DISPOSABLE_REPORT_CARD_TEST_ONLY'||!u
   await sql.unsafe('INSERT INTO '+table('projections')+' (school_id,report_id,revision,data) VALUES ($1,$2,$3,$4)',['school-a','report-1',5,JSON.stringify(projection)]);
 
   await reset();
+  // Diagnose fixture lookup without printing credentials or student data.
+  const reportCheck=await sql.unsafe('SELECT version,record FROM '+reports+' WHERE school_id=$1 AND id=$2',['school-a','report-1']);
+  const memberCheck=await sql.unsafe('SELECT id FROM '+table('memberships')+' WHERE school_id=$1 AND id=$2',['school-a','teacher-1']);
+  const projectionCheck=await sql.unsafe('SELECT revision FROM '+table('projections')+' WHERE school_id=$1 AND report_id=$2',['school-a','report-1']);
+  assert.equal(reportCheck.length,1,'fixture report lookup failed');
+  assert.equal(memberCheck.length,1,'fixture membership lookup failed');
+  assert.equal(projectionCheck.length,1,'fixture projection lookup failed');
+  assert.equal(typeof reportCheck[0].record,'object','report JSONB was not decoded to an object');
+  assert.equal(reportCheck[0].record.schoolId,'school-a','report JSONB school mismatch');
+  const trustedCheck=await db.begin(tx=>loader(tx,'school-a','report-1','teacher-1'));
+  assert.ok(trustedCheck,'trusted fixture loader returned null');
+  assert.equal(trustedCheck.context.membership.id,'teacher-1','trusted fixture membership mismatch');
+  console.log('PASS: fixture report and trusted source lookups');
   const concurrent=await Promise.all([executeReportTransaction(runner,request('teacher-1','submit',1,'key-a')),executeReportTransaction(runner,request('teacher-1','submit',1,'key-b'))]);
   assert.equal(concurrent.filter(x=>x.ok&&x.kind==='applied').length,1,JSON.stringify(concurrent));
   assert.equal(concurrent.filter(x=>!x.ok&&x.code==='stale_version').length,1,JSON.stringify(concurrent));
