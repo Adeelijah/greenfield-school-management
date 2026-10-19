@@ -172,6 +172,15 @@ Next after both gates pass: review and close the remaining database authorizatio
 
 User verified 323 offline tests and all 33 PostgreSQL groups. The fixture-only authority guard builder adds BEFORE STATEMENT discovery-gate acquisition for inserts, updates and deletes on eleven parent/authority relations, and rejects truncate. This prevents absent-row/phantom mutations from bypassing the gate simply because existing readers did not lock their new row. It reuses the existing invoker trigger functions and creates no roles, grants, policies or production changes.
 
-Three offline tests raise the expected gate to 326; two prepared PostgreSQL groups raise the harness to 35. Database execution and the full gate remain pending user-local verification. See `ASSESSMENT_AUTHORITY_LOCK_REVIEW.md`.
+Three offline tests raise the expected gate to 326; two prepared PostgreSQL groups raise the harness to 35. The user subsequently verified all 326 offline tests and all 35 PostgreSQL groups passed. See `ASSESSMENT_AUTHORITY_LOCK_REVIEW.md`.
 
 Continue with academic parent revision fan-out (including old/new placement scopes and rollback/deduplication), then restricted fixture roles/grants/RLS and release/revocation policy. Lock ordering alone does not enforce authorization or advance revisions for parent content edits. Existing canonical reconstruction still rejects changed content; no route/UI release is enabled.
+
+
+## Latest continuation — academic parent revision fan-out
+
+User verified 326 offline tests and all 35 PostgreSQL groups. Seven academic parent families now prepare fixture-only BEFORE UPDATE/DELETE invalidation of their dependent scopes, including complete class/session/term fan-out and pre-cascade enrollment discovery. The existing transaction/scope claim protocol deduplicates overlapping parent and score changes and rolls back revisions with failed receipts. Authority-only changes retain transaction gate locking without changing academic revisions.
+
+Two added offline assertions raise the expected full count to 328; three prepared PostgreSQL groups raise the harness to 38. All 52 selected offline tests plus syntax/whitespace passed here. Full local gate and SQL execution are pending. See `ASSESSMENT_AUTHORITY_LOCK_REVIEW.md` for conservative no-op update behavior and boundaries.
+
+Next after verification: restricted fixture reader/writer grants and RLS with adversarial role/tenant tests, then immutable release/revocation policy before routes. Owner-run tests still do not demonstrate deployed authorization. No production schema, migration, live auth or route changed.
