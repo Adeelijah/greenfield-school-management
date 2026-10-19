@@ -62,3 +62,8 @@ After separate approval, build schema-faithful isolated PostgreSQL tests for wro
 ## Validation status
 
 Eight metadata tests are prepared for tenant-scoped relations, term/session FKs, partial config uniqueness, retained roster history, enrollment/config score binding, exact teacher-review finalization binding, receipts/audit lineage, and migration-entrypoint exclusion. These inspect Drizzle metadata, not PostgreSQL constraint execution. They could not run locally because `drizzle-orm` is not installed in the assistant's checkout; no dependencies were installed. Existing Report Cards pure tests remain runnable independently. Full TypeScript/ESLint and the new metadata tests require the user's existing installed dependencies.
+
+
+## Follow-up source/configuration policy
+
+The user confirmed this schema proposal's full offline gate passed with 226 tests. `assessment-persistence-policy.ts` now defines a review-stage source/workflow revision distinction, complete scope/expected-version matching, stable lock ordering, teacher subject-assignment checks, exact bounded numeric text validation and text observational keys. See `ASSESSMENT_SOURCE_POLICY_REVIEW.md` for the exact prerequisite target names and remaining enforcement work. The original assessment planner is unchanged. New pure validation does not enforce database constraints, append-only behavior or lock acquisition and does not make the proposal migration-ready.
