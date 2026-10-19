@@ -1,4 +1,5 @@
 // Review-only DDL. No connection, role creation, credentials or production names.
+import { reportReleaseGuardDDL } from './report-release-disposable-guards.mjs';
 import { fixtureRolePreflightPlan } from './assessment-disposable-role-preflight.mjs';
 const q = value => '"' + value.replaceAll('"', '""') + '"';
 const base = ['schools','school_users','memberships','academic_sessions','terms','academic_levels','academic_sections','classes','students','enrollments','teacher_class_assignments'];
@@ -10,7 +11,7 @@ export function fixtureSecurityPlan(schema, schoolId) {
  const table = name => q(schema)+'.'+q(name);
  const roleList = Object.values(roles).map(q).join(',');
  const targets = [...base,...assessments,...reports,'fixture_source_write_gate'];
- const appendOnly = reports.filter(name=>name!=='report_cards');
+ const appendOnly = reports.filter(name=>name!=='report_cards'&&name!=='report_card_releases');
  const reportUpdates = ['stage','version','submitted_by','approved_by','published_at','return_reason','assessment_source_version_id','assessment_revision'];
  const school = "'"+schoolId+"'::uuid";
  const predicate = name => name==='schools' ? 'id='+school
@@ -22,12 +23,15 @@ export function fixtureSecurityPlan(schema, schoolId) {
   'REVOKE ALL ON ALL FUNCTIONS IN SCHEMA '+q(schema)+' FROM PUBLIC,'+roleList,
   'REVOKE ALL ON ALL SEQUENCES IN SCHEMA '+q(schema)+' FROM PUBLIC,'+roleList,
   'GRANT USAGE ON SCHEMA '+q(schema)+' TO '+roleList,
+  ...reportReleaseGuardDDL(schema).statements,
+  'REVOKE ALL ON FUNCTION '+table('fixture_guard_release_history')+'() FROM PUBLIC,'+roleList,
   `CREATE FUNCTION ${table('fixture_restrict_service_writes')}() RETURNS trigger LANGUAGE plpgsql SET search_path=pg_catalog AS $$
 BEGIN
  IF current_user='${roles.reader}' THEN
   RAISE EXCEPTION 'fixture reader cannot mutate rows' USING ERRCODE='42501';
  ELSIF current_user='${roles.writer}' THEN
   IF TG_TABLE_NAME='report_cards' AND TG_OP IN ('INSERT','UPDATE') THEN RETURN NULL; END IF;
+  IF TG_TABLE_NAME='report_card_releases' AND TG_OP='UPDATE' THEN RETURN NULL; END IF;
   IF TG_TABLE_NAME IN ('report_card_snapshots','report_card_audit','report_card_operation_receipts','report_card_releases') AND TG_OP='INSERT' THEN RETURN NULL; END IF;
   RAISE EXCEPTION 'fixture writer cannot mutate academic or immutable rows' USING ERRCODE='42501';
  END IF;
@@ -47,7 +51,7 @@ END $$`,
   statements.push('CREATE POLICY fixture_service_lock ON '+target+' FOR UPDATE TO '+roleList+' USING ('+scope+') WITH CHECK (false)');
   statements.push('GRANT SELECT ON '+target+' TO '+roleList);
   statements.push('GRANT UPDATE (id) ON '+target+' TO '+q(roles.reader));
-  if(name!=='report_cards') statements.push('GRANT UPDATE (id) ON '+target+' TO '+q(roles.writer));
+  if(name!=='report_cards'&&name!=='report_card_releases') statements.push('GRANT UPDATE (id) ON '+target+' TO '+q(roles.writer));
   statements.push('CREATE TRIGGER aaa_fixture_service_write_guard BEFORE INSERT OR UPDATE OR DELETE ON '+target+' FOR EACH STATEMENT EXECUTE FUNCTION '+table('fixture_restrict_service_writes')+'()');
  }
  for(const name of reports) {
@@ -56,5 +60,7 @@ END $$`,
  }
  statements.push('GRANT UPDATE ('+reportUpdates.map(q).join(',')+') ON '+table('report_cards')+' TO '+q(roles.writer));
  statements.push('CREATE POLICY fixture_report_transition ON '+table('report_cards')+' FOR UPDATE TO '+q(roles.writer)+' USING (school_id='+school+') WITH CHECK (school_id='+school+')');
+ statements.push('GRANT UPDATE (revoked_at) ON '+table('report_card_releases')+' TO '+q(roles.writer));
+ statements.push('CREATE POLICY fixture_release_revoke ON '+table('report_card_releases')+' FOR UPDATE TO '+q(roles.writer)+' USING (school_id='+school+') WITH CHECK (school_id='+school+' AND revoked_at IS NOT NULL)');
  return { roles, targets, appendOnly, reportUpdates, statements };
 }
