@@ -60,3 +60,16 @@ test('database errors remain generic and disclose no source or credential detail
  const f = fixture(); f.tx.unsafe = async () => { throw Error('sensitive source detail'); };
  assert.deepEqual(await f.read(), { ok: false, code: 'read_failed' });
 });
+
+test('raw selected rows reject missing IDs, invalid enums and coerced scalar values', async () => {
+ const cases: [string, Record<string, unknown>][] = [
+  ['school_users', { authUserId: null }], ['memberships', { role: 'owner' }],
+  ['schools', { finalPrimaryYear: '5' }], ['students', { status: 'completed' }],
+  ['academic_levels', { isActive: 1 }], ['academic_sessions', { isCurrent: 'false' }],
+  ['teacher_class_assignments', { endedAt: '2026-10-19T00:00:00Z' }],
+ ];
+ for (const [table, patch] of cases) {
+  const f = fixture(); Object.assign(f.tables[table]![0]!, patch);
+  assert.deepEqual(await f.read(), { ok: false, code: 'read_failed' }, table);
+ }
+});
