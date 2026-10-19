@@ -4,6 +4,7 @@ import { randomBytes } from 'node:crypto';
 import postgres from 'postgres';
 import { initialAssessment, previewSchoolId } from '../src/components/academics/calendar-assessment-fixtures.ts';
 import { readAuthoritativeReport } from '../src/lib/academics/report-card-authoritative-read.ts';
+import { executeTrustedDisposableReport } from '../src/lib/academics/report-card-postgres-disposable-trusted-transaction.ts';
 import { disposableAuthoritativeReadPort } from '../src/lib/academics/report-card-postgres-disposable-read-adapter.ts';
 
 const url = process.env.REPORT_CARD_TEST_DATABASE_URL;
@@ -94,6 +95,110 @@ if (!url || process.env.REPORT_CARD_TEST_CONFIRM !== 'DISPOSABLE_REPORT_CARD_TES
   await sql.unsafe('UPDATE ' + table('scopes') + ' SET revision=revision-1');
   assert.equal((await read()).ok, true);
   console.log('PASS: locks release at transaction end and later reads detect source changes');
+
+  // Combined read/write tests use the same synthetic report table. Existing
+  // reader-only fixtures above deliberately do not require a version column.
+  await sql.unsafe('ALTER TABLE ' + table('reports') + ' ADD COLUMN version integer NOT NULL DEFAULT 1');
+  const workflowTable = name => '"' + schema + '"."' + name + '"';
+  await sql.unsafe('CREATE TABLE ' + workflowTable('receipts') + ' (school_id text,actor_id text,operation_key text,report_id text,fingerprint text,resulting_version integer,PRIMARY KEY(school_id,actor_id,operation_key))');
+  await sql.unsafe('CREATE TABLE ' + workflowTable('audits') + ' (school_id text,report_id text,version integer,payload jsonb)');
+  await sql.unsafe('CREATE TABLE ' + workflowTable('releases') + ' (school_id text,report_id text,version integer,published_at text,UNIQUE(school_id,report_id,version))');
+  const command = (action = 'submit', expectedVersion = 1, idempotencyKey = 'submit') => ({ reportId: 'report', command: { action, expectedVersion, assessmentVersion: record.assessmentVersion, idempotencyKey } });
+  const clock = () => '2026-10-19T09:00:00Z';
+  const database = (afterUpdate = async () => {}) => ({ unsafe: sql.unsafe, begin: callback => client.begin(async tx => {
+   const bound = wrap(tx);
+   await bound.unsafe("SET LOCAL lock_timeout='300ms'");
+   await bound.unsafe("SET LOCAL statement_timeout='3s'");
+   return callback({ unsafe: async (query, parameters) => {
+    const result = await bound.unsafe(query, parameters);
+    if (query.startsWith('UPDATE ' + table('reports'))) await afterUpdate();
+    return result;
+   } });
+  }) });
+  const execute = (input = command(), db = database(), user = 'auth-teacher') => executeTrustedDisposableReport(db, schema, input, async () => ({ authUserId: user }), clock);
+  const resetWorkflow = async () => {
+   await sql.unsafe('TRUNCATE ' + ['audits', 'receipts', 'releases'].map(workflowTable).join(','));
+   await sql.unsafe('UPDATE ' + table('reports') + ' SET version=1,record=$1::text::jsonb', [JSON.stringify(record)]);
+  };
+  const workflowState = async () => ({
+   reports: Array.from(await sql.unsafe('SELECT version,record FROM ' + table('reports')), row => ({ ...row })),
+   audits: Array.from(await sql.unsafe('SELECT * FROM ' + workflowTable('audits') + ' ORDER BY version'), row => ({ ...row })),
+   receipts: Array.from(await sql.unsafe('SELECT * FROM ' + workflowTable('receipts') + ' ORDER BY operation_key'), row => ({ ...row })),
+   releases: Array.from(await sql.unsafe('SELECT * FROM ' + workflowTable('releases') + ' ORDER BY version'), row => ({ ...row }))
+  });
+  await resetWorkflow();
+  const competing = await Promise.all([execute(command('submit', 1, 'a')), execute(command('submit', 1, 'b'))]);
+  assert.equal(competing.filter(r => r.ok && r.kind === 'applied').length, 1, JSON.stringify(competing));
+  assert.equal(competing.filter(r => !r.ok && r.code === 'stale_version').length, 1, JSON.stringify(competing));
+  await resetWorkflow();
+  assert.deepEqual(await execute(), { ok: true, kind: 'applied', version: 2 });
+  assert.deepEqual(await execute(), { ok: true, kind: 'replay', version: 2 });
+  const committed = await workflowState();
+  assert.equal((await execute(command('submit', 2))).code, 'conflict');
+  assert.deepEqual(await workflowState(), committed);
+  console.log('PASS: combined trusted transaction serializes submissions, replays and rejects changed payload');
+  await resetWorkflow();
+  const duplicates = await Promise.all([execute(), execute()]);
+  assert.equal(duplicates.filter(r => r.ok && r.kind === 'applied').length, 1, JSON.stringify(duplicates));
+  assert.equal(duplicates.filter(r => r.ok && r.kind === 'replay').length, 1, JSON.stringify(duplicates));
+  assert.equal((await workflowState()).receipts.length, 1);
+
+
+  for (const failedTable of ['audits', 'receipts']) {
+   await resetWorkflow(); const before = await workflowState();
+   const column = failedTable === 'audits' ? 'version' : 'resulting_version';
+   await sql.unsafe('ALTER TABLE ' + workflowTable(failedTable) + ' ADD CONSTRAINT reject_combined CHECK (' + column + ' <> 2)');
+   try {
+    assert.equal((await execute()).code, 'transaction_failed');
+    assert.deepEqual(await workflowState(), before, failedTable + ' failure committed partial writes');
+   } finally { await sql.unsafe('ALTER TABLE ' + workflowTable(failedTable) + ' DROP CONSTRAINT reject_combined'); }
+   assert.deepEqual(await execute(), { ok: true, kind: 'applied', version: 2 });
+  }
+  console.log('PASS: combined outer transaction rolls back audit/receipt errors and allows same-key retry');
+  await sql.unsafe('INSERT INTO ' + table('identities') + ' VALUES ($1)', ['auth-admin']);
+  await sql.unsafe('INSERT INTO ' + table('memberships') + ' VALUES ($1,$2,$3,$4,$5)', ['admin', 'auth-admin', school, 'admin', 'active']);
+  assert.deepEqual(await execute(command('approve', 2, 'approve'), database(), 'auth-admin'), { ok: true, kind: 'applied', version: 3 });
+  const beforeRelease = await workflowState();
+  await sql.unsafe('ALTER TABLE ' + workflowTable('releases') + ' ADD CONSTRAINT reject_release CHECK (version <> 4)');
+  try {
+   assert.equal((await execute(command('publish', 3, 'publish'), database(), 'auth-admin')).code, 'transaction_failed');
+   assert.deepEqual(await workflowState(), beforeRelease);
+  } finally { await sql.unsafe('ALTER TABLE ' + workflowTable('releases') + ' DROP CONSTRAINT reject_release'); }
+  assert.deepEqual(await execute(command('publish', 3, 'publish'), database(), 'auth-admin'), { ok: true, kind: 'applied', version: 4 });
+  assert.deepEqual(await execute(command('publish', 3, 'publish'), database(), 'auth-admin'), { ok: true, kind: 'replay', version: 4 });
+  assert.equal((await workflowState()).releases.length, 1);
+  console.log('PASS: combined publish failure rolls back report/audit/receipt, retry releases once');
+
+
+  await resetWorkflow();
+  let checked = false;
+  const protectedDb = database(async () => {
+   checked = true;
+   await assert.rejects(client.begin(async tx => {
+    await tx.unsafe("SET LOCAL lock_timeout='150ms'");
+    await tx.unsafe("SET LOCAL statement_timeout='2s'");
+    await tx.unsafe('UPDATE ' + table('scopes') + ' SET revision=revision+1');
+   }), error => error.code === '55P03');
+  });
+  assert.deepEqual(await execute(command(), protectedDb), { ok: true, kind: 'applied', version: 2 });
+  assert.equal(checked, true);
+  console.log('PASS: source mutation cannot interleave between combined report update and audit commit');
+
+  await resetWorkflow();
+  const beforeSourceChange = await workflowState();
+  await client.begin(async tx => {
+   const bound = wrap(tx);
+   await bound.unsafe('SELECT revision FROM ' + table('scopes') + ' FOR UPDATE');
+   const blockedSubmission = await execute();
+   assert.equal(blockedSubmission.ok, false);
+   assert.equal(blockedSubmission.code, 'read_failed');
+   await bound.unsafe('UPDATE ' + table('scopes') + ' SET revision=revision+1,academic=$1::text::jsonb', [JSON.stringify({ ...academic, version: record.assessmentVersion + 1 })]);
+   await bound.unsafe('UPDATE ' + table('subjects') + ' SET assessment_revision=assessment_revision+1,source_revision=source_revision+1');
+  });
+  assert.equal((await execute()).code, 'stale_assessment');
+  assert.deepEqual(await workflowState(), beforeSourceChange);
+  console.log('PASS: source-first writer blocks submission; committed revision rejects stale report without writes');
+
  } finally {
   try { await sql.unsafe('DROP SCHEMA IF EXISTS "' + schema + '" CASCADE'); } finally { await client.end(); }
  }
