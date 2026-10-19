@@ -8,6 +8,7 @@ import { executeFixtureCanonicalReportCommand } from '../src/lib/academics/repor
 import { buildApprovedReportSnapshot } from '../src/lib/academics/report-card-approved-snapshot.ts';
 import { canonicalizeSnapshotValue } from '../src/lib/academics/report-card-canonical-snapshot.ts';
 import postgres from 'postgres';
+import { assessmentAuthorityGuardDDL } from './lib/assessment-disposable-authority-guards.mjs';
 import { assessmentWriteGuardDDL } from './lib/assessment-disposable-write-guards.mjs';
 import { getTableConfig } from 'drizzle-orm/pg-core';
 import { assessmentFixtureDDL, fixtureTables, reportFixtureTables, fixtureIdentifier as q } from './lib/assessment-disposable-schema.mjs';
@@ -602,6 +603,27 @@ if (!url || process.env.REPORT_CARD_TEST_CONFIRM !== 'DISPOSABLE_REPORT_CARD_TES
 
 
 
+
+  // Install after earlier revision assertions: this batch changes lock ordering only.
+  const authorityGuards = assessmentAuthorityGuardDDL(schema);
+  for (const statement of authorityGuards.statements) await sql.unsafe(statement);
+  await client.begin(async tx => {
+   await wrap(tx).unsafe(guards.readGate);
+   for (const name of authorityGuards.targets) {
+    // Even zero-row statements must wait before discovery or row acquisition.
+    for (const statement of [
+     'INSERT INTO '+table(name)+' SELECT * FROM '+table(name)+' WHERE false',
+     'UPDATE '+table(name)+' SET id=id WHERE false',
+     'DELETE FROM '+table(name)+' WHERE false',
+    ]) await expectError('55P03',()=>boundedWrite(other=>other.unsafe(statement)));
+   }
+  });
+  console.log('PASS: every authority and parent insert/update/delete takes discovery gate before row discovery');
+  await sql.unsafe('UPDATE '+table('memberships')+" SET status='suspended' WHERE id=$1::uuid",[ids.teacher]);
+  try { assert.deepEqual(await runWorkflow(createCommand(guardPupil,'authority-suspended-create')),{ok:false,code:'forbidden'}); }
+  finally { await sql.unsafe('UPDATE '+table('memberships')+" SET status='active' WHERE id=$1::uuid",[ids.teacher]); }
+  for (const name of authorityGuards.targets) await expectError('P0001',()=>sql.unsafe('TRUNCATE '+table(name)+' CASCADE'));
+  console.log('PASS: authority changes complete after reader release, subsequent commands recheck membership and parent truncate is blocked');
 
  } finally {
   try { await sql.unsafe('DROP SCHEMA IF EXISTS ' + q(schema) + ' CASCADE'); } finally { await client.end(); }
