@@ -15,10 +15,11 @@ export type SqlDatabase = SqlClient & {
 export type TrustedReportLoader = (tx:SqlClient, schoolId:string, reportId:string, actorMembershipId:string)=>Promise<{projection:ReportCardDraft;context:ReportTrustedContext}|null>;
 
 /** Identifier must be created by the test harness, never taken from user input. */
-export function disposableReportTransactionRunner(db:SqlDatabase, schema:string, loadTrusted:TrustedReportLoader):TransactionRunner {
+export function disposableReportTransactionRunner(db:SqlDatabase, schema:string, loadTrusted:TrustedReportLoader, reportTable: 'reports'|'read_reports' = 'reports'):TransactionRunner {
   if(!/^rc_it_[a-f0-9]{16}$/.test(schema))throw Error('Only generated disposable test schema identifiers allowed.');
   const table=(name:string)=>'"'+schema+'"."'+name+'"';
-  const reports=table('reports'), receipts=table('receipts'), audits=table('audits'), releases=table('releases');
+  if(!['reports','read_reports'].includes(reportTable))throw Error('Unsupported disposable report table');
+  const reports=table(reportTable), receipts=table('receipts'), audits=table('audits'), releases=table('releases');
   return {
     run<T>(callback:(tx:ReportTransaction)=>Promise<T>):Promise<T> {
       return db.begin(async connection=>{
