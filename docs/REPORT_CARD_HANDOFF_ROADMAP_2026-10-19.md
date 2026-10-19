@@ -204,6 +204,15 @@ Next after full offline and opt-in PostgreSQL verification: restricted failure/c
 
 ## Latest continuation — restricted writer failure and recovery
 
-User verified all 42 PostgreSQL groups. Three additional opt-in groups now prepare real restricted-role creation/submission, approval and publication failure injection, full report/source state rollback assertions, same-key retry/replay and single-snapshot/release checks. Role/policy/workload rollback remains automatic. All 46 related offline tests plus syntax/whitespace passed here. Offline count remains 345; latest explicitly confirmed offline count is 337. New expected opt-in PostgreSQL count: 45; ordinary mode remains 38 plus an explicit seven-group skip. The three new SQL groups remain pending local execution.
+User verified all 42 PostgreSQL groups. Three additional opt-in groups now prepare real restricted-role creation/submission, approval and publication failure injection, full report/source state rollback assertions, same-key retry/replay and single-snapshot/release checks. Role/policy/workload rollback remains automatic. All 46 related offline tests plus syntax/whitespace passed here. Offline count remains 345; latest explicitly confirmed offline count is 337. New expected opt-in PostgreSQL count: 45; ordinary mode remains 38 plus an explicit seven-group skip. The user subsequently verified all 45 PostgreSQL groups passed.
 
 See `ASSESSMENT_DISPOSABLE_SECURITY_REVIEW.md`. Next: review and implement immutable published-release revocation/correction policy, and close restricted independent-session concurrency/login/authority gaps before routes. Do not claim savepoint tests establish concurrent-session behavior; uncommitted disposable roles cannot be used from another session. Preserve no-merge/deploy/production restrictions.
+
+
+## Latest continuation — published correction policy
+
+User verified all 45 PostgreSQL groups. `report-card-release-correction.ts` now prepares the pure withdrawal plan: active same-school admin, exact current release and approved snapshot, mandatory reason, optimistic report version, one-way release timestamp and published-to-draft correction. It preserves snapshots/publication provenance and permits stale-source withdrawal; subsequent submit must refresh a complete current source and repeat approval/publication. The module does not authenticate, persist or replay receipts.
+
+Twelve new tests raise the expected full offline count from 345 to 357. All 38 selected tests plus syntax/whitespace passed here. Full TypeScript/ESLint remain pending local verification; latest explicitly confirmed full offline count is 337. No SQL/harness changed; 45 PostgreSQL groups remain user-verified. See `REPORT_CARD_RELEASE_CORRECTION_REVIEW.md`.
+
+Next: proposal audit/release binding and one-way revocation guards, then actual transactional revoke writer with actor-wide idempotency, restricted privileges and rollback/retry/history tests. Restricted independent-session concurrency and final login/live-auth contract still precede route/UI release. No merge, deployment, production schema or live authorization changes.
