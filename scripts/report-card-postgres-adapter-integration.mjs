@@ -135,6 +135,71 @@ if(process.env.REPORT_CARD_TEST_CONFIRM!=='DISPOSABLE_REPORT_CARD_TEST_ONLY'||!u
   assert.equal(publishing.filter(x=>!x.ok).length,1);
   assert.equal(await count('releases'),1);
   console.log('PASS: actual transaction port guards approval and single publication');
+
+  // Rejections must leave every workflow table unchanged, not merely return false.
+  const snapshot=async()=>({
+   reports:Array.from(await sql.unsafe('SELECT * FROM '+reports+' ORDER BY school_id,id'),row=>({...row})),
+   audits:Array.from(await sql.unsafe('SELECT * FROM '+audits+' ORDER BY version'),row=>({...row})),
+   receipts:Array.from(await sql.unsafe('SELECT * FROM '+receipts+' ORDER BY operation_key'),row=>({...row})),
+   releases:Array.from(await sql.unsafe('SELECT * FROM '+releases+' ORDER BY version'),row=>({...row}))
+  });
+  const rejectUnchanged=async(input,code)=>{
+   const before=await snapshot();
+   const result=await executeReportTransaction(runner,input);
+   assert.equal(result.ok,false,JSON.stringify(result));
+   assert.equal(result.code,code);
+   assert.deepEqual(await snapshot(),before,'denied operation changed workflow state');
+  };
+  await reset();
+  await sql.unsafe('INSERT INTO '+reports+' (school_id,id,version,record) VALUES ($1,$2,$3,$4::text::jsonb)',['school-b','other-school-report',1,JSON.stringify({...record,schoolId:'school-b'})]);
+  await rejectUnchanged({...request(),reportId:'other-school-report'},'not_found');
+  await rejectUnchanged(request('missing-actor'),'not_found');
+  await rejectUnchanged(request('admin-1','approve',1,'invalid-stage'),'invalid_transition');
+  await rejectUnchanged({...request(),command:{...request().command,assessmentVersion:4}},'stale_assessment');
+  await sql.unsafe('UPDATE '+table('projections')+' SET revision=6');
+  try{await rejectUnchanged(request(),'stale_assessment');}
+  finally{await sql.unsafe('UPDATE '+table('projections')+' SET revision=5');}
+  await sql.unsafe('DELETE FROM '+table('assignments'));
+  try{await rejectUnchanged(request(),'forbidden');}
+  finally{await sql.unsafe('INSERT INTO '+table('assignments')+' (school_id,membership_id,data) VALUES ($1,$2,$3::text::jsonb)',['school-a','teacher-1',JSON.stringify(assignment)]);}
+  await sql.unsafe('UPDATE '+table('memberships')+' SET data=$1::text::jsonb WHERE id=$2',[JSON.stringify({...members[0],status:'suspended'}),'teacher-1']);
+  try{await rejectUnchanged(request(),'forbidden');}
+  finally{await sql.unsafe('UPDATE '+table('memberships')+' SET data=$1::text::jsonb WHERE id=$2',[JSON.stringify(members[0]),'teacher-1']);}
+  console.log('PASS: invalid stage, actor, assignment and stale source reject without writes');
+
+  await reset();
+  assert.deepEqual(await executeReportTransaction(runner,request()),{ok:true,kind:'applied',version:2});
+  await rejectUnchanged({...request(),fingerprint:'a'.repeat(64)},'conflict');
+  console.log('PASS: conflicting receipt fingerprint preserves committed state');
+
+  await reset();
+  await sql.unsafe('ALTER TABLE '+audits+' ADD CONSTRAINT reject_audit CHECK (version <> 2)');
+  try{await rejectUnchanged(request(),'transaction_failed');}
+  finally{await sql.unsafe('ALTER TABLE '+audits+' DROP CONSTRAINT reject_audit');}
+  assert.deepEqual(await executeReportTransaction(runner,request()),{ok:true,kind:'applied',version:2});
+  assert.deepEqual(await executeReportTransaction(runner,request()),{ok:true,kind:'replay',version:2});
+  console.log('PASS: audit failure rolls back and same operation can retry then replay');
+
+  await reset();
+  const retryReceipt=request('teacher-1','submit',1,'force-fail');
+  await rejectUnchanged(retryReceipt,'transaction_failed');
+  await sql.unsafe('ALTER TABLE '+receipts+' DROP CONSTRAINT reject_receipts');
+  assert.deepEqual(await executeReportTransaction(runner,retryReceipt),{ok:true,kind:'applied',version:2});
+  assert.deepEqual(await executeReportTransaction(runner,retryReceipt),{ok:true,kind:'replay',version:2});
+  console.log('PASS: receipt failure leaves no poisoned operation key');
+
+  assert.deepEqual(await executeReportTransaction(runner,request('admin-1','approve',2,'approve-retry')),{ok:true,kind:'applied',version:3});
+  const retryPublish=request('admin-1','publish',3,'publish-retry');
+  await sql.unsafe('ALTER TABLE '+releases+' ADD CONSTRAINT reject_release CHECK (version <> 4)');
+  try{await rejectUnchanged(retryPublish,'transaction_failed');}
+  finally{await sql.unsafe('ALTER TABLE '+releases+' DROP CONSTRAINT reject_release');}
+  assert.deepEqual(await executeReportTransaction(runner,retryPublish),{ok:true,kind:'applied',version:4});
+  assert.deepEqual(await executeReportTransaction(runner,retryPublish),{ok:true,kind:'replay',version:4});
+  assert.equal(await count('releases'),1);
+  assert.equal(await count('audits'),3);
+  assert.equal(await count('receipts'),3);
+  console.log('PASS: release failure rolls back report, audit and receipt; retry publishes once');
+
  }finally{
   try{await sql.unsafe('DROP SCHEMA IF EXISTS "'+schema+'" CASCADE');}finally{await client.end();}
  }
