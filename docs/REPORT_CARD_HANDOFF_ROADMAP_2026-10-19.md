@@ -135,6 +135,12 @@ Continue after the offline gate passes: carry complete enrollment/placement, sco
 
 ## Latest continuation — canonical complete-source content
 
-The user confirmed all 259 offline tests passed. `assessment-canonical-source.ts` now prepares versioned complete-scope source manifests and freshly recalculated per-subject finalized documents, with strict canonical JSON/SHA-256 verification of persisted content and exact source/review/finalization bindings. Thirteen new pure tests raise the expected offline count to 272. This batch does not change SQL or connect to any database. See `ASSESSMENT_CANONICAL_SOURCE_REVIEW.md` for the completeness contract and remaining authority boundary.
+The user confirmed all 259 offline tests passed. `assessment-canonical-source.ts` now prepares versioned complete-scope source manifests and freshly recalculated per-subject finalized documents, with strict canonical JSON/SHA-256 verification of persisted content and exact source/review/finalization bindings. The user subsequently confirmed the full offline gate passed with all 272 tests. This batch does not change SQL or connect to any database. See `ASSESSMENT_CANONICAL_SOURCE_REVIEW.md` for the completeness contract and remaining authority boundary.
 
 Next after offline verification: implement the transaction-scoped schema-faithful complete SQL loader and round-trip real complete manifests/finalizations through JSONB in the disposable harness. The existing selected-student reader and synthetic minimal manifest data are not sufficient for this verifier. Continue into real report/snapshot bindings only after complete-loader provenance and lock tests pass.
+
+## Latest continuation — complete PostgreSQL canonical reads
+
+The user confirmed all 272 offline tests passed. `assessment-postgres-canonical-reader.ts` now prepares complete, transaction-scoped schema-faithful source discovery/materialization and content verification, reusing existing selected-column decoders and reviewer/admin authority checks. Ten new offline tests raise the expected full gate to 282 tests; four added PostgreSQL groups raise the disposable harness to nineteen. Locally, 54 selected tests, script syntax and tracked whitespace passed. Full TypeScript/ESLint and the four new database groups remain unverified in the user's environment. See `ASSESSMENT_POSTGRES_CANONICAL_READER.md`.
+
+Next only after both gates pass: reconcile report proposal enrollment/source-version/snapshot references and immutable release bindings, then compose the schema-faithful report writer. Preserve source discovery gate ordering, rollback/idempotency behavior and the separate no-production/no-deployment boundary.
