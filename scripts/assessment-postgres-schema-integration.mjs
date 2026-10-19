@@ -9,6 +9,7 @@ import { executeFixtureCanonicalReportCommand } from '../src/lib/academics/repor
 import { buildApprovedReportSnapshot } from '../src/lib/academics/report-card-approved-snapshot.ts';
 import { canonicalizeSnapshotValue } from '../src/lib/academics/report-card-canonical-snapshot.ts';
 import postgres from 'postgres';
+import { disposableLoginPlan, inspectDisposableLogin, disposableLoginURL } from './lib/disposable-login-plan.mjs';
 import { disposableSessionRendezvous } from './lib/disposable-session-rendezvous.mjs';
 import { reportReleaseGuardDDL } from './lib/report-release-disposable-guards.mjs';
 import { fixtureSecurityPlan } from './lib/assessment-disposable-security-plan.mjs';
@@ -955,7 +956,9 @@ END $$`);
    const sessionFixture=assessmentFixtureDDL(sessionSchema,{includeReports:true});
    const sessionSecurity=fixtureSecurityPlan(sessionSchema,ids.school);
    const sessionTable=sessionFixture.table,runToken=randomBytes(24).toString('hex');
-   let sessionCommitted=false;
+   const loginPlan=disposableLoginPlan(sessionSchema),loginPassword=randomBytes(32).toString('hex');
+   const databaseName=decodeURIComponent(parsed.pathname.slice(1));
+   let sessionCommitted=false,loginClient=null;
    const cleanupProbe=Error('intentional independent-session cleanup probe');
    await assert.rejects((async()=>{
    try {
@@ -985,15 +988,37 @@ BEGIN RAISE EXCEPTION 'independent fixture history is append-only' USING ERRCODE
      const preflight=fixtureRolePreflightPlan(sessionSchema);
      assert.equal(inspectFixtureRestrictedRoles(sessionSchema,await bound.unsafe(preflight.query,preflight.parameters)).ok,true);
      for(const statement of sessionSecurity.statements)await bound.unsafe(statement);
+     // Secret is generated in memory and never printed or saved. Hex validation
+     // precedes interpolation because CREATE ROLE PASSWORD cannot bind a value.
+     disposableLoginURL(url,sessionSchema,loginPassword);
+     try {
+      await bound.unsafe('CREATE ROLE '+q(loginPlan.login)+" LOGIN NOINHERIT NOSUPERUSER NOBYPASSRLS NOCREATEROLE NOCREATEDB NOREPLICATION PASSWORD '"+loginPassword+"'");
+     } catch { throw Error('Disposable login provisioning failed (details suppressed to protect generated secret)'); }
+     for(const option of ['SET TRUE','INHERIT FALSE','ADMIN FALSE'])await bound.unsafe('GRANT '+loginPlan.roles.map(q).join(',')+' TO '+q(loginPlan.login)+' WITH '+option);
+     await bound.unsafe('GRANT CONNECT ON DATABASE '+q(databaseName)+' TO '+q(loginPlan.login));
+     assert.equal(inspectDisposableLogin(sessionSchema,await bound.unsafe(loginPlan.query,loginPlan.parameters)),true);
+
     });
     sessionCommitted=true;
+    loginClient=postgres(disposableLoginURL(url,sessionSchema,loginPassword),{max:4,prepare:false,connect_timeout:5,onnotice:()=>{}});
+    const loginWrap=tx=>({unsafe:(query,parameters=[])=>tx.unsafe(query,parameters.map(v=>typeof v==='string'?loginClient.typed(v,25):v))});
+    try {
+     const evidence=(await loginClient.unsafe('SELECT session_user AS login,current_user AS role'))[0];
+     assert.equal(evidence.login,loginPlan.login);assert.equal(evidence.role,loginPlan.login);
+    } catch { throw Error('Disposable login authentication/evidence failed (connection details suppressed)'); }
+    await expectError('42501',()=>loginClient.unsafe('SELECT id FROM '+sessionTable('report_cards')));
+    const ownerName=(await sql.unsafe('SELECT current_user AS name'))[0].name;
+    await expectError('42501',()=>loginClient.begin(tx=>tx.unsafe('SET LOCAL ROLE '+q(ownerName))));
+    await expectError('42501',()=>loginClient.begin(tx=>tx.unsafe('CREATE ROLE '+q(sessionSchema+'_forbidden'))));
+    await expectError('42501',()=>loginClient.begin(tx=>tx.unsafe('GRANT '+q(sessionSecurity.roles.writer)+' TO '+q(ownerName))));
+    console.log('PASS: actual generated login has no inherited fixture access, administrator role switch, role creation or membership administration');
     const roleDb=(role,rendezvous=null,seen=null)=>({
      unsafe:()=>{throw Error('Restricted SQL requires its transaction');},
-     begin:callback=>client.begin(async tx=>{
-      const bound=wrap(tx);await bound.unsafe('SET LOCAL ROLE '+q(role));
+     begin:callback=>loginClient.begin(async tx=>{
+      const bound=loginWrap(tx);await bound.unsafe('SET LOCAL ROLE '+q(role));
       await bound.unsafe("SET LOCAL row_security=on");await bound.unsafe("SET LOCAL lock_timeout='5s'");await bound.unsafe("SET LOCAL statement_timeout='15s'");
-      const evidence=(await bound.unsafe("SELECT current_user AS role,pg_catalog.pg_backend_pid() AS pid,pg_catalog.current_setting('row_security') AS security"))[0];
-      assert.equal(evidence.role,role);assert.equal(evidence.security,'on');if(seen)seen.add(evidence.pid);
+      const evidence=(await bound.unsafe("SELECT session_user AS login,current_user AS role,pg_catalog.pg_backend_pid() AS pid,pg_catalog.current_setting('row_security') AS security"))[0];
+      assert.equal(evidence.login,loginPlan.login);assert.equal(evidence.role,role);assert.equal(evidence.security,'on');if(seen)seen.add(evidence.pid);
       if(rendezvous)await rendezvous.arrive(evidence.pid,evidence.role);
       return callback(bound);
      }),
@@ -1031,24 +1056,37 @@ BEGIN RAISE EXCEPTION 'independent fixture history is append-only' USING ERRCODE
     assert.deepEqual(await executeFixtureCanonicalReportCommand(writer,sessionSchema,{action:'approve',reportId:reportA,expectedVersion:10,operationKey:'independent-teacher-denial'},teacherIdentity),{ok:false,code:'forbidden'});
     assert.equal((await executeFixtureReportRevocation(writer,sessionSchema,independentRevoke,adminIdentity)).kind,'replay');
     console.log('PASS: distinct restricted sessions reject competing stale keys, foreign-school reads, reader writes and teacher approval while historical replay survives');
+    await writer.begin(async bound=>{
+     await bound.unsafe('RESET ROLE');
+     const reset=(await bound.unsafe('SELECT session_user AS login,current_user AS role'))[0];
+     assert.equal(reset.login,loginPlan.login);assert.equal(reset.role,loginPlan.login);
+    });
+    await expectError('42501',()=>writer.begin(bound=>bound.unsafe('CREATE TABLE '+sessionTable('forbidden_table')+' (id int)')));
+    await expectError('42501',()=>writer.begin(bound=>bound.unsafe('ALTER TABLE '+sessionTable('report_cards')+' DISABLE ROW LEVEL SECURITY')));
+    assert.equal(inspectDisposableLogin(sessionSchema,await sql.unsafe(loginPlan.query,loginPlan.parameters)),true);
+    console.log('PASS: service role reset returns to the unprivileged login; schema creation and RLS disabling are denied without privilege drift');
     throw cleanupProbe;
    } finally {
     // Marker ownership also permits cleanup if COMMIT succeeded but its client
     // acknowledgement was lost. Never drop a colliding pre-existing schema.
+    if(loginClient)await loginClient.end();
     const markerExists=(await sql.unsafe('SELECT pg_catalog.to_regclass($1::text) IS NOT NULL AS present',[sessionTable('fixture_run_marker')]))[0].present;
     if(markerExists){
      const marker=await sql.unsafe('SELECT token FROM '+sessionTable('fixture_run_marker'));
      assert.equal(marker.length,1);assert.equal(marker[0].token,runToken,'refuse cleanup of a fixture owned by another run');
      await sql.unsafe('DROP SCHEMA '+q(sessionSchema)+' CASCADE');
+     await sql.unsafe('REVOKE CONNECT ON DATABASE '+q(databaseName)+' FROM '+q(loginPlan.login));
+     await sql.unsafe('DROP ROLE '+q(loginPlan.login));
      await sql.unsafe('DROP ROLE '+Object.values(sessionSecurity.roles).map(q).join(','));
     }else if(sessionCommitted)throw Error('Independent fixture marker missing; automatic cleanup refused for '+sessionSchema);
    }
    })(),error=>error===cleanupProbe);
    const removed=fixtureRolePreflightPlan(sessionSchema);
    assert.equal((await sql.unsafe(removed.query,removed.parameters)).length,0);
+   assert.equal((await sql.unsafe(loginPlan.query,loginPlan.parameters)).length,0);
    assert.equal((await sql.unsafe('SELECT count(*)::int AS n FROM pg_catalog.pg_namespace WHERE nspname=$1::text',[sessionSchema]))[0].n,0);
    console.log('PASS: committed independent-session fixture and exact temporary roles are removed even after an intentional workload error');
-  }else console.log('SKIPPED: four independent restricted-session groups require the existing disposable role-admin confirmation');
+  }else console.log('SKIPPED: six independent restricted-session/login groups require the existing disposable role-admin confirmation');
 
  } finally {
   try { await sql.unsafe('DROP SCHEMA IF EXISTS ' + q(schema) + ' CASCADE'); } finally { await client.end(); }
