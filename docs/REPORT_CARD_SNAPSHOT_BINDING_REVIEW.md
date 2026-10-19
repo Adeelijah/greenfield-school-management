@@ -48,3 +48,7 @@ Report snapshot JSON in this constraint fixture is explicitly `greenfield.report
 JavaScript syntax and tracked whitespace checks passed here. The new Drizzle metadata assertions, full TypeScript/ESLint and all new PostgreSQL statements require execution in the user's installed environment/disposable database. No dependencies were installed and no SQL was executed here.
 
 After both gates pass, implement the canonical per-pupil snapshot builder and schema-faithful transactional writer. Keep production migration generation/application, live authentication/security, guardian access, merges and deployment behind their separate roadmap gates.
+
+## Subsequent user verification
+
+The user confirmed the full offline gate passed with all 293 tests and all 23 PostgreSQL groups passed, including 27 fixture relations and the new report binding/rollback groups. The next actual adapter/snapshot milestone is documented in `REPORT_CARD_CANONICAL_WRITER_REVIEW.md`; its expanded assertions still require verification.
