@@ -236,3 +236,10 @@ Fixture security now installs one-way history guards with grants and gives the w
 Five prepared PostgreSQL groups raise expected opt-in total to 53 (43 owner groups plus ten restricted). They cover restricted failure/retry, complete republish/repeated correction history, outer concurrent same-key withdrawal and outer failure rollback/stale-source recovery. New SQL has not been executed here. See `REPORT_CARD_REVOKE_WRITER_REVIEW.md`.
 
 Next after local gates: restricted independent-session concurrency, least-privilege login and final server identity/membership contract, then controlled server read/command integration and UI. Fixed-school trusted-service RLS is not end-user authorization; owner concurrency is not restricted-session concurrency. No merge, deployment, production migrations, live auth or real student data.
+
+
+## Latest continuation — repair published timestamp in guard fixture
+
+The user ran the 53-group harness: first 51 groups passed, then the owner concurrent revoke test failed with two invalid_release outcomes; the final group was not reached. An earlier active-release guard test restored published_at with now(), breaking equality with immutable release.released_at. The fixture now saves/restores its original timestamp and immediately asserts exact active-release equality. Revoke validation remains strict.
+
+A new unit regression demonstrates mismatch rejection and successful exact restoration. All 63 selected tests, syntax and whitespace passed here. Expected offline count is 377; full local TypeScript/ESLint and complete 53-group PostgreSQL rerun are pending. Do not mark 53 groups verified or advance the roadmap past this repair until that run passes. Latest explicitly confirmed full offline count remains 357. See `REPORT_CARD_REVOKE_WRITER_REVIEW.md`.
