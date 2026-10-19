@@ -27,7 +27,7 @@ test('teacher, bursar, suspended and foreign-school actors cannot revoke',()=>{
 });
 test('command boundary rejects forged authority, missing keys, getters and blank or excessive reasons',()=>{
  const f=fixture();
- for(const raw of [null,{...f.command,schoolId:'foreign'},{...f.command,reason:' '},{...f.command,reason:'x'.repeat(2001)},{...f.command,operationKey:'x'.repeat(201)},{...f.command,action:'publish'},{...f.command,expectedVersion:1.5}])assert.equal(normalizeReleaseCorrectionCommand(raw),null);
+ for(const raw of [null,{...f.command,schoolId:'foreign'},{...f.command,reason:' '},{...f.command,reason:'x'.repeat(2001)},{...f.command,operationKey:'x'.repeat(129)},{...f.command,action:'publish'},{...f.command,expectedVersion:1.5}])assert.equal(normalizeReleaseCorrectionCommand(raw),null);
  const decorated={...f.command,[Symbol('authority')]:true};assert.equal(normalizeReleaseCorrectionCommand(decorated),null);
  const getter={...f.command};Object.defineProperty(getter,'reason',{enumerable:true,get(){throw Error('must not read getter');}});assert.equal(normalizeReleaseCorrectionCommand(getter),null);
 });
