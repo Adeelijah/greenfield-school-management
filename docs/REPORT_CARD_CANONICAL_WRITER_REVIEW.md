@@ -37,3 +37,7 @@ Five groups extend the opt-in PostgreSQL harness from 23 to 28:
 These five PostgreSQL groups are prepared, not assistant-executed. The advisory barrier is bounded and fixture-only. Existing scripted binding tests remain distinct from the new actual writer tests.
 
 After both verification gates pass, implement persisted creation/teacher submission and admin return/approved-reopen/source-refresh commands using the same provenance, lock ordering, optimistic versions and atomic idempotency. Then address restricted roles, grants/RLS, parent/authority insertion/mutation protocols and independent security review before real server routes. No production migration, publication endpoint, deployment or merge is authorized by this batch.
+
+## Subsequent verification and companion workflow
+
+The user confirmed all 309 offline tests and all 28 PostgreSQL groups passed. The next companion adapter now prepares creation, teacher submission, admin return and approved reopen; see `REPORT_CARD_PERSISTED_WORKFLOW_REVIEW.md`. Both mutation adapters share an exclusive school-user actor anchor acquired after the shared discovery gate and before report locks. This strengthens actor-scoped operation-key serialization across command families; the previous standalone approval/publication behavior remains under regression tests.
