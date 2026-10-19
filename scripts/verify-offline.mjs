@@ -28,6 +28,7 @@ const tests = [
   'src/lib/academics/report-card-preflight.test.ts',
   'src/lib/academics/report-card-persistence-policy.test.ts',
   'src/lib/academics/report-card-memory-adapter.test.ts',
+  'src/lib/academics/report-card-snapshot-readiness.test.ts',
   'src/components/greenfield-date-picker-layout.test.ts',
 ];
 
