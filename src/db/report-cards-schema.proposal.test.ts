@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { getTableConfig } from 'drizzle-orm/pg-core';
+import { getTableConfig, PgDialect } from 'drizzle-orm/pg-core';
 // @ts-expect-error Node type stripping requires explicit source extension.
 import * as proposal from './report-cards-schema.proposal.ts';
 const cfg=(t:Parameters<typeof getTableConfig>[0])=>getTableConfig(t);
@@ -93,4 +93,18 @@ test('receipt payload validation retains actor-key uniqueness and canonical hash
  assert.ok(checks(proposal.proposedReportReceipts).includes('report_receipts_payload_valid'));
  assert.ok(checks(proposal.proposedReportReceipts).includes('report_receipts_hash_length'));
  assert.ok(indexes(proposal.proposedReportReceipts).includes('report_receipts_school_actor_key_unique'));
+});
+
+test('creation audit is explicitly version zero to one and separate from later transitions',()=>{
+ assert.ok(proposal.proposedReportAction.enumValues.includes('create'));
+ const check=cfg(proposal.proposedReportAudit).checks.find(c=>c.name==='report_audit_version_step');assert.ok(check);
+ const expression=new PgDialect().sqlToQuery(check.value).sql;
+ assert.ok(expression.includes("= 'create'"));assert.ok(expression.includes('"before_version" = 0'));assert.ok(expression.includes('"after_version" = 1'));
+ assert.ok(expression.includes("<> 'create'"));assert.ok(expression.includes('"before_version" > 0'));
+});
+test('return reason is persisted in audit and constrained independently of mutable report state',()=>{
+ assert.ok(cfg(proposal.proposedReportAudit).columns.some(c=>c.name==='reason'));
+ const check=cfg(proposal.proposedReportAudit).checks.find(c=>c.name==='report_audit_reason_valid');assert.ok(check);
+ const expression=new PgDialect().sqlToQuery(check.value).sql;
+ assert.ok(expression.includes("= 'return'"));assert.ok(expression.includes('IS NOT NULL'));assert.ok(expression.includes("<> 'return'"));
 });
