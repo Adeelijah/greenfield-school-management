@@ -7,7 +7,7 @@ import { canonicalizeSnapshotValue } from '../src/lib/academics/report-card-cano
 import postgres from 'postgres';
 import { assessmentWriteGuardDDL } from './lib/assessment-disposable-write-guards.mjs';
 import { getTableConfig } from 'drizzle-orm/pg-core';
-import { assessmentFixtureDDL, fixtureTables, fixtureIdentifier as q } from './lib/assessment-disposable-schema.mjs';
+import { assessmentFixtureDDL, fixtureTables, reportFixtureTables, fixtureIdentifier as q } from './lib/assessment-disposable-schema.mjs';
 
 const url = process.env.REPORT_CARD_TEST_DATABASE_URL;
 if (!url || process.env.REPORT_CARD_TEST_CONFIRM !== 'DISPOSABLE_REPORT_CARD_TEST_ONLY') {
@@ -16,11 +16,11 @@ if (!url || process.env.REPORT_CARD_TEST_CONFIRM !== 'DISPOSABLE_REPORT_CARD_TES
  const parsed = new URL(url);
  if (!['postgres:', 'postgresql:'].includes(parsed.protocol) || !['localhost', '127.0.0.1', '[::1]'].includes(parsed.hostname) || !/^greenfield_report_cards_disposable(?:_[a-z0-9_]+)?$/.test(decodeURIComponent(parsed.pathname.slice(1)))) throw Error('Only a local disposable test database is permitted.');
  const schema = 'rc_it_' + randomBytes(8).toString('hex');
- const fixture = assessmentFixtureDDL(schema);
+ const fixture = assessmentFixtureDDL(schema, { includeReports: true });
  const client = postgres(url, { max: 4, prepare: false, connect_timeout: 5, onnotice: () => {} });
  const wrap = tx => ({ unsafe: (query, parameters = []) => tx.unsafe(query, parameters.map(v => typeof v === 'string' ? client.typed(v, 25) : v)) });
  const sql = wrap(client); const table = fixture.table;
- const configs = new Map(fixtureTables.map(t => { const c = getTableConfig(t); return [c.name, c]; }));
+ const configs = new Map([...fixtureTables, ...reportFixtureTables].map(t => { const c = getTableConfig(t); return [c.name, c]; }));
  const insert = (tx, name, row) => {
   const c = configs.get(name); assert.ok(c, 'unknown fixture table');
   const keys = Object.keys(row);
@@ -48,7 +48,7 @@ if (!url || process.env.REPORT_CARD_TEST_CONFIRM !== 'DISPOSABLE_REPORT_CARD_TES
   for (const statement of fixture.statements) await sql.unsafe(statement);
   const actual = await sql.unsafe('SELECT count(*)::int AS n FROM information_schema.tables WHERE table_schema=$1', [schema]);
   assert.equal(actual[0].n, fixture.tableCount);
-  console.log('PASS: all 22 fixture relations created from actual metadata with isolated prerequisites');
+  console.log('PASS: all 27 fixture relations created from actual metadata with isolated prerequisites');
   for (const [id, slug] of [[ids.school, 'fictional-school'], [ids.foreignSchool, 'fictional-other']]) await insert(sql, 'schools', { id, name: slug, slug, final_primary_year: 5 });
   for (const [id, name] of [[ids.teacherUser, 'Fictional Teacher'], [ids.adminUser, 'Fictional Admin']]) await insert(sql, 'school_users', { id, auth_user_id: randomUUID(), display_name: name });
   for (const [id, user, role] of [[ids.teacher, ids.teacherUser, 'teacher'], [ids.admin, ids.adminUser, 'admin']]) await insert(sql, 'memberships', { id, school_id: ids.school, user_id: user, role });
@@ -319,6 +319,80 @@ if (!url || process.env.REPORT_CARD_TEST_CONFIRM !== 'DISPOSABLE_REPORT_CARD_TES
   await sql.unsafe('UPDATE ' + table('assessment_scores') + ' SET version=version+1 WHERE id=$1::uuid', [canonicalScore]);
   assert.deepEqual(await readCanonical(), { ok: false, code: 'incomplete_source' });
   console.log('PASS: canonical read holds source/authority locks and later second-pupil edits invalidate finalization');
+
+  // Report proposal bindings are tested against the same verified relational
+  // source. These rows are fixture-only, not a report writer or release endpoint.
+  const reportSource = await seal();
+  const reportRevision = (await revisions())[ids.scope];
+  const reportA = randomUUID(), reportB = randomUUID(), snapshotA = randomUUID(), snapshotB = randomUUID();
+  const reportRow = { id: reportA, school_id: ids.school, enrollment_id: ids.enrollment, student_id: ids.student, class_id: ids.class, session_id: ids.session, term_id: ids.term,
+   assessment_scope_id: ids.scope, assessment_source_version_id: reportSource, assessment_revision: reportRevision, stage: 'approved', version: 3, submitted_by: ids.teacher, approved_by: ids.admin };
+  await expectError('23503', () => insert(sql, 'report_cards', { ...reportRow, id: randomUUID(), enrollment_id: canonicalEnrollment }));
+  await expectError('23503', () => insert(sql, 'report_cards', { ...reportRow, id: randomUUID(), class_id: secondClass }));
+  await expectError('23503', () => insert(sql, 'report_cards', { ...reportRow, id: randomUUID(), assessment_source_version_id: ids.otherSource }));
+  await expectError('23503', () => insert(sql, 'report_cards', { ...reportRow, id: randomUUID(), assessment_revision: reportRevision + 1 }));
+  await insert(sql, 'report_cards', reportRow);
+  await insert(sql, 'report_cards', { ...reportRow, id: reportB, student_id: ids.otherStudent, enrollment_id: canonicalEnrollment });
+  console.log('PASS: report proposal rejects substituted enrollment/class and mismatched source scope/revision');
+
+  const snapshotPayload = { format: 'greenfield.report-card.binding-fixture.v1', reportId: reportA, enrollmentId: ids.enrollment, sourceVersionId: reportSource, assessmentRevision: reportRevision };
+  const reportSnapshotRow = { id: snapshotA, school_id: ids.school, report_id: reportA, report_version: 3, enrollment_id: ids.enrollment, assessment_scope_id: ids.scope,
+   assessment_source_version_id: reportSource, assessment_revision: reportRevision, source_versions: [{ id: reportSource, revision: reportRevision }], canonical_payload: snapshotPayload,
+   content_hash: createHash('sha256').update(canonicalizeSnapshotValue(snapshotPayload)).digest('hex') };
+  await expectError('23503', () => insert(sql, 'report_card_snapshots', { ...reportSnapshotRow, id: randomUUID(), enrollment_id: canonicalEnrollment }));
+  await expectError('23503', () => insert(sql, 'report_card_snapshots', { ...reportSnapshotRow, id: randomUUID(), assessment_source_version_id: ids.otherSource }));
+  await expectError('23514', () => insert(sql, 'report_card_snapshots', { ...reportSnapshotRow, id: randomUUID(), source_versions: [] }));
+  await expectError('23514', () => insert(sql, 'report_card_snapshots', { ...reportSnapshotRow, id: randomUUID(), content_hash: 'Z'.repeat(64) }));
+  await insert(sql, 'report_card_snapshots', reportSnapshotRow);
+  const secondSnapshotPayload = { ...snapshotPayload, reportId: reportB, enrollmentId: canonicalEnrollment };
+  await insert(sql, 'report_card_snapshots', { ...reportSnapshotRow, id: snapshotB, report_id: reportB, enrollment_id: canonicalEnrollment, canonical_payload: secondSnapshotPayload,
+   content_hash: createHash('sha256').update(canonicalizeSnapshotValue(secondSnapshotPayload)).digest('hex') });
+  await expectError('23505', () => insert(sql, 'report_card_snapshots', { ...reportSnapshotRow, id: randomUUID() }));
+  await expectError('23514', () => sql.unsafe('UPDATE ' + table('report_cards') + ' SET approved_by=submitted_by WHERE id=$1::uuid', [reportA]));
+  await expectError('23514', () => sql.unsafe('UPDATE ' + table('report_cards') + " SET stage='published' WHERE id=$1::uuid", [reportA]));
+  console.log('PASS: report snapshots pin report enrollment/source and enforce version, JSON, hash and stage fields');
+
+  const reportAuditRow = { id: randomUUID(), school_id: ids.school, report_id: reportA, actor_membership_id: ids.admin, action: 'approve', before_stage: 'submitted', after_stage: 'approved', before_version: 2, after_version: 3, snapshot_id: snapshotA, snapshot_report_version: 3 };
+  await expectError('23503', () => insert(sql, 'report_card_audit', { ...reportAuditRow, snapshot_id: snapshotB }));
+  await expectError('23514', () => insert(sql, 'report_card_audit', { ...reportAuditRow, snapshot_id: null }));
+  await expectError('23514', () => insert(sql, 'report_card_audit', { ...reportAuditRow, after_stage: 'published' }));
+  await insert(sql, 'report_card_audit', reportAuditRow);
+  const reportReleaseRow = { id: randomUUID(), school_id: ids.school, report_id: reportA, report_version: 4, snapshot_id: snapshotA, snapshot_report_version: 3, published_by: ids.admin, released_at: '2026-10-19T10:00:00Z' };
+  await expectError('23503', () => insert(sql, 'report_card_releases', { ...reportReleaseRow, report_id: reportB }));
+  await expectError('23514', () => insert(sql, 'report_card_releases', { ...reportReleaseRow, report_version: 8 }));
+  await expectError('23503', () => insert(sql, 'report_card_releases', { ...reportReleaseRow, snapshot_report_version: 99, report_version: 100 }));
+  await expectError('23514', () => insert(sql, 'report_card_releases', { ...reportReleaseRow, revoked_at: '2000-01-01T00:00:00Z' }));
+  console.log('PASS: report audit and release reject other-report snapshots, wrong approved versions and invalid transitions');
+
+  for (const name of ['report_card_snapshots', 'report_card_audit', 'report_card_operation_receipts']) {
+   await sql.unsafe('CREATE TRIGGER fixture_append_only BEFORE UPDATE OR DELETE ON ' + table(name) + ' FOR EACH ROW EXECUTE FUNCTION ' + table('reject_append_only') + '()');
+   await sql.unsafe('CREATE TRIGGER fixture_no_truncate BEFORE TRUNCATE ON ' + table(name) + ' FOR EACH STATEMENT EXECUTE FUNCTION ' + table('reject_append_only') + '()');
+  }
+  const reportReceiptRow = { school_id: ids.school, report_id: reportB, actor_membership_id: ids.admin, operation_key: 'reserved-report-key', fingerprint: hash, resulting_version: 3, outcome: { ok: true } };
+  await insert(sql, 'report_card_operation_receipts', reportReceiptRow);
+  const publishBindingFixture = operationKey => client.begin(async tx => {
+   const bound = wrap(tx);
+   const changed = await bound.unsafe('UPDATE ' + table('report_cards') + " SET stage='published',version=4,published_at=$2::timestamptz WHERE id=$1::uuid AND version=3 AND stage='approved' RETURNING id", [reportA, reportReleaseRow.released_at]);
+   assert.equal(changed.length, 1);
+   await insert(bound, 'report_card_audit', { ...reportAuditRow, id: randomUUID(), action: 'publish', before_stage: 'approved', after_stage: 'published', before_version: 3, after_version: 4 });
+   await insert(bound, 'report_card_releases', reportReleaseRow);
+   await insert(bound, 'report_card_operation_receipts', { ...reportReceiptRow, report_id: reportA, operation_key: operationKey, resulting_version: 4 });
+  });
+  await expectError('23505', () => publishBindingFixture('reserved-report-key'));
+  const afterFailedPublication = (await sql.unsafe('SELECT stage,version,published_at FROM ' + table('report_cards') + ' WHERE id=$1::uuid', [reportA]))[0];
+  assert.equal(afterFailedPublication.stage, 'approved'); assert.equal(afterFailedPublication.version, 3); assert.equal(afterFailedPublication.published_at, null);
+  assert.equal((await sql.unsafe('SELECT count(*)::int AS n FROM ' + table('report_card_releases')))[0].n, 0);
+  assert.equal((await sql.unsafe('SELECT count(*)::int AS n FROM ' + table('report_card_audit')))[0].n, 1);
+  await publishBindingFixture('publish-report-binding-fixture');
+  assert.equal((await sql.unsafe('SELECT count(*)::int AS n FROM ' + table('report_card_releases')))[0].n, 1);
+  await expectError('23505', () => insert(sql, 'report_card_releases', { ...reportReleaseRow, id: randomUUID() }));
+  for (const name of ['report_card_snapshots', 'report_card_audit', 'report_card_operation_receipts']) {
+   await expectError('P0001', () => sql.unsafe('UPDATE ' + table(name) + ' SET school_id=school_id'));
+   await expectError('P0001', () => sql.unsafe('DELETE FROM ' + table(name)));
+   await expectError('P0001', () => sql.unsafe('TRUNCATE ' + table(name) + ' CASCADE'));
+  }
+  console.log('PASS: report binding publication rolls back on receipt collision, retries once and preserves append-only records');
+
 
 
 
