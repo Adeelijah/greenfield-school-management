@@ -15,5 +15,19 @@ test('authority and parent writes acquire the existing gate before any row lock'
 });
 test('authority ordering introduces no definer privilege, revision policy or live security changes', () => {
  const sql = assessmentAuthorityGuardDDL(schema).statements.join('\n');
- for (const text of ['SECURITY DEFINER', 'GRANT ', 'CREATE ROLE', 'ALTER TABLE', 'public.', 'fixture_mark_source_scope']) assert.equal(sql.includes(text), false);
+ for (const text of ['SECURITY DEFINER', 'GRANT ', 'CREATE ROLE', 'ALTER TABLE', 'public.']) assert.equal(sql.includes(text), false);
+});
+
+test('academic parent invalidation uses old and new identities and deterministic scope claims', () => {
+ const sql = assessmentAuthorityGuardDDL(schema).statements.join('\n');
+ for (const key of ['school_id', 'class_id', 'session_id', 'term_id', 'student_id', 'level_id', 'section_id']) assert.ok(sql.includes(key));
+ assert.ok(sql.includes("(before_row->>'id')::uuid,(after_row->>'id')::uuid"));
+ assert.match(sql, /ORDER BY s.id/);
+ assert.ok(sql.includes('fixture_mark_source_scope"(target)'));
+});
+test('academic parent triggers discover references before cascade and leave authority changes out of revisions', () => {
+ const plan = assessmentAuthorityGuardDDL(schema);
+ assert.equal(plan.academicParents.length, 7);
+ for (const name of plan.academicParents) assert.ok(plan.statements.some(s => s.includes('BEFORE UPDATE OR DELETE ON "'+schema+'"."'+name+'" FOR EACH ROW')));
+ for (const name of ['school_users','memberships','teacher_class_assignments','assessment_teacher_subjects']) assert.equal(plan.academicParents.includes(name),false);
 });
