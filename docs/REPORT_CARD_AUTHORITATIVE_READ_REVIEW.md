@@ -33,7 +33,7 @@ Synthetic academic data is still stored as a JSONB scope snapshot, not queried f
 
 Membership/assignment mutations (including insertion/deletion) must lock the existing identity guard `FOR UPDATE` first. Academic mutations, including roster/enrollment inserts or deletes, must lock every affected existing academic scope guard `FOR UPDATE` in stable key order before touching rows and increment its revision atomically. An enrollment change affecting multiple class/term scopes must invalidate all affected scopes. These guards are essential because row locks do not protect absent rows from phantom inserts. The fixture has no triggers or grants enforcing this protocol; a direct writer bypass can still violate it. Do not treat these tests as a production concurrency proof.
 
-The old disposable write adapter uses report-first locking. It is deliberately unchanged and must not be composed with this membership-first reader until a single consistent lock order and transaction owner are implemented and tested.
+The standalone disposable writer retains its original report-first entry point. The combined wrapper below acquires identity/membership/report/source locks first, then invokes the writer on the same connection and same report. Do not mix the standalone report-first entry point with the combined protocol in a live environment.
 
 ### Verification and local run
 
@@ -46,3 +46,22 @@ node --experimental-strip-types .\scripts\report-card-postgres-authoritative-rea
 ```
 
 The harness accepts only loopback hosts and the disposable database name, creates fictional `read_*` fixture tables in its random schema, and cleans that schema in `finally`. It tests grade recomputation, auth-bound school scope, inactive membership/assignment, enrollment/source/revision rejection, and conflicting SQL updates using transaction-local lock/statement timeouts. Updates must fail with PostgreSQL `55P03` while the reader holds locks, then succeed after the reader commits. Nothing is connected to real student data, production schemas, Supabase or the live writer.
+
+
+## Combined trusted transaction — pending PostgreSQL verification
+
+The user confirmed the separate read adapter passed the full offline gate (204 tests, TypeScript, ESLint with the existing unrelated warning, whitespace) and all five local PostgreSQL source-read/locking groups on 2026-10-19.
+
+`report-card-postgres-disposable-trusted-transaction.ts` now owns exactly one real `db.begin` for trusted identity, membership, report, assignment, source validation and workflow writes. The existing workflow adapter accepts only a fixed allowlist of two synthetic report table names (`reports`, default unchanged, or `read_reports`). The combined wrapper uses `read_reports` and a transaction-bound bridge that never issues BEGIN or commits. The original report row is re-locked on the same connection; no new report is discovered after source reads.
+
+Only report ID and workflow command are selected from input. Actor/school derive from the trusted reader; a versioned SHA-256 operation fingerprint is generated internally from the copied command fields and report ID. The verified identity and clock callbacks remain test capabilities rather than production authentication. Request-body actor/school/fingerprint fields are ignored.
+
+Crucially, `executeReportTransaction` catches errors and returns denied outcomes. The wrapper throws those outcomes across the outer `db.begin` boundary, forcing rollback of any prior report/audit/receipt/release writes before returning the sanitized outcome. A nested callback that simply returned `transaction_failed` would be unsafe. Offline regression tests explicitly cover this case, one transaction owner, derived actor identity, replay/conflict and missing identity.
+
+The existing authoritative-read integration script is extended with a version column and synthetic audit/receipt/release tables after its original five read-only groups. New pending checks cover competing submissions and duplicate-key races, payload conflicts, audit/receipt/release rollback and retry, a source mutation attempted between report update and audit insertion, and a source-first writer that blocks submission then invalidates the report revision. Transaction-local lock and statement timeouts bound conflicts. These cases have not been run against PostgreSQL by the assistant.
+
+A source-first timed-out read returns generic `read_failed`; the wrapper rolls the whole transaction back. After the source writer commits, a fresh attempt returns `stale_assessment`. There is no automatic retry loop. Replays also revalidate membership and current academic sources first; a previously successful operation may be denied after source revision drift rather than replayed from stale authority.
+
+The fixture academic writer only locks/updates its source scope and subject metadata; it does not attempt a later report lock. Real mutation paths must share a reviewed global lock protocol, including all affected enrollment scopes. Guard enforcement, phantom prevention, real score/config/student joins, canonical immutable snapshots, RLS and live authenticated routes remain pending. Passing the synthetic combined harness will not close all of Phase B or establish production readiness.
+
+Local contributor validation for this batch: 70 Report Cards offline tests, JavaScript harness syntax and whitespace passed. Full project TypeScript/ESLint still require the user's installed dependencies. No database was accessed or dependencies installed by the assistant.
