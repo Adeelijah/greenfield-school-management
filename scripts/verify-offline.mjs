@@ -46,6 +46,7 @@ const tests = [
   'src/lib/academics/report-card-approved-snapshot.test.ts',
   'src/lib/academics/report-card-postgres-canonical-writer.test.ts',
   'src/lib/academics/report-card-postgres-workflow-writer.test.ts',
+  'src/lib/academics/report-card-postgres-revoke-writer.test.ts',
   'src/lib/academics/report-card-academic-payload.test.ts',
   'src/lib/academics/report-card-trusted-source.test.ts',
   'src/lib/academics/report-card-authoritative-read.test.ts',
