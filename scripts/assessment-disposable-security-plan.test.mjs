@@ -35,7 +35,7 @@ test('only report records receive INSERT and no role receives DELETE, TRUNCATE, 
  for(const s of grants)for(const forbidden of ['GRANT DELETE','GRANT TRUNCATE','GRANT CREATE','fixture_source_write_claims','GRANT ALL'])assert.equal(s.includes(forbidden),false);
 });
 test('immutable report rows keep false update checks and no transition policy',()=>{
- const p=plan();assert.equal(p.appendOnly.length,4);
+ const p=plan();assert.equal(p.appendOnly.length,3);
  for(const name of p.appendOnly){assert.ok(p.statements.some(s=>s.startsWith('CREATE POLICY fixture_service_lock ON "'+schema+'"."'+name+'"')&&s.endsWith('WITH CHECK (false)')));assert.equal(p.statements.some(s=>s.startsWith('CREATE POLICY fixture_report_transition ON "'+schema+'"."'+name+'"')),false);}
 });
 test('plan removes PUBLIC access, keeps setup-owner explicit, and never administers roles or live schemas',()=>{
@@ -43,4 +43,17 @@ test('plan removes PUBLIC access, keeps setup-owner explicit, and never administ
  for(const kind of ['TABLES','FUNCTIONS','SEQUENCES'])assert.ok(sql.includes('REVOKE ALL ON ALL '+kind+' IN SCHEMA "'+schema+'" FROM PUBLIC,'));
  assert.ok(sql.includes('FOR ALL TO CURRENT_USER USING (true) WITH CHECK (true)'));
  for(const word of ['CREATE ROLE','ALTER ROLE','DROP ROLE','public.','DISABLE ROW LEVEL SECURITY','BYPASSRLS']) assert.equal(sql.includes(word),false);
+});
+
+test('release mutation privilege is limited to revoked_at and always installs one-way history guards',()=>{
+ const p=plan(),target='"'+schema+'"."report_card_releases"';
+ assert.ok(p.statements.includes('GRANT UPDATE (revoked_at) ON '+target+' TO "'+p.roles.writer+'"'));
+ assert.equal(p.statements.some(s=>s.startsWith('GRANT UPDATE (id) ON '+target+' TO "'+p.roles.writer+'"')),false);
+ const sql=p.statements.join('\n');assert.ok(sql.includes('OLD.revoked_at IS NOT NULL OR NEW.revoked_at IS NULL'));
+ assert.ok(sql.includes('CREATE TRIGGER fixture_release_no_delete'));
+});
+test('release revocation RLS keeps the fixed school and guard functions are not publicly executable',()=>{
+ const p=plan(),sql=p.statements.join('\n');
+ assert.ok(sql.includes('WITH CHECK (school_id=\''+school+"'::uuid AND revoked_at IS NOT NULL)"));
+ assert.ok(sql.includes('REVOKE ALL ON FUNCTION "'+schema+'"."fixture_guard_release_history"() FROM PUBLIC,'));
 });
