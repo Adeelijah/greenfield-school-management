@@ -9,6 +9,7 @@ import { executeFixtureCanonicalReportCommand } from '../src/lib/academics/repor
 import { buildApprovedReportSnapshot } from '../src/lib/academics/report-card-approved-snapshot.ts';
 import { canonicalizeSnapshotValue } from '../src/lib/academics/report-card-canonical-snapshot.ts';
 import postgres from 'postgres';
+import { disposableSessionRendezvous } from './lib/disposable-session-rendezvous.mjs';
 import { reportReleaseGuardDDL } from './lib/report-release-disposable-guards.mjs';
 import { fixtureSecurityPlan } from './lib/assessment-disposable-security-plan.mjs';
 import { fixtureRolePreflightPlan, inspectFixtureRestrictedRoles } from './lib/assessment-disposable-role-preflight.mjs';
@@ -946,6 +947,108 @@ END $$`);
   assert.deepEqual(await runActualRevoke(retryRevokeCommand,authUser),{ok:false,code:'forbidden'});
   assert.equal((await runActualRevoke(retryRevokeCommand)).kind,'applied');assert.equal((await runActualRevoke(retryRevokeCommand)).kind,'replay');
   console.log('PASS: actual outer revoke transaction rolls back every injected persistence failure and withdraws stale-source publication on same-key retry');
+
+  if(testRestrictedRoles) {
+   // A separate committed fixture is required: another backend cannot see the
+   // uncommitted roles/policies from the savepoint security tests above.
+   const sessionSchema='rc_it_'+randomBytes(8).toString('hex');
+   const sessionFixture=assessmentFixtureDDL(sessionSchema,{includeReports:true});
+   const sessionSecurity=fixtureSecurityPlan(sessionSchema,ids.school);
+   const sessionTable=sessionFixture.table,runToken=randomBytes(24).toString('hex');
+   let sessionCommitted=false;
+   const cleanupProbe=Error('intentional independent-session cleanup probe');
+   await assert.rejects((async()=>{
+   try {
+    await client.begin(async tx=>{
+     const bound=wrap(tx);await bound.unsafe(guards.readGate);
+     for(const statement of sessionFixture.statements)await bound.unsafe(statement);
+     await bound.unsafe('CREATE TABLE '+sessionTable('fixture_run_marker')+' (token text PRIMARY KEY)');
+     await bound.unsafe('INSERT INTO '+sessionTable('fixture_run_marker')+' VALUES ($1::text)',[runToken]);
+     // Respect the new audit -> release FK. Enum types belong to their schema,
+     // so clone them through text while copying all other values losslessly.
+     const copyOrder=[...fixtureTables,...[reportFixtureTables[0],reportFixtureTables[1],reportFixtureTables[4],reportFixtureTables[2],reportFixtureTables[3]]];
+     for(const model of copyOrder){
+      const metadata=getTableConfig(model),columns=metadata.columns.map(c=>q(c.name));
+      const values=metadata.columns.map(c=>{const type=sessionFixture.columnType(c),value='s.'+q(c.name);return type.startsWith(q(sessionSchema)+'.')?value+'::text::'+type:value;});
+      await bound.unsafe('INSERT INTO '+sessionTable(metadata.name)+' ('+columns.join(',')+') SELECT '+values.join(',')+' FROM '+table(metadata.name)+' s');
+     }
+     for(const statement of assessmentWriteGuardDDL(sessionSchema).statements)await bound.unsafe(statement);
+     for(const statement of assessmentAuthorityGuardDDL(sessionSchema).statements)await bound.unsafe(statement);
+     await bound.unsafe(`CREATE FUNCTION ${sessionTable('fixture_append_only')}() RETURNS trigger LANGUAGE plpgsql SET search_path=pg_catalog AS $$
+BEGIN RAISE EXCEPTION 'independent fixture history is append-only' USING ERRCODE='P0001'; RETURN NULL; END $$`);
+     for(const name of ['assessment_source_versions','assessment_teacher_reviews','assessment_finalizations','assessment_audit','assessment_operation_receipts','report_card_snapshots','report_card_audit','report_card_operation_receipts']){
+      await bound.unsafe('CREATE TRIGGER fixture_append_only BEFORE UPDATE OR DELETE ON '+sessionTable(name)+' FOR EACH STATEMENT EXECUTE FUNCTION '+sessionTable('fixture_append_only')+'()');
+      await bound.unsafe('CREATE TRIGGER fixture_no_truncate BEFORE TRUNCATE ON '+sessionTable(name)+' FOR EACH STATEMENT EXECUTE FUNCTION '+sessionTable('fixture_append_only')+'()');
+     }
+     for(const role of Object.values(sessionSecurity.roles))await bound.unsafe('CREATE ROLE '+q(role)+' NOLOGIN NOINHERIT NOSUPERUSER NOBYPASSRLS NOCREATEROLE NOCREATEDB NOREPLICATION');
+     await bound.unsafe('GRANT '+Object.values(sessionSecurity.roles).map(q).join(',')+' TO CURRENT_USER WITH SET TRUE');
+     const preflight=fixtureRolePreflightPlan(sessionSchema);
+     assert.equal(inspectFixtureRestrictedRoles(sessionSchema,await bound.unsafe(preflight.query,preflight.parameters)).ok,true);
+     for(const statement of sessionSecurity.statements)await bound.unsafe(statement);
+    });
+    sessionCommitted=true;
+    const roleDb=(role,rendezvous=null,seen=null)=>({
+     unsafe:()=>{throw Error('Restricted SQL requires its transaction');},
+     begin:callback=>client.begin(async tx=>{
+      const bound=wrap(tx);await bound.unsafe('SET LOCAL ROLE '+q(role));
+      await bound.unsafe("SET LOCAL row_security=on");await bound.unsafe("SET LOCAL lock_timeout='5s'");await bound.unsafe("SET LOCAL statement_timeout='15s'");
+      const evidence=(await bound.unsafe("SELECT current_user AS role,pg_catalog.pg_backend_pid() AS pid,pg_catalog.current_setting('row_security') AS security"))[0];
+      assert.equal(evidence.role,role);assert.equal(evidence.security,'on');if(seen)seen.add(evidence.pid);
+      if(rendezvous)await rendezvous.arrive(evidence.pid,evidence.role);
+      return callback(bound);
+     }),
+    });
+    const sessionPair=async execute=>{
+     const rendezvous=disposableSessionRendezvous(sessionSecurity.roles.writer),seen=new Set();
+     const pending=[0,1].map(index=>execute(roleDb(sessionSecurity.roles.writer,rendezvous,seen),index).catch(error=>{rendezvous.cancel();throw error;}));
+     const results=await Promise.allSettled(pending);rendezvous.cancel();
+     for(const result of results)if(result.status==='rejected')throw result.reason;
+     assert.equal(seen.size,2,'workload must run in two distinct restricted PostgreSQL backends');
+     return results.map(result=>result.value);
+    };
+    const assertSingleApply=results=>{assert.equal(results.every(result=>result.ok),true,JSON.stringify(results));assert.deepEqual(results.map(result=>result.kind).sort(),['applied','replay']);};
+    const teacherIdentity=async()=>({authUserId:authUser}),adminIdentity=async()=>({authUserId:adminAuth});
+    const independentSubmit={action:'submit',reportId:reportA,expectedVersion:5,operationKey:'independent-submit'};
+    assertSingleApply(await sessionPair(db=>executeFixtureReportWorkflow(db,sessionSchema,independentSubmit,teacherIdentity)));
+    assert.equal((await sql.unsafe('SELECT version FROM '+sessionTable('report_cards')+' WHERE id=$1::uuid',[reportA]))[0].version,6);
+    console.log('PASS: two distinct restricted PostgreSQL sessions serialize same-key submission and replay under committed fixture RLS');
+
+    assertSingleApply(await sessionPair(db=>executeFixtureCanonicalReportCommand(db,sessionSchema,{action:'approve',reportId:reportA,expectedVersion:6,operationKey:'independent-approve'},adminIdentity)));
+    assertSingleApply(await sessionPair(db=>executeFixtureCanonicalReportCommand(db,sessionSchema,{action:'publish',reportId:reportA,expectedVersion:7,operationKey:'independent-publish'},adminIdentity)));
+    const independentRelease=(await sql.unsafe('SELECT id FROM '+sessionTable('report_card_releases')+' WHERE report_id=$1::uuid AND revoked_at IS NULL',[reportA]))[0];
+    const independentRevoke={action:'revoke',reportId:reportA,releaseId:independentRelease.id,expectedVersion:8,operationKey:'independent-revoke',reason:'Correct publication across sessions'};
+    assertSingleApply(await sessionPair(db=>executeFixtureReportRevocation(db,sessionSchema,independentRevoke,adminIdentity)));
+    assert.equal((await sql.unsafe('SELECT id FROM '+sessionTable('report_card_snapshots')+' WHERE report_id=$1::uuid',[reportA])).length,2);
+    assert.equal((await sql.unsafe('SELECT id FROM '+sessionTable('report_card_releases')+' WHERE report_id=$1::uuid AND revoked_at IS NULL',[reportA])).length,0);
+    console.log('PASS: independent restricted approval/publication/revocation pairs apply once, replay once and preserve immutable snapshot/release history');
+
+    const competing=await sessionPair((db,index)=>executeFixtureReportWorkflow(db,sessionSchema,{action:'submit',reportId:reportA,expectedVersion:9,operationKey:'independent-competing-'+index},teacherIdentity));
+    assert.equal(competing.filter(result=>result.ok&&result.kind==='applied').length,1,JSON.stringify(competing));
+    assert.equal(competing.filter(result=>!result.ok&&result.code==='stale_version').length,1,JSON.stringify(competing));
+    const reader=roleDb(sessionSecurity.roles.reader),writer=roleDb(sessionSecurity.roles.writer);
+    await reader.begin(async bound=>{assert.equal((await bound.unsafe('SELECT id FROM '+sessionTable('schools')+' WHERE id=$1::uuid',[ids.foreignSchool])).length,0);});
+    await expectError('42501',()=>reader.begin(bound=>bound.unsafe('UPDATE '+sessionTable('report_cards')+" SET stage='draft' WHERE false")));
+    assert.deepEqual(await executeFixtureCanonicalReportCommand(writer,sessionSchema,{action:'approve',reportId:reportA,expectedVersion:10,operationKey:'independent-teacher-denial'},teacherIdentity),{ok:false,code:'forbidden'});
+    assert.equal((await executeFixtureReportRevocation(writer,sessionSchema,independentRevoke,adminIdentity)).kind,'replay');
+    console.log('PASS: distinct restricted sessions reject competing stale keys, foreign-school reads, reader writes and teacher approval while historical replay survives');
+    throw cleanupProbe;
+   } finally {
+    // Marker ownership also permits cleanup if COMMIT succeeded but its client
+    // acknowledgement was lost. Never drop a colliding pre-existing schema.
+    const markerExists=(await sql.unsafe('SELECT pg_catalog.to_regclass($1::text) IS NOT NULL AS present',[sessionTable('fixture_run_marker')]))[0].present;
+    if(markerExists){
+     const marker=await sql.unsafe('SELECT token FROM '+sessionTable('fixture_run_marker'));
+     assert.equal(marker.length,1);assert.equal(marker[0].token,runToken,'refuse cleanup of a fixture owned by another run');
+     await sql.unsafe('DROP SCHEMA '+q(sessionSchema)+' CASCADE');
+     await sql.unsafe('DROP ROLE '+Object.values(sessionSecurity.roles).map(q).join(','));
+    }else if(sessionCommitted)throw Error('Independent fixture marker missing; automatic cleanup refused for '+sessionSchema);
+   }
+   })(),error=>error===cleanupProbe);
+   const removed=fixtureRolePreflightPlan(sessionSchema);
+   assert.equal((await sql.unsafe(removed.query,removed.parameters)).length,0);
+   assert.equal((await sql.unsafe('SELECT count(*)::int AS n FROM pg_catalog.pg_namespace WHERE nspname=$1::text',[sessionSchema]))[0].n,0);
+   console.log('PASS: committed independent-session fixture and exact temporary roles are removed even after an intentional workload error');
+  }else console.log('SKIPPED: four independent restricted-session groups require the existing disposable role-admin confirmation');
 
  } finally {
   try { await sql.unsafe('DROP SCHEMA IF EXISTS ' + q(schema) + ' CASCADE'); } finally { await client.end(); }
