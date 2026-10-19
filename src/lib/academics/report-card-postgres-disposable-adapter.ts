@@ -40,12 +40,12 @@ export function disposableReportTransactionRunner(db:SqlDatabase, schema:string,
           },
           async updateReport(reportId,beforeVersion,next){
             if(lockedReport!==reportId||lockedSchool!==next.schoolId)throw Error('Locked report mismatch');
-            const rows=await connection.unsafe('UPDATE '+reports+' SET version=$1,record=$2 WHERE school_id=$3 AND id=$4 AND version=$5 RETURNING version',[next.version,JSON.stringify(next),next.schoolId,reportId,beforeVersion]);
+            const rows=await connection.unsafe('UPDATE '+reports+' SET version=$1,record=$2::text::jsonb WHERE school_id=$3 AND id=$4 AND version=$5 RETURNING version',[next.version,JSON.stringify(next),next.schoolId,reportId,beforeVersion]);
             return rows.length===1;
           },
           async appendAudit(audit:ReportAudit){
             if(lockedSchool!==audit.schoolId)throw Error('Audit tenant mismatch');
-            await connection.unsafe('INSERT INTO '+audits+' (school_id,report_id,version,payload) VALUES ($1,$2,$3,$4)',[audit.schoolId,lockedReport, audit.version,JSON.stringify(audit)]);
+            await connection.unsafe('INSERT INTO '+audits+' (school_id,report_id,version,payload) VALUES ($1,$2,$3,$4::text::jsonb)',[audit.schoolId,lockedReport, audit.version,JSON.stringify(audit)]);
           },
           async appendReceipt(receipt:ReportStoredReceipt){
             if(lockedSchool!==receipt.schoolId||lockedReport!==receipt.reportId)throw Error('Receipt tenant mismatch');
