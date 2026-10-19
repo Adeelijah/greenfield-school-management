@@ -250,3 +250,10 @@ A new unit regression demonstrates mismatch rejection and successful exact resto
 User's offline rerun stopped at TypeScript: ten TS18046 errors from accessing an unknown receipt outcome in the revoke adapter. An explicit runtime object predicate now narrows the value to Record<string, unknown> before field checks; malformed outcomes reject as invalid_receipt. No assertion cast, suppression, SQL or authorization relaxation was introduced. One new regression covers primitive/array/encoded/missing-field outcomes and no mutation.
 
 All 64 selected tests plus syntax/whitespace passed here. Expected offline count is 378; full local TypeScript/ESLint and the complete 53 PostgreSQL groups are still pending. Do not advance beyond these repairs or mark the expanded suite verified before both local gates pass. Latest explicitly verified full offline count remains 357; first 51 groups of the prior expanded PostgreSQL run passed before the now-repaired fixture timestamp mismatch.
+
+
+## Verified PostgreSQL repair result — 2026-10-19
+
+User supplied the complete successful rerun: all 53 PostgreSQL groups passed, including exact timestamp restoration, outer concurrent same-key withdrawal, restricted correction/republication/repeated history and final outer failure rollback. PostgreSQL verification for this milestone is complete in the disposable environment. No additional SQL or production change was made for this status update.
+
+The repaired full offline gate is still unconfirmed: its last supplied output stopped at TS18046 before the receipt-object narrowing fix. Run the current verify-offline.mjs and require TypeScript, ESLint, all 378 tests and whitespace to pass. No further database rerun is required solely for this documentation update. Once the offline gate passes, continue restricted independent-session concurrency and least-privilege login/authority work without another approval request. Preserve no-merge/deploy/production restrictions.
