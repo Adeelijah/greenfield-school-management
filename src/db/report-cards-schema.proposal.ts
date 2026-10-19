@@ -2,7 +2,8 @@
 // This module must not be included in Drizzle Kit's configured schema entrypoint.
 import { sql } from 'drizzle-orm';
 import { check, foreignKey, integer, jsonb, pgEnum, pgTable, text, timestamp, uniqueIndex, uuid, varchar, index } from 'drizzle-orm/pg-core';
-import { academicSessions, classes, memberships, students, terms } from './schema';
+// @ts-expect-error Node 22 type stripping requires the explicit source extension.
+import { academicSessions, classes, memberships, students, terms } from './schema.ts';
 
 export const proposedReportStage = pgEnum('report_card_stage', ['draft','submitted','returned','approved','published']);
 export const proposedReportAction = pgEnum('report_card_action', ['submit','return','approve','publish','reopen']);
