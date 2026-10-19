@@ -29,6 +29,7 @@ const tests = [
   'src/lib/academics/assessment-persistence-policy.test.ts',
   'src/lib/academics/assessment-relational-recalculation.test.ts',
   'src/lib/academics/assessment-canonical-source.test.ts',
+  'src/lib/academics/assessment-postgres-canonical-reader.test.ts',
   'src/lib/academics/assessment-postgres-fixture-source-reader.test.ts',
   'src/lib/academics/report-cards.test.ts',
   'src/lib/academics/report-card-workflow.test.ts',
