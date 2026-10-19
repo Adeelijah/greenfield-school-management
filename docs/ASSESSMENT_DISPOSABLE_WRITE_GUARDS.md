@@ -46,6 +46,6 @@ The original seven constraint/append-only/revision groups remain intact and run 
 
 ## Verification and next step
 
-JavaScript syntax, four new guard-builder tests and 90 existing scoped domain tests passed locally. Full project TypeScript/ESLint and the metadata-backed fixture tests require the user's installed dependencies; all new PostgreSQL assertions remain unrun until local disposable verification.
+JavaScript syntax, four new guard-builder tests and 90 existing scoped domain tests passed locally. The user subsequently confirmed the full offline gate passed with 243 tests and all twelve PostgreSQL groups passed. The next relational source-reader milestone is documented in `ASSESSMENT_RELATIONAL_SOURCE_READER.md`; its new assertions remain pending.
 
 Run the usual offline gate, then the same `scripts/assessment-postgres-schema-integration.mjs` command with the existing dedicated loopback disposable database and explicit opt-in variables. It creates and drops only its own generated schema. After this passes, continue the schema-faithful trusted read/combined adapter integration and remaining parent mutation/role enforcement; do not ask for another routine development go-ahead under the user's standing authorization.
