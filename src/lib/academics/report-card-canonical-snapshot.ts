@@ -19,7 +19,7 @@ export interface CanonicalSnapshot {
 function normalize(value: unknown, seen: WeakSet<object>): SnapshotValue {
   if (value === null || typeof value === 'string' || typeof value === 'boolean') return value;
   if (typeof value === 'number') {
-    if (!Number.isFinite(value) || !Number.isSafeInteger(value) && !Number.isFinite(value)) throw new Error('Invalid snapshot number');
+    if (!Number.isFinite(value)) throw new Error('Invalid snapshot number');
     return Object.is(value, -0) ? 0 : value;
   }
   if (typeof value !== 'object') throw new Error('Unsupported snapshot value');
