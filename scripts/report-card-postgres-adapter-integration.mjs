@@ -44,7 +44,7 @@ if(process.env.REPORT_CARD_TEST_CONFIRM!=='DISPOSABLE_REPORT_CARD_TEST_ONLY'||!u
  const request=(actor='teacher-1',action='submit',expectedVersion=1,key='submit-1')=>({schoolId:'school-a',reportId:'report-1',actorMembershipId:actor,fingerprint:'f'.repeat(64),command:{action,expectedVersion,assessmentVersion:5,idempotencyKey:key},occurredAt:'2026-10-19T12:00:00Z'});
  const reset=async()=>{
   await sql.unsafe('TRUNCATE '+releases+','+audits+','+receipts+','+reports);
-  await sql.unsafe('INSERT INTO '+reports+' (school_id,id,version,record) VALUES ($1,$2,$3,$4)',['school-a','report-1',1,JSON.stringify(record)]);
+  await sql.unsafe('INSERT INTO '+reports+' (school_id,id,version,record) VALUES ($1,$2,$3,$4::text::jsonb)',['school-a','report-1',1,JSON.stringify(record)]);
  };
  const count=async(name)=>(await sql.unsafe('SELECT count(*)::int AS n FROM '+table(name)))[0].n;
  try{
@@ -56,9 +56,9 @@ if(process.env.REPORT_CARD_TEST_CONFIRM!=='DISPOSABLE_REPORT_CARD_TEST_ONLY'||!u
   await sql.unsafe('CREATE TABLE '+table('memberships')+' (school_id text NOT NULL,id text NOT NULL,data jsonb NOT NULL,PRIMARY KEY(school_id,id))');
   await sql.unsafe('CREATE TABLE '+table('assignments')+' (school_id text NOT NULL,membership_id text NOT NULL,data jsonb NOT NULL)');
   await sql.unsafe('CREATE TABLE '+table('projections')+' (school_id text NOT NULL,report_id text NOT NULL,revision integer NOT NULL,data jsonb NOT NULL,PRIMARY KEY(school_id,report_id))');
-  for(const m of members)await sql.unsafe('INSERT INTO '+table('memberships')+' (school_id,id,data) VALUES ($1,$2,$3)',[m.schoolId,m.id,JSON.stringify(m)]);
-  await sql.unsafe('INSERT INTO '+table('assignments')+' (school_id,membership_id,data) VALUES ($1,$2,$3)',['school-a','teacher-1',JSON.stringify(assignment)]);
-  await sql.unsafe('INSERT INTO '+table('projections')+' (school_id,report_id,revision,data) VALUES ($1,$2,$3,$4)',['school-a','report-1',5,JSON.stringify(projection)]);
+  for(const m of members)await sql.unsafe('INSERT INTO '+table('memberships')+' (school_id,id,data) VALUES ($1,$2,$3::text::jsonb)',[m.schoolId,m.id,JSON.stringify(m)]);
+  await sql.unsafe('INSERT INTO '+table('assignments')+' (school_id,membership_id,data) VALUES ($1,$2,$3::text::jsonb)',['school-a','teacher-1',JSON.stringify(assignment)]);
+  await sql.unsafe('INSERT INTO '+table('projections')+' (school_id,report_id,revision,data) VALUES ($1,$2,$3,$4::text::jsonb)',['school-a','report-1',5,JSON.stringify(projection)]);
 
   await reset();
   // Diagnose fixture lookup without printing credentials or student data.
