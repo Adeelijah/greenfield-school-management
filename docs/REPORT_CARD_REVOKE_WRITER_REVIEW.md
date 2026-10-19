@@ -33,3 +33,12 @@ Ten adapter unit tests and two privilege-plan tests raise expected offline count
 ## Remaining gates
 
 After both local gates pass, close restricted independent-session concurrency and real least-privilege login/authority handling without persisting unwanted test roles. Reconcile the fixed-school fixture model with the actual server connection/auth strategy and global membership ambiguity policy. Then add a controlled server read/command boundary before route/UI integration and browser QA. Guardian endpoints, exports/display-name provenance, operational readiness, deployment and production release remain separate later milestones. Preserve existing no-merge/no-production restrictions.
+
+
+## Fixture timestamp repair — 2026-10-19
+
+The user ran the expanded harness: the first 51 groups passed (including all ten restricted-role groups and the three binding/history groups), then the owner concurrent-withdrawal group returned invalid_release twice. This is not a passing 53-group result; the final outer failure group was not reached.
+
+Root cause: the earlier active-release/reopen guard test temporarily restaged its published report as approved, then restored published_at with now(). That changed report publication provenance while the immutable release retained its actual released_at. The new correction planner correctly requires exact equality and rejected the damaged fixture.
+
+The guard test now saves the original published_at, restores that exact timestamp in finally, and immediately asserts equality with the active release. No application validation, security rule or revoke behavior is weakened. One new unit regression verifies that a mismatched timestamp is rejected without mutation and restoring the original permits withdrawal. All 63 selected offline tests, script syntax and whitespace passed here. Expected full offline total is 377; PostgreSQL expectation remains 53 and must be rerun. No SQL was executed by the assistant.
