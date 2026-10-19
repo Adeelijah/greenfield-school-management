@@ -8,6 +8,7 @@ import { executeFixtureCanonicalReportCommand } from '../src/lib/academics/repor
 import { buildApprovedReportSnapshot } from '../src/lib/academics/report-card-approved-snapshot.ts';
 import { canonicalizeSnapshotValue } from '../src/lib/academics/report-card-canonical-snapshot.ts';
 import postgres from 'postgres';
+import { reportReleaseGuardDDL } from './lib/report-release-disposable-guards.mjs';
 import { fixtureSecurityPlan } from './lib/assessment-disposable-security-plan.mjs';
 import { fixtureRolePreflightPlan, inspectFixtureRestrictedRoles } from './lib/assessment-disposable-role-preflight.mjs';
 import { assessmentAuthorityGuardDDL } from './lib/assessment-disposable-authority-guards.mjs';
@@ -820,7 +821,67 @@ END $$`);
    assert.equal(flags[0].relrowsecurity,false);
    assert.equal((await sql.unsafe('SELECT id FROM '+table('report_cards')+' WHERE student_id IN ($1::uuid,$2::uuid)',[securityPupil.studentId,failurePupil.studentId])).length,0);
    console.log('PASS: temporary security roles, grants, policies and workload writes roll back together without persistent role changes');
-  } else console.log('SKIPPED: seven restricted-role groups require REPORT_CARD_TEST_ROLE_ADMIN_CONFIRM=DISPOSABLE_ROLE_ADMIN_TEST_ONLY and a local role-admin test connection; 38 owner-run groups do not prove restricted access');
+  } else console.log('SKIPPED: seven restricted-role groups require REPORT_CARD_TEST_ROLE_ADMIN_CONFIRM=DISPOSABLE_ROLE_ADMIN_TEST_ONLY and a local role-admin test connection; 41 owner-run groups do not prove restricted access');
+
+  const revocationTime='2026-10-19T12:00:00.000Z';
+  const revokeAudit={...reportAuditRow,id:randomUUID(),action:'revoke',before_stage:'published',after_stage:'draft',before_version:4,after_version:5,
+   release_id:reportReleaseRow.id,reason:'Correct the published score',occurred_at:revocationTime};
+  const otherPublication=(await sql.unsafe('SELECT id FROM '+table('report_card_releases')+' WHERE report_id=$1::uuid',[firstWriter.reportId]))[0];
+  await expectError('23503',()=>insert(sql,'report_card_audit',{...revokeAudit,id:randomUUID(),release_id:randomUUID()}));
+  await expectError('23503',()=>insert(sql,'report_card_audit',{...revokeAudit,id:randomUUID(),release_id:otherPublication.id}));
+  await expectError('23503',()=>insert(sql,'report_card_audit',{...revokeAudit,id:randomUUID(),snapshot_id:snapshotB}));
+  for(const patch of [{release_id:null},{reason:null},{reason:' '},{reason:'x'.repeat(2001)},{before_stage:'approved'},{snapshot_report_version:2},{before_version:5,after_version:6}])
+   await expectError('23514',()=>insert(sql,'report_card_audit',{...revokeAudit,id:randomUUID(),...patch}));
+  await expectError('23505',()=>client.begin(async tx=>{
+   const bound=wrap(tx);await insert(bound,'report_card_audit',revokeAudit);
+   await insert(bound,'report_card_audit',{...revokeAudit,id:randomUUID()});
+  }));
+  console.log('PASS: revoke audit binds the exact historical release/snapshot/version, requires a reason and permits one event per release');
+
+  for(const statement of reportReleaseGuardDDL(schema).statements)await sql.unsafe(statement);
+  const originalRelease=(await sql.unsafe('SELECT * FROM '+table('report_card_releases')+' WHERE id=$1::uuid',[reportReleaseRow.id]))[0];
+  const historyRollback=Error('intentional release history rollback');
+  for(const statement of [
+   'UPDATE '+table('report_card_releases')+' SET published_by=$2::uuid WHERE id=$1::uuid',
+   'UPDATE '+table('report_card_releases')+' SET snapshot_id=$2::uuid WHERE id=$1::uuid',
+   'UPDATE '+table('report_card_releases')+' SET id=$2::uuid WHERE id=$1::uuid',
+  ])await expectError('23514',()=>sql.unsafe(statement,[reportReleaseRow.id,randomUUID()]));
+  await expectError('23514',()=>insert(sql,'report_card_releases',{...reportReleaseRow,id:randomUUID(),revoked_at:revocationTime}));
+  await assert.rejects(client.begin(async tx=>{
+   const bound=wrap(tx);
+   await bound.unsafe('UPDATE '+table('report_card_releases')+' SET revoked_at=$2::timestamptz WHERE id=$1::uuid',[reportReleaseRow.id,revocationTime]);
+   for(const value of [null,revocationTime,'2026-10-19T13:00:00.000Z'])
+    await expectError('23514',()=>tx.savepoint(inner=>wrap(inner).unsafe('UPDATE '+table('report_card_releases')+' SET revoked_at=$2::timestamptz WHERE id=$1::uuid',[reportReleaseRow.id,value])));
+   throw historyRollback;
+  }),error=>error===historyRollback);
+  assert.deepEqual((await sql.unsafe('SELECT * FROM '+table('report_card_releases')+' WHERE id=$1::uuid',[reportReleaseRow.id]))[0],originalRelease);
+  await expectError('P0001',()=>sql.unsafe('DELETE FROM '+table('report_card_releases')+' WHERE false'));
+  await expectError('P0001',()=>sql.unsafe('TRUNCATE '+table('report_card_releases')+' CASCADE'));
+  console.log('PASS: release history freezes original facts, permits one revocation, rejects restoration/deletion/truncate and rolls back cleanly');
+
+  const beforeCorrectionReport=await sql.unsafe('SELECT * FROM '+table('report_cards')+' WHERE id=$1::uuid',[reportA]);
+  const beforeCorrectionSnapshot=await sql.unsafe('SELECT * FROM '+table('report_card_snapshots')+' WHERE id=$1::uuid',[snapshotA]);
+  const revokeBindingFixture=operationKey=>client.begin(async tx=>{
+   const bound=wrap(tx);
+   await bound.unsafe('SELECT id FROM '+table('report_cards')+' WHERE id=$1::uuid FOR UPDATE',[reportA]);
+   await bound.unsafe('SELECT id FROM '+table('report_card_releases')+' WHERE id=$1::uuid FOR UPDATE',[reportReleaseRow.id]);
+   await bound.unsafe('UPDATE '+table('report_card_releases')+' SET revoked_at=$2::timestamptz WHERE id=$1::uuid',[reportReleaseRow.id,revocationTime]);
+   const changed=await bound.unsafe('UPDATE '+table('report_cards')+" SET stage='draft',version=5,submitted_by=NULL,approved_by=NULL,published_at=NULL,return_reason=NULL WHERE id=$1::uuid AND version=4 AND stage='published' RETURNING id",[reportA]);
+   assert.equal(changed.length,1);
+   await insert(bound,'report_card_audit',{...revokeAudit,id:randomUUID()});
+   await insert(bound,'report_card_operation_receipts',{...reportReceiptRow,report_id:reportA,operation_key:operationKey,resulting_version:5,outcome:{ok:true,action:'revoke',releaseId:reportReleaseRow.id,snapshotId:snapshotA,version:5}});
+  });
+  await expectError('23505',()=>revokeBindingFixture('reserved-report-key'));
+  assert.deepEqual(await sql.unsafe('SELECT * FROM '+table('report_cards')+' WHERE id=$1::uuid',[reportA]),beforeCorrectionReport);
+  assert.deepEqual((await sql.unsafe('SELECT * FROM '+table('report_card_releases')+' WHERE id=$1::uuid',[reportReleaseRow.id]))[0],originalRelease);
+  assert.equal((await sql.unsafe('SELECT id FROM '+table('report_card_audit')+" WHERE release_id=$1::uuid AND action='revoke'",[reportReleaseRow.id])).length,0);
+  await revokeBindingFixture('revoke-binding-fixture');
+  const corrected=(await sql.unsafe('SELECT stage,version,submitted_by,approved_by,published_at FROM '+table('report_cards')+' WHERE id=$1::uuid',[reportA]))[0];
+  assert.equal(corrected.stage,'draft');assert.equal(corrected.version,5);assert.equal(corrected.submitted_by,null);assert.equal(corrected.approved_by,null);assert.equal(corrected.published_at,null);
+  assert.deepEqual(await sql.unsafe('SELECT * FROM '+table('report_card_snapshots')+' WHERE id=$1::uuid',[snapshotA]),beforeCorrectionSnapshot);
+  assert.equal((await sql.unsafe('SELECT reason FROM '+table('report_card_audit')+' WHERE release_id=$1::uuid',[reportReleaseRow.id]))[0].reason,revokeAudit.reason);
+  assert.equal((await sql.unsafe('SELECT id FROM '+table('report_card_releases')+' WHERE report_id=$1::uuid AND revoked_at IS NULL',[reportA])).length,0);
+  console.log('PASS: fixture withdrawal report/release/audit/receipt changes roll back on collision, retry atomically and preserve the original snapshot');
 
  } finally {
   try { await sql.unsafe('DROP SCHEMA IF EXISTS ' + q(schema) + ' CASCADE'); } finally { await client.end(); }
