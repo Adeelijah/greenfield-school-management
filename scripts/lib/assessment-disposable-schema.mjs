@@ -3,12 +3,16 @@ import { SQL, getTableName } from 'drizzle-orm';
 import { getTableConfig, PgDialect } from 'drizzle-orm/pg-core';
 import * as base from '../../src/db/schema.ts';
 import * as proposal from '../../src/db/academic-assessments-schema.proposal.ts';
+import * as reports from '../../src/db/report-cards-schema.proposal.ts';
+export const reportFixtureTables = [reports.proposedReportCards, reports.proposedReportSnapshots, reports.proposedReportAudit, reports.proposedReportReceipts, reports.proposedReportReleases];
 export const fixtureTables = [base.schools, base.schoolUsers, base.memberships, base.academicSessions, base.terms, base.academicLevels, base.academicSections, base.classes, base.students, base.enrollments, base.teacherClassAssignments,
  proposal.proposedAssessmentSubjects, proposal.proposedAssessmentConfigs, proposal.proposedAssessmentScopes, proposal.proposedAssessmentRoster, proposal.proposedAssessmentTeachers, proposal.proposedAssessmentScores, proposal.proposedAssessmentSources, proposal.proposedAssessmentReviews, proposal.proposedAssessmentFinalizations, proposal.proposedAssessmentAudit, proposal.proposedAssessmentReceipts];
-const enums = [...Object.values(base), ...Object.values(proposal)].filter(v => typeof v === 'function' && typeof v.enumName === 'string' && Array.isArray(v.enumValues));
+const enums = [...Object.values(base), ...Object.values(proposal), ...Object.values(reports)].filter(v => typeof v === 'function' && typeof v.enumName === 'string' && Array.isArray(v.enumValues));
 export const fixtureIdentifier = value => '"' + value.replaceAll('"', '""') + '"';
 const literal = value => "'" + value.replaceAll("'", "''") + "'";
-export function assessmentFixtureDDL(schema) {
+export function assessmentFixtureDDL(schema, { includeReports = false } = {}) {
+ if (typeof includeReports !== 'boolean') throw Error('Invalid report fixture option');
+ const tables = includeReports ? [...fixtureTables, ...reportFixtureTables] : fixtureTables;
  if (!/^rc_it_[a-f0-9]{16}$/.test(schema)) throw Error('Only generated disposable fixture schemas allowed.');
  const q = fixtureIdentifier;
  const table = name => q(schema) + '.' + q(name);
@@ -20,9 +24,9 @@ export function assessmentFixtureDDL(schema) {
  };
  const columnType = column => enums.some(e => e.enumName === column.getSQLType()) ? table(column.getSQLType()) : column.getSQLType();
  const statements = ['CREATE SCHEMA ' + q(schema)];
- const usedEnums = new Set(fixtureTables.flatMap(t => getTableConfig(t).columns.map(c => c.getSQLType())));
+ const usedEnums = new Set(tables.flatMap(t => getTableConfig(t).columns.map(c => c.getSQLType())));
  for (const e of enums.filter(e => usedEnums.has(e.enumName))) statements.push('CREATE TYPE ' + table(e.enumName) + ' AS ENUM (' + e.enumValues.map(literal).join(',') + ')');
- for (const t of fixtureTables) {
+ for (const t of tables) {
   const c = getTableConfig(t);
   if (c.primaryKeys.length) throw Error('Table-level primary keys need explicit emitter support');
   if (c.uniqueConstraints.length) throw Error('Table-level unique constraints need explicit emitter support');
@@ -46,7 +50,7 @@ export function assessmentFixtureDDL(schema) {
   for (const check of c.checks) columns.push('CONSTRAINT ' + q(check.name) + ' CHECK (' + expression(check.value) + ')');
   statements.push('CREATE TABLE ' + table(c.name) + ' (' + columns.join(',') + ')');
  }
- for (const t of fixtureTables) {
+ for (const t of tables) {
   const c = getTableConfig(t);
   for (const index of c.indexes) {
    const i = index.config;
@@ -64,13 +68,14 @@ export function assessmentFixtureDDL(schema) {
  // Explicit review prerequisites are added ONLY to isolated fixture tables.
  statements.push('CREATE UNIQUE INDEX terms_school_session_id_unique ON ' + table('terms') + ' (school_id,session_id,id)');
  statements.push('CREATE UNIQUE INDEX teacher_class_assignments_school_id_id_unique ON ' + table('teacher_class_assignments') + ' (school_id,id)');
- const known = new Set(fixtureTables.map(getTableName));
- for (const t of fixtureTables) for (const key of getTableConfig(t).foreignKeys) {
+ if (includeReports) statements.push('CREATE UNIQUE INDEX enrollments_report_binding_unique ON ' + table('enrollments') + ' (school_id,id,student_id,class_id,session_id)');
+ const known = new Set(tables.map(getTableName));
+ for (const t of tables) for (const key of getTableConfig(t).foreignKeys) {
   const ref = key.reference(); const target = getTableName(ref.foreignTable);
   if (!known.has(target)) throw Error('External fixture reference: ' + target);
   const remove = key.onDelete ?? 'no action'; const update = key.onUpdate ?? 'no action';
   if (![remove, update].every(action => ['no action', 'restrict', 'cascade', 'set null', 'set default'].includes(action))) throw Error('Unsupported FK action');
   statements.push('ALTER TABLE ' + table(getTableName(t)) + ' ADD CONSTRAINT ' + q(key.getName()) + ' FOREIGN KEY (' + ref.columns.map(c => q(c.name)).join(',') + ') REFERENCES ' + table(target) + ' (' + ref.foreignColumns.map(c => q(c.name)).join(',') + ') ON DELETE ' + remove + ' ON UPDATE ' + update);
  }
- return { statements, table, columnType, proposalTableCount: 11, tableCount: fixtureTables.length };
+ return { statements, table, columnType, proposalTableCount: 11, reportTableCount: includeReports ? 5 : 0, tableCount: tables.length };
 }
