@@ -46,3 +46,8 @@ The user ran the combined milestone locally on 2026-10-19: the full offline gate
 ## Offline tests
 
 Ten new tests cover the auth→school-user→membership join, active-school ambiguity, suspended/bursar rejection, ended assignment mapping, student/enrollment ownership, duplicates across classes, legacy/inactive class mappings, Primary 5/6 and early-years handling, calendar validation, mixed-school rows and non-mutating output without invented version/term fields. These extend the offline allowlist; passing them is not evidence of applied SQL constraints, live JWT behavior or deployed authorization.
+
+
+## Follow-up proposal prepared
+
+`src/db/academic-assessments-schema.proposal.ts` now describes 11 review-only relations for the missing academic persistence layer. `ASSESSMENT_PERSISTENCE_PROPOSAL_REVIEW.md` records the required term/assignment unique-key prerequisites, source revision and lock protocol, and the constraints still requiring transaction/security enforcement. The proposal is excluded from the production schema and migration entrypoint. Presence of this draft does not close the production-model gaps listed above. The user confirmed the preceding mapping milestone's full offline gate passed with 218 tests.
