@@ -48,7 +48,7 @@ node --experimental-strip-types .\scripts\report-card-postgres-authoritative-rea
 The harness accepts only loopback hosts and the disposable database name, creates fictional `read_*` fixture tables in its random schema, and cleans that schema in `finally`. It tests grade recomputation, auth-bound school scope, inactive membership/assignment, enrollment/source/revision rejection, and conflicting SQL updates using transaction-local lock/statement timeouts. Updates must fail with PostgreSQL `55P03` while the reader holds locks, then succeed after the reader commits. Nothing is connected to real student data, production schemas, Supabase or the live writer.
 
 
-## Combined trusted transaction — pending PostgreSQL verification
+## Combined trusted transaction — user-verified in disposable PostgreSQL
 
 The user confirmed the separate read adapter passed the full offline gate (204 tests, TypeScript, ESLint with the existing unrelated warning, whitespace) and all five local PostgreSQL source-read/locking groups on 2026-10-19.
 
@@ -58,10 +58,15 @@ Only report ID and workflow command are selected from input. Actor/school derive
 
 Crucially, `executeReportTransaction` catches errors and returns denied outcomes. The wrapper throws those outcomes across the outer `db.begin` boundary, forcing rollback of any prior report/audit/receipt/release writes before returning the sanitized outcome. A nested callback that simply returned `transaction_failed` would be unsafe. Offline regression tests explicitly cover this case, one transaction owner, derived actor identity, replay/conflict and missing identity.
 
-The existing authoritative-read integration script is extended with a version column and synthetic audit/receipt/release tables after its original five read-only groups. New pending checks cover competing submissions and duplicate-key races, payload conflicts, audit/receipt/release rollback and retry, a source mutation attempted between report update and audit insertion, and a source-first writer that blocks submission then invalidates the report revision. Transaction-local lock and statement timeouts bound conflicts. These cases have not been run against PostgreSQL by the assistant.
+The existing authoritative-read integration script is extended with a version column and synthetic audit/receipt/release tables after its original five read-only groups. New pending checks cover competing submissions and duplicate-key races, payload conflicts, audit/receipt/release rollback and retry, a source mutation attempted between report update and audit insertion, and a source-first writer that blocks submission then invalidates the report revision. Transaction-local lock and statement timeouts bound conflicts. The user subsequently ran all ten read/combined integration groups successfully on 2026-10-19; the full offline gate also passed with 208 tests. No database run was performed by the assistant.
 
 A source-first timed-out read returns generic `read_failed`; the wrapper rolls the whole transaction back. After the source writer commits, a fresh attempt returns `stale_assessment`. There is no automatic retry loop. Replays also revalidate membership and current academic sources first; a previously successful operation may be denied after source revision drift rather than replayed from stale authority.
 
 The fixture academic writer only locks/updates its source scope and subject metadata; it does not attempt a later report lock. Real mutation paths must share a reviewed global lock protocol, including all affected enrollment scopes. Guard enforcement, phantom prevention, real score/config/student joins, canonical immutable snapshots, RLS and live authenticated routes remain pending. Passing the synthetic combined harness will not close all of Phase B or establish production readiness.
 
 Local contributor validation for this batch: 70 Report Cards offline tests, JavaScript harness syntax and whitespace passed. Full project TypeScript/ESLint still require the user's installed dependencies. No database was accessed or dependencies installed by the assistant.
+
+
+## Current follow-up: actual model reconciliation
+
+`REPORT_CARD_PERSISTED_MODEL_RECONCILIATION.md` records the real auth/student/enrollment/class/assignment column mapping and missing academic persistence fields. The pure `report-card-persisted-model-map.ts` validates selected rows against current Drizzle types. It is not wired to the coordinator or live routes. Subject/config/score/revision storage, term/session domain-field reconciliation and historical-student eligibility remain explicit blockers; no synthetic defaults are substituted.
