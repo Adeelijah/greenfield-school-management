@@ -7,7 +7,7 @@
 1. Read `AGENTS.md` and `docs/DEVELOPMENT_WORKFLOW.md`; honor approval gates, no secret inspection, no Supabase/production DB changes.
 2. Review `docs/REPORT_CARD_DISPOSABLE_ADAPTER_REVIEW.md`, `docs/REPORT_CARD_DISPOSABLE_POSTGRES_TESTS.md`, `docs/REPORT_CARD_MIGRATION_READINESS_REVIEW.md`, `docs/REPORT_CARD_RLS_REVIEW.md`, and `docs/REPORT_CARD_TRANSACTION_PORT_REVIEW.md`.
 3. Inspect the latest `report-cards-foundation` commit and working tree before edits. Do not assume local uncommitted changes are safe to overwrite.
-4. Continue with the failing JSONB fixture round-trip assertion described below, then rerun the full disposable adapter integration harness.
+4. The JSONB failure was resolved in commit `3d7f54c`; all six original integration groups passed in the user’s local run. Continue Phase A with the expanded negative and failure/retry cases, which still require local PostgreSQL verification.
 
 ## Project context
 
@@ -31,26 +31,17 @@ Greenfield is a Next.js 16 / React 19 / TypeScript / Tailwind 4 / Supabase SSR A
 - PostgreSQL 18 on Windows, database `greenfield_report_cards_disposable`, login `greenfield_test`.
 - Smoke test: **2/2 passed** (optimistic version update; savepoint rollback).
 - Simplified concurrency suite: **5/5 passed** (conflicting writers, duplicate idempotency, tenant-scoped lookup, rollback, publication stage).
-- The adapter integration harness **has NOT passed**. Earlier it failed `not_found`; a subsequent fix enabled fixture lookup but the most recent run failed:
+- The user ran the adapter integration harness after commit `3d7f54c` and reported **all six original integration groups passing** on 2026-10-19. JSONB fixture/source round trips and report/audit writes, concurrent submissions, duplicate-key replay, cross-school membership rejection, receipt rollback, and approval/publication serialization passed.
+- The user then cleared the disposable database environment and temporary password variables.
+- The earlier `not_found` and JSONB string/object failures are historical, not current blockers. Preserve explicit text parameter binding and JSONB type/round-trip assertions.
+- Expanded Phase A tests now cover denial without writes, receipt conflicts, audit/release failures, and retry/replay after rollback. These new PostgreSQL cases are **not yet verified**.
 
-```
-AssertionError [ERR_ASSERTION]: report JSONB was not decoded to an object
-'string' !== 'object'
-at scripts/report-card-postgres-adapter-integration.mjs:71
-```
+## Immediate next task: finish Phase A verification
 
-The failure was observed **after** pulling updated code (at least through commit `955db51`). Current script includes `textParameters`, `$4::text::jsonb` fixture inserts, and `assert.equal(typeof reportCheck[0].record,'object')`. Diagnose JSONB encoding/decoding of the `postgres` driver and any double-serialization; do not remove the assertion or silently coerce the result without checking DB `jsonb_typeof` and read behavior. `ExperimentalWarning` and `MODULE_TYPELESS_PACKAGE_JSON` are informational, not test failures. `SKIPPED` means the opt-in environment variables were absent.
-
-**Important distinction:** `jsonb_typeof(record)='object'` can pass while the JavaScript driver still returns a string. Confirm the actual type and encoding path; use parameterized queries, test round trips of report, audit, membership, assignment and projection.
-
-## Immediate next task: unblock real transaction-port integration
-
-1. Fetch current `scripts/report-card-postgres-adapter-integration.mjs`, `src/lib/academics/report-card-postgres-disposable-adapter.ts`, `src/lib/academics/report-card-transaction-port.ts` and `AGENTS.md`.
-2. Fix PostgreSQL JSONB decoding/serialization at the appropriate boundary without changing production behavior. Test fixture JSONB and updated report/audit JSONB round trips. Prefer minimal, explicit, tested decoding at the test adapter boundary if necessary; never trust client data as authoritative.
-3. Run safe offline checks (TypeScript, ESLint, offline tests and `git diff --check`); report which were actually executed. Commit/push only within the user's authorization and repository approval rules.
-4. User pulls `report-cards-foundation` and runs the adapter integration harness on the **disposable local DB only**.
-5. Target integration assertions: fixture source lookups; competing submissions (one applied, one stale); duplicate key (applied/replay); cross-school actor rejection; injected receipt failure rolls back record and audit; approval/publish requires proper stage and only one release.
-6. Once these pass, update `docs/REPORT_CARD_DISPOSABLE_ADAPTER_REVIEW.md` to distinguish confirmed results from remaining production blockers.
+1. Review the expanded harness, then run safe offline checks.
+2. Obtain commit/push approval under `AGENTS.md` before publishing this expanded batch unless already explicitly authorized.
+3. The user reruns the harness against the same separate local disposable PostgreSQL database only. Do not infer execution from a committed test script.
+4. After those tests pass, proceed to Phase B authoritative academic reads. Production authentication, enrollment/source reads, immutable snapshots, RLS and guardian authorization remain unimplemented or unverified by this harness.
 
 ### Local run instructions (Windows PowerShell)
 
@@ -75,9 +66,9 @@ Never paste the password or connection URL into chat. Scripts must enforce dispo
 
 ## Roadmap to production-ready Report Cards
 
-### Phase A — Complete isolated adapter tests (CURRENT, BLOCKED)
-- Resolve JSONB fixture read failure.
-- Confirm full end-to-end `executeReportTransaction` integration suite against disposable PostgreSQL.
+### Phase A — Complete isolated adapter tests (CURRENT, EXPANDED VERIFICATION PENDING)
+- JSONB fixture read failure resolved; original six integration groups passed locally.
+- Confirm expanded `executeReportTransaction` integration suite against disposable PostgreSQL.
 - Add negative tests for cross-school report IDs, invalid actor/assignment, stale assessment revision, invalid stage, failed audit/release insert and receipt conflict.
 - Verify atomicity and idempotency after real transaction failures.
 **Exit:** reproducible passing integration suite, no production DB changes.
@@ -128,4 +119,4 @@ Beyond Report Cards, check actual implementation status before claiming these co
 - Do not inspect `.env` or credentials; do not use actual student data.
 - Do not connect to Supabase/production DB, apply migrations, deploy, or change live auth/RLS without explicit authorization.
 - Check `AGENTS.md` for commit/push approval and validation requirements.
-- **First action in the next chat:** inspect the latest integration script and resolve the JSONB decoding assertion; then run the disposable test and proceed through phases above.
+- **First action in the next chat:** inspect the latest integration script and expanded-test verification status; preserve the resolved JSONB fix and proceed through the phases above.
