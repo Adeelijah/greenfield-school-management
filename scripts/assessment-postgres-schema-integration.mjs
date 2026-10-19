@@ -8,6 +8,8 @@ import { executeFixtureCanonicalReportCommand } from '../src/lib/academics/repor
 import { buildApprovedReportSnapshot } from '../src/lib/academics/report-card-approved-snapshot.ts';
 import { canonicalizeSnapshotValue } from '../src/lib/academics/report-card-canonical-snapshot.ts';
 import postgres from 'postgres';
+import { fixtureSecurityPlan } from './lib/assessment-disposable-security-plan.mjs';
+import { fixtureRolePreflightPlan, inspectFixtureRestrictedRoles } from './lib/assessment-disposable-role-preflight.mjs';
 import { assessmentAuthorityGuardDDL } from './lib/assessment-disposable-authority-guards.mjs';
 import { assessmentWriteGuardDDL } from './lib/assessment-disposable-write-guards.mjs';
 import { getTableConfig } from 'drizzle-orm/pg-core';
@@ -48,7 +50,14 @@ if (!url || process.env.REPORT_CARD_TEST_CONFIRM !== 'DISPOSABLE_REPORT_CARD_TES
  const sourceRow = { id: ids.source, school_id: ids.school, scope_id: ids.scope, revision: 1, source_manifest: { format: 1, fixture: true }, content_hash: hash };
  const reviewRow = { id: ids.review, school_id: ids.school, scope_id: ids.scope, roster_id: ids.roster, source_version_id: ids.source, reviewer_membership_id: ids.teacher };
  const finalRow = { id: ids.finalization, school_id: ids.school, scope_id: ids.scope, roster_id: ids.roster, source_version_id: ids.source, teacher_review_id: ids.review, finalized_by: ids.admin, results: { fixture: true, students: [] }, content_hash: hash };
+ const roleConfirmation=process.env.REPORT_CARD_TEST_ROLE_ADMIN_CONFIRM;
+ const testRestrictedRoles=roleConfirmation==='DISPOSABLE_ROLE_ADMIN_TEST_ONLY';
  try {
+  if(roleConfirmation && !testRestrictedRoles) throw Error('Invalid disposable role-admin confirmation.');
+  if(testRestrictedRoles) {
+   const capability=await sql.unsafe('SELECT rolsuper OR rolcreaterole AS allowed FROM pg_catalog.pg_roles WHERE rolname=current_user');
+   if(capability[0]?.allowed!==true) throw Error('Restricted-role groups require a local disposable test connection with CREATEROLE. No roles or fixture schema were created. Do not grant production privileges; use a separately authorized local test administrator.');
+  }
   for (const statement of fixture.statements) await sql.unsafe(statement);
   const actual = await sql.unsafe('SELECT count(*)::int AS n FROM information_schema.tables WHERE table_schema=$1', [schema]);
   assert.equal(actual[0].n, fixture.tableCount);
@@ -684,6 +693,76 @@ if (!url || process.env.REPORT_CARD_TEST_CONFIRM !== 'DISPOSABLE_REPORT_CARD_TES
   await sql.unsafe('UPDATE '+table('memberships')+" SET status='active' WHERE id=$1::uuid",[ids.teacher]);
   assert.deepEqual(await revisions(),beforeAuthorityOnly);
   console.log('PASS: committed parent edits stale the source, fresh canonical finalization recovers and immutable report snapshots remain unchanged');
+
+  if(testRestrictedRoles) {
+   const securityPupil={studentId:randomUUID(),enrollmentId:randomUUID()};
+   await insert(sql,'students',{id:securityPupil.studentId,school_id:ids.school,admission_number:'FICTION-SECURITY',first_name:'Fictional',last_name:'Security'});
+   await insert(sql,'enrollments',{id:securityPupil.enrollmentId,school_id:ids.school,student_id:securityPupil.studentId,class_id:ids.class,session_id:ids.session});
+   await insert(sql,'assessment_scores',{...scoreRow,id:randomUUID(),roster_id:nextRoster,enrollment_id:securityPupil.enrollmentId,student_id:securityPupil.studentId});
+   expectedPupilCount+=1;
+   await seal();
+   const security=fixtureSecurityPlan(schema,ids.school), rolePreflight=fixtureRolePreflightPlan(schema);
+   const rollbackSecurity=Error('intentional rollback of temporary roles and policies');
+   await assert.rejects(client.begin(async tx=>{
+    const bound=wrap(tx);
+    for(const role of Object.values(security.roles)) await bound.unsafe('CREATE ROLE '+q(role)+' NOLOGIN NOINHERIT NOSUPERUSER NOBYPASSRLS NOCREATEROLE NOCREATEDB NOREPLICATION');
+    await bound.unsafe('GRANT '+Object.values(security.roles).map(q).join(',')+' TO CURRENT_USER WITH SET TRUE');
+    const evidence=await bound.unsafe(rolePreflight.query,rolePreflight.parameters);
+    assert.equal(inspectFixtureRestrictedRoles(schema,evidence).ok,true);
+    for(const statement of security.statements) await bound.unsafe(statement);
+    const asRole=async role=>{
+     await bound.unsafe('SET LOCAL ROLE '+q(role));
+     const current=await bound.unsafe('SELECT current_user AS name');assert.equal(current[0].name,role);
+    };
+    const denied=work=>expectError('42501',()=>tx.savepoint(inner=>work(wrap(inner))));
+    await asRole(security.roles.reader);
+    assert.equal((await bound.unsafe('SELECT id FROM '+table('schools')+' WHERE id=$1::uuid',[ids.school])).length,1);
+    assert.equal((await bound.unsafe('SELECT id FROM '+table('schools')+' WHERE id=$1::uuid',[ids.foreignSchool])).length,0);
+    assert.equal((await bound.unsafe('SELECT id FROM '+table('assessment_subjects')+' WHERE id=$1::uuid',[ids.foreignSubject])).length,0);
+    await bound.unsafe("SELECT pg_catalog.set_config('app.school_id',$1,true)",[ids.foreignSchool]);
+    assert.equal((await bound.unsafe('SELECT id FROM '+table('schools')+' WHERE id=$1::uuid',[ids.foreignSchool])).length,0);
+    console.log('PASS: restricted role preflight, exact execution role and forced school RLS reject foreign rows and forged session scope');
+
+    assert.equal((await bound.unsafe('SELECT id FROM '+table('assessment_scores')+' WHERE id=$1::uuid FOR SHARE',[editableScore])).length,1);
+    assert.equal((await readFixtureVerifiedCanonicalAssessment(bound,schema,scopeSelector,verifyIdentity)).ok,true);
+    for(const name of security.targets) await denied(other=>other.unsafe('UPDATE '+table(name)+' SET id=id WHERE false'));
+    await denied(other=>insert(other,'report_cards',{...reportRow,id:randomUUID()}));
+    await denied(other=>other.unsafe('TRUNCATE '+table('report_cards')));
+    await denied(other=>other.unsafe('SELECT '+table('fixture_mark_source_scope')+'($1::uuid)',[ids.scope]));
+    console.log('PASS: restricted reader performs actual canonical locking reads but cannot mutate any fixture relation or call revision helpers');
+
+    await asRole(security.roles.writer);
+    for(const name of security.targets.filter(name=>name!=='report_cards')) await denied(other=>other.unsafe('UPDATE '+table(name)+' SET id=id WHERE false'));
+    await denied(other=>other.unsafe('UPDATE '+table('report_cards')+' SET school_id=$1::uuid WHERE false',[ids.foreignSchool]));
+    await denied(other=>other.unsafe('DELETE FROM '+table('report_card_snapshots')+' WHERE false'));
+    await denied(other=>insert(other,'report_cards',{...reportRow,id:randomUUID(),school_id:ids.foreignSchool}));
+    const restrictedDb={begin:callback=>tx.savepoint(async inner=>{
+     const execution=wrap(inner),current=await execution.unsafe('SELECT current_user AS name');
+     assert.equal(current[0].name,security.roles.writer);
+     return callback(execution);
+    })};
+    const command=createCommand(securityPupil,'restricted-create');
+    const created=await executeFixtureReportWorkflow(restrictedDb,schema,command,verifyIdentity);
+    assert.equal(created.ok,true,JSON.stringify(created));
+    assert.equal((await executeFixtureReportWorkflow(restrictedDb,schema,command,verifyIdentity)).kind,'replay');
+    const submit={action:'submit',reportId:created.reportId,expectedVersion:1,operationKey:'restricted-submit'};
+    assert.equal((await executeFixtureReportWorkflow(restrictedDb,schema,submit,verifyIdentity)).ok,true);
+    const approve={action:'approve',reportId:created.reportId,expectedVersion:2,operationKey:'restricted-approve'};
+    assert.deepEqual(await executeFixtureCanonicalReportCommand(restrictedDb,schema,approve,verifyIdentity),{ok:false,code:'forbidden'});
+    const verifyAdmin=async()=>({authUserId:adminAuth});
+    assert.equal((await executeFixtureCanonicalReportCommand(restrictedDb,schema,approve,verifyAdmin)).ok,true);
+    const publish={action:'publish',reportId:created.reportId,expectedVersion:3,operationKey:'restricted-publish'};
+    assert.equal((await executeFixtureCanonicalReportCommand(restrictedDb,schema,publish,verifyAdmin)).ok,true);
+    assert.equal((await executeFixtureCanonicalReportCommand(restrictedDb,schema,publish,verifyAdmin)).kind,'replay');
+    assert.equal((await bound.unsafe('SELECT id FROM '+table('report_card_releases')+' WHERE report_id=$1::uuid',[created.reportId])).length,1);
+    console.log('PASS: restricted writer runs actual create/submit/approve/publish and replay while academic, identity and immutable updates are denied');
+    throw rollbackSecurity;
+   }),error=>error===rollbackSecurity);
+   assert.equal((await sql.unsafe(rolePreflight.query,rolePreflight.parameters)).length,0);
+   const flags=await sql.unsafe('SELECT relrowsecurity FROM pg_catalog.pg_class WHERE oid=$1::pg_catalog.regclass',[table('report_cards')]);
+   assert.equal(flags[0].relrowsecurity,false);
+   console.log('PASS: temporary security roles, grants, policies and workload writes roll back together without persistent role changes');
+  } else console.log('SKIPPED: four restricted-role groups require REPORT_CARD_TEST_ROLE_ADMIN_CONFIRM=DISPOSABLE_ROLE_ADMIN_TEST_ONLY and a local role-admin test connection; 38 owner-run groups do not prove restricted access');
 
  } finally {
   try { await sql.unsafe('DROP SCHEMA IF EXISTS ' + q(schema) + ' CASCADE'); } finally { await client.end(); }
