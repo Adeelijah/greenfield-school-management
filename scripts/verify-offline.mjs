@@ -38,6 +38,8 @@ const tests = [
   'src/lib/academics/report-card-memory-adapter.test.ts',
   'src/lib/academics/report-card-snapshot-readiness.test.ts',
   'src/lib/academics/report-card-canonical-snapshot.test.ts',
+  'src/lib/academics/report-card-approved-snapshot.test.ts',
+  'src/lib/academics/report-card-postgres-canonical-writer.test.ts',
   'src/lib/academics/report-card-academic-payload.test.ts',
   'src/lib/academics/report-card-trusted-source.test.ts',
   'src/lib/academics/report-card-authoritative-read.test.ts',
