@@ -29,7 +29,11 @@ export type TransactionRunner = {
   run<T>(callback:(tx:ReportTransaction)=>Promise<T>):Promise<T>;
 };
 class TransactionAbort extends Error {
-  constructor(readonly code:string, message:string){super(message);}
+  readonly code: string;
+  constructor(code:string, message:string){
+    super(message);
+    this.code = code;
+  }
 }
 const abort = (code:string,message:string):never => {throw new TransactionAbort(code,message);};
 export async function executeReportTransaction(runner:TransactionRunner, request:TransactionRequest):Promise<TransactionOutcome> {
