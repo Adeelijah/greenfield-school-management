@@ -30,7 +30,7 @@ No migration, production database connection, deployment or merge is part of thi
 Use the same `REPORT_CARD_TEST_DATABASE_URL` and `REPORT_CARD_TEST_CONFIRM` as the earlier disposable smoke tests, then run:
 
 ```powershell
-node .\scripts\report-card-postgres-adapter-integration.mjs
+node --experimental-strip-types .\scripts\report-card-postgres-adapter-integration.mjs
 ```
 
 This script has **not been run in the contributor's local PostgreSQL instance**; its results must be confirmed by the user. Fixture memberships and projections are fictional and inserted by the test harness; they do not establish real production authentication, authoritative enrollment, canonical snapshot persistence, RLS or guardian access. The test harness creates and removes only its randomly generated `rc_it_...` schema inside the explicitly named disposable database.
