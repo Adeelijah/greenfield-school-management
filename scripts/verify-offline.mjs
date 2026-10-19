@@ -7,6 +7,7 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const tests = [
   'scripts/assessment-disposable-schema.test.mjs',
   'scripts/assessment-disposable-write-guards.test.mjs',
+  'scripts/assessment-disposable-authority-guards.test.mjs',
   'src/components/academics/class-structure.test.ts',
   'src/components/students/academic-progression.test.ts',
   'src/components/students/class-assignment-validation.test.ts',
