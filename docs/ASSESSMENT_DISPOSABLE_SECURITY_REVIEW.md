@@ -1,6 +1,6 @@
 # Fixed-school restricted fixture permissions
 
-Status: prepared, not executed by the assistant. User verified the preceding 337-test offline gate and all 38 owner-run PostgreSQL groups. No production policy, authentication, migration or deployment changed.
+Status: initial restricted-role boundary user-verified: all 42 PostgreSQL groups passed on 2026-10-19, including the four opt-in groups. Latest explicitly confirmed offline count is 337; the expanded 345-test gate still needs its local result. No SQL was executed by the assistant. No production policy, authentication, migration or deployment changed.
 
 ## Prepared boundary
 
@@ -33,3 +33,14 @@ Eight new offline tests raise the expected full offline count to 345. All 26 rel
 Next after actual restricted-role verification: add restricted failure/concurrency coverage, review append-only release revocation/correction policy and close the login/authority deployment contract before route integration. Do not merge, deploy or apply production grants/RLS.
 
 References: https://www.postgresql.org/docs/18/sql-createpolicy.html (locking-read policy table), https://www.postgresql.org/docs/18/sql-grant.html and https://www.postgresql.org/docs/18/ddl-rowsecurity.html .
+
+
+## Restricted failure/retry continuation
+
+The user verified all initial 42 PostgreSQL groups under the local role-admin setup. Three additional opt-in groups now prepare failure injection under the actual restricted writer role: creation and submission report/audit/receipt rollback; approval snapshot/audit/receipt rollback; publication release/audit/receipt rollback. Each failure compares all five report relations and scope revisions against their exact previous state, checks current_user remains the restricted writer, then reuses the original key for an applied result followed by replay. Approval creates exactly one snapshot; publication retains it and creates one release. Final outer rollback also verifies neither security pupil retains a report.
+
+A second fictional pupil is added before sealing. A test-only BEFORE INSERT trigger reads a schema-specific failure setting; the setting provides no identity or privileges. Setup creates the trigger before the plan revokes PUBLIC function access. Failure selection is outside each application savepoint so a failed statement cannot silently clear the test switch; finally clears it before retry. Both writer families still own their application savepoint and map injected SQL errors after rollback. No production runtime code, policy or privilege changed.
+
+Expected opt-in PostgreSQL count is now 45 (38 owner-run plus seven restricted-role groups). Ordinary mode explicitly skips the seven restricted groups. The original four-group/42-count description above records the verified baseline. All 46 related offline tests, syntax and whitespace checks passed here; the three new SQL groups have not been executed. Offline allowlist count remains 345. Use the same complete local admin setup/test/cleanup block.
+
+Restricted-role concurrency across independent sessions remains unverified: temporary roles/policies in this harness are deliberately uncommitted and cannot be shared with another connection. Do not substitute sequential savepoints for a concurrency claim. Release/revocation remains a separate implementation gate.
