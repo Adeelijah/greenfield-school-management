@@ -3,7 +3,18 @@
 import { sql } from 'drizzle-orm';
 import { check, foreignKey, integer, jsonb, pgEnum, pgTable, text, timestamp, uniqueIndex, uuid, varchar, index } from 'drizzle-orm/pg-core';
 // @ts-expect-error Node 22 type stripping requires the explicit source extension.
-import { academicSessions, classes, memberships, students, terms } from './schema.ts';
+import { academicSessions, classes, memberships, students } from './schema.ts';
+
+// Shadow declaration ONLY: describes the required composite key on the existing
+// terms table without changing the production schema or generating a migration.
+// Never include this proposal file in a Drizzle Kit schema glob.
+export const proposedTermsCompositeTarget = pgTable('terms', {
+ id: uuid('id').primaryKey(),
+ schoolId: uuid('school_id').notNull(),
+ sessionId: uuid('session_id').notNull(),
+}, t => [
+ uniqueIndex('terms_school_session_id_unique').on(t.schoolId, t.sessionId, t.id),
+]);
 
 export const proposedReportStage = pgEnum('report_card_stage', ['draft','submitted','returned','approved','published']);
 export const proposedReportAction = pgEnum('report_card_action', ['submit','return','approve','publish','reopen']);
@@ -29,9 +40,8 @@ export const proposedReportCards = pgTable('report_cards', {
  foreignKey({columns:[t.schoolId,t.studentId],foreignColumns:[students.schoolId,students.id],name:'report_cards_school_student_fk'}).onDelete('restrict'),
  foreignKey({columns:[t.schoolId,t.classId],foreignColumns:[classes.schoolId,classes.id],name:'report_cards_school_class_fk'}).onDelete('restrict'),
  foreignKey({columns:[t.schoolId,t.sessionId],foreignColumns:[academicSessions.schoolId,academicSessions.id],name:'report_cards_school_session_fk'}).onDelete('restrict'),
- // Existing terms lacks a unique composite (school_id, session_id, id).
- // Add that prerequisite to the base schema in a separately approved migration.
- foreignKey({columns:[t.termId],foreignColumns:[terms.id],name:'report_cards_term_fk'}).onDelete('restrict'),
+ // Requires separately approved prerequisite UNIQUE (school_id, session_id, id) on live terms.
+ foreignKey({columns:[t.schoolId,t.sessionId,t.termId],foreignColumns:[proposedTermsCompositeTarget.schoolId,proposedTermsCompositeTarget.sessionId,proposedTermsCompositeTarget.id],name:'report_cards_school_session_term_fk'}).onDelete('restrict'),
  foreignKey({columns:[t.schoolId,t.submittedBy],foreignColumns:[memberships.schoolId,memberships.id],name:'report_cards_school_submitter_fk'}).onDelete('restrict'),
  foreignKey({columns:[t.schoolId,t.approvedBy],foreignColumns:[memberships.schoolId,memberships.id],name:'report_cards_school_approver_fk'}).onDelete('restrict'),
  check('report_cards_version_positive',sql`${t.version} > 0`),
