@@ -188,6 +188,15 @@ Next after verification: restricted fixture reader/writer grants and RLS with ad
 
 ## Latest continuation — restricted fixture role preflight
 
-User verified 328 offline tests and all 38 PostgreSQL groups. A catalog-only query plan and strict offline role-evidence validator now prepare the restricted reader/writer prerequisites: generated role names, exact rows, no privileged flags, no object ownership and no outgoing role memberships. Nine tests raise the expected offline count to 337. No SQL was executed or added to the PostgreSQL harness; its 38 groups remain user-verified. Full new offline gate is pending local verification.
+User verified 328 offline tests and all 38 PostgreSQL groups. A catalog-only query plan and strict offline role-evidence validator now prepare the restricted reader/writer prerequisites: generated role names, exact rows, no privileged flags, no object ownership and no outgoing role memberships. Nine tests raise the expected offline count to 337. No SQL was executed or added to the PostgreSQL harness; its 38 groups remain user-verified. The user subsequently confirmed all 337 offline tests passed.
 
 See `ASSESSMENT_RESTRICTED_ROLE_PREFLIGHT.md`. This is a prerequisite, not implemented grants/RLS or a security certificate. Next: controlled role-admin fixture setup, explicit execution-role checks and the restricted privilege/function boundary. Resolve locking-reader UPDATE privilege requirements without broadening access blindly; do not use caller-controlled GUC values as identity. Keep direct client access denied. Release/revocation policy, live auth, route/UI integration and deployment remain later.
+
+
+## Latest continuation — fixed-school fixture permissions and opt-in role tests
+
+User verified 337 offline tests. A fixture-only security plan now prepares forced RLS, restrictive fixed-school service-role clamps, scoped SELECT/locking privileges, statement mutation guards and narrowly listed report transition columns. No role creation or SQL is executed by the builder. Eight offline tests raise the expected total to 345; all 26 related tests, syntax and whitespace passed here.
+
+The disposable harness adds four opt-in restricted-role groups (42 total when enabled). They require a separate explicit disposable role-admin confirmation and a LOCAL role-admin test connection. Roles, policies, grants and workload writes are created inside an intentionally rolled-back transaction; current_user is checked for reader and writer execution. Ordinary mode remains 38 groups plus a clear restricted-groups skip. No new SQL was executed here. See `ASSESSMENT_DISPOSABLE_SECURITY_REVIEW.md` for the required privileges, role/session limits and pending gates.
+
+Next after full offline and opt-in PostgreSQL verification: restricted failure/concurrency tests, release revocation/correction policy and the final live auth/login privilege contract, then route/UI integration. These are trusted school service roles, not end-user identities; do not claim school-scoped RLS replaces teacher/admin/guardian authorization or proves a production deployment.
