@@ -26,7 +26,7 @@ export const proposedEnrollmentCompositeTarget = pgTable('enrollments', {
 },t=>[uniqueIndex('enrollments_report_binding_unique').on(t.schoolId,t.id,t.studentId,t.classId,t.sessionId)]);
 
 export const proposedReportStage = pgEnum('report_card_stage', ['draft','submitted','returned','approved','published']);
-export const proposedReportAction = pgEnum('report_card_action', ['submit','return','approve','publish','reopen']);
+export const proposedReportAction = pgEnum('report_card_action', ['create','submit','return','approve','publish','reopen']);
 
 export const proposedReportCards = pgTable('report_cards', {
  id:uuid('id').defaultRandom().primaryKey(),
@@ -102,6 +102,7 @@ export const proposedReportAudit = pgTable('report_card_audit',{
  reportId:uuid('report_id').notNull(),
  actorMembershipId:uuid('actor_membership_id').notNull(),
  action:proposedReportAction('action').notNull(),
+ reason:text('reason'),
  beforeStage:proposedReportStage('before_stage').notNull(),
  afterStage:proposedReportStage('after_stage').notNull(),
  beforeVersion:integer('before_version').notNull(),
@@ -114,13 +115,15 @@ export const proposedReportAudit = pgTable('report_card_audit',{
  foreignKey({columns:[t.schoolId,t.reportId],foreignColumns:[proposedReportCards.schoolId,proposedReportCards.id],name:'report_audit_school_report_fk'}).onDelete('restrict'),
  foreignKey({columns:[t.schoolId,t.actorMembershipId],foreignColumns:[memberships.schoolId,memberships.id],name:'report_audit_school_actor_fk'}).onDelete('restrict'),
  foreignKey({columns:[t.schoolId,t.reportId,t.snapshotId,t.snapshotReportVersion],foreignColumns:[proposedReportSnapshots.schoolId,proposedReportSnapshots.reportId,proposedReportSnapshots.id,proposedReportSnapshots.reportVersion],name:'report_audit_school_snapshot_fk'}).onDelete('restrict'),
- check('report_audit_version_step',sql`${t.afterVersion} = ${t.beforeVersion} + 1 AND ${t.beforeVersion} > 0`),
+ check('report_audit_version_step',sql`(${t.action} = 'create' AND ${t.beforeVersion} = 0 AND ${t.afterVersion} = 1) OR (${t.action} <> 'create' AND ${t.beforeVersion} > 0 AND ${t.afterVersion} = ${t.beforeVersion} + 1)`),
  check('report_audit_snapshot_binding_valid',sql`
   (${t.action} = 'approve' AND ${t.snapshotId} IS NOT NULL AND ${t.snapshotReportVersion} IS NOT NULL AND ${t.snapshotReportVersion} = ${t.afterVersion}) OR
   (${t.action} = 'publish' AND ${t.snapshotId} IS NOT NULL AND ${t.snapshotReportVersion} IS NOT NULL AND ${t.snapshotReportVersion} + 1 = ${t.afterVersion}) OR
   (${t.action} NOT IN ('approve','publish') AND ${t.snapshotId} IS NULL AND ${t.snapshotReportVersion} IS NULL)
  `),
+ check('report_audit_reason_valid',sql`(${t.action} = 'return' AND ${t.reason} IS NOT NULL AND length(trim(${t.reason})) > 0) OR (${t.action} <> 'return' AND ${t.reason} IS NULL)`),
  check('report_audit_stage_transition_valid',sql`
+  (${t.action} = 'create' AND ${t.beforeStage} = 'draft' AND ${t.afterStage} = 'draft') OR
   (${t.action} = 'submit' AND ${t.beforeStage} IN ('draft','returned') AND ${t.afterStage} = 'submitted') OR
   (${t.action} = 'return' AND ${t.beforeStage} = 'submitted' AND ${t.afterStage} = 'returned') OR
   (${t.action} = 'approve' AND ${t.beforeStage} = 'submitted' AND ${t.afterStage} = 'approved') OR
