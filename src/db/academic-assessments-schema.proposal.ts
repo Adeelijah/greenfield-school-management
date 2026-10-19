@@ -41,6 +41,7 @@ export const proposedAssessmentScopes = pgTable('assessment_scopes', {
 }, t => [
  uniqueIndex('as_scope_school_id_uq').on(t.schoolId, t.id),
  uniqueIndex('as_scope_identity_uq').on(t.schoolId, t.classId, t.sessionId, t.termId),
+ uniqueIndex('as_scope_full_target_uq').on(t.schoolId, t.id, t.classId, t.sessionId, t.termId),
  foreignKey({ columns: [t.schoolId, t.classId], foreignColumns: [classes.schoolId, classes.id], name: 'as_scope_class_fk' }).onDelete('restrict'),
  foreignKey({ columns: [t.schoolId, t.sessionId], foreignColumns: [academicSessions.schoolId, academicSessions.id], name: 'as_scope_session_fk' }).onDelete('restrict'),
  foreignKey({ columns: [t.schoolId, t.sessionId, t.termId], foreignColumns: [terms.schoolId, terms.sessionId, terms.id], name: 'as_scope_term_fk' }).onDelete('restrict'),
@@ -91,6 +92,7 @@ export const proposedAssessmentSources = pgTable('assessment_source_versions', {
 }, t => [
  uniqueIndex('as_source_scope_revision_uq').on(t.schoolId, t.scopeId, t.revision),
  uniqueIndex('as_source_scope_target_uq').on(t.schoolId, t.id, t.scopeId),
+ uniqueIndex('as_source_revision_target_uq').on(t.schoolId, t.id, t.scopeId, t.revision),
  foreignKey({ columns: [t.schoolId, t.scopeId], foreignColumns: [proposedAssessmentScopes.schoolId, proposedAssessmentScopes.id], name: 'as_source_scope_fk' }).onDelete('restrict'),
  check('as_source_payload_valid', sql`${t.revision} > 0 AND jsonb_typeof(${t.sourceManifest}) = 'object' AND ${t.contentHash} ~ '^[a-f0-9]{64}$'`),
 ]);
