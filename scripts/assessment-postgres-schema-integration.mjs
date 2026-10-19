@@ -625,6 +625,66 @@ if (!url || process.env.REPORT_CARD_TEST_CONFIRM !== 'DISPOSABLE_REPORT_CARD_TES
   for (const name of authorityGuards.targets) await expectError('P0001',()=>sql.unsafe('TRUNCATE '+table(name)+' CASCADE'));
   console.log('PASS: authority changes complete after reader release, subsequent commands recheck membership and parent truncate is blocked');
 
+  const sessionParentScopes=[ids.scope,secondTermScope,destinationScope,newScope];
+  const allParentScopes=[...sessionParentScopes,ids.otherScope];
+  const parentCases=[
+   ['schools',ids.school,allParentScopes],
+   ['students',ids.student,[ids.scope,secondTermScope]],
+   ['classes',ids.class,[ids.scope,secondTermScope,ids.otherScope]],
+   ['academic_levels',ids.level,allParentScopes],
+   ['academic_sections',ids.section,[ids.scope,secondTermScope,ids.otherScope]],
+   ['academic_sessions',ids.session,sessionParentScopes],
+   ['terms',ids.term,[ids.scope,destinationScope]],
+  ];
+  const parentRollback=Error('intentional fixture parent rollback');
+  for (const [name,id,affected] of parentCases) {
+   const before=await revisions();
+   await assert.rejects(client.begin(async tx=>{
+    const bound=wrap(tx);
+    await bound.unsafe('UPDATE '+table(name)+' SET id=id WHERE id=$1::uuid',[id]);
+    const after=Object.fromEntries((await bound.unsafe('SELECT id,revision FROM '+table('assessment_scopes'))).map(row=>[row.id,row.revision]));
+    assertIncrement(before,after,affected);
+    throw parentRollback;
+   }),error=>error===parentRollback);
+   assert.deepEqual(await revisions(),before);
+  }
+  console.log('PASS: seven academic parent families invalidate exactly their dependent class/session/term scopes and roll back');
+
+  const beforeParentFailure=await revisions();
+  const beforeSchool=await sql.unsafe('SELECT final_primary_year FROM '+table('schools')+' WHERE id=$1::uuid',[ids.school]);
+  await expectError('23505',()=>client.begin(async tx=>{
+   const bound=wrap(tx);
+   await bound.unsafe('UPDATE '+table('schools')+' SET final_primary_year=6 WHERE id=$1::uuid',[ids.school]);
+   await bound.unsafe('UPDATE '+table('academic_levels')+' SET id=id WHERE id=$1::uuid',[ids.level]);
+   await bound.unsafe('UPDATE '+table('assessment_scores')+' SET version=version+1 WHERE id=$1::uuid',[editableScore]);
+   const after=Object.fromEntries((await bound.unsafe('SELECT id,revision FROM '+table('assessment_scopes'))).map(row=>[row.id,row.revision]));
+   assertIncrement(beforeParentFailure,after,allParentScopes);
+   await insert(bound,'assessment_operation_receipts',receiptRow);
+  }));
+  assert.deepEqual(await revisions(),beforeParentFailure);
+  assert.deepEqual(await sql.unsafe('SELECT final_primary_year FROM '+table('schools')+' WHERE id=$1::uuid',[ids.school]),beforeSchool);
+  console.log('PASS: parent and score writes share once-per-transaction revision claims; receipt collision rolls back parent data and fan-out');
+
+  await seal();
+  assert.equal((await readCanonical()).ok,true);
+  const historyBeforeParent=await sql.unsafe('SELECT id,content_hash,canonical_payload FROM '+table('report_card_snapshots')+' ORDER BY id');
+  const beforeParentCommit=await revisions();
+  await client.begin(async tx=>{
+   const bound=wrap(tx);
+   await bound.unsafe('UPDATE '+table('schools')+' SET final_primary_year=6 WHERE id=$1::uuid',[ids.school]);
+   await bound.unsafe('UPDATE '+table('academic_levels')+' SET id=id WHERE id=$1::uuid',[ids.level]);
+   await bound.unsafe('UPDATE '+table('schools')+' SET final_primary_year=6 WHERE id=$1::uuid',[ids.school]);
+  });
+  assertIncrement(beforeParentCommit,await revisions(),allParentScopes);
+  assert.equal((await readCanonical()).ok,false);
+  await seal();
+  assert.equal((await readCanonical()).ok,true);
+  assert.deepEqual(await sql.unsafe('SELECT id,content_hash,canonical_payload FROM '+table('report_card_snapshots')+' ORDER BY id'),historyBeforeParent);
+  const beforeAuthorityOnly=await revisions();
+  await sql.unsafe('UPDATE '+table('memberships')+" SET status='active' WHERE id=$1::uuid",[ids.teacher]);
+  assert.deepEqual(await revisions(),beforeAuthorityOnly);
+  console.log('PASS: committed parent edits stale the source, fresh canonical finalization recovers and immutable report snapshots remain unchanged');
+
  } finally {
   try { await sql.unsafe('DROP SCHEMA IF EXISTS ' + q(schema) + ' CASCADE'); } finally { await client.end(); }
  }
