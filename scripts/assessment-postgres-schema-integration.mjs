@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFixtureRelationalAssessment } from '../src/lib/academics/assessment-postgres-fixture-source-reader.ts';
 import { randomBytes, randomUUID, createHash } from 'node:crypto';
 import { loadFixtureCompleteAssessment, readFixtureVerifiedCanonicalAssessment } from '../src/lib/academics/assessment-postgres-canonical-reader.ts';
+import { executeFixtureReportRevocation } from '../src/lib/academics/report-card-postgres-revoke-writer.ts';
 import { executeFixtureReportWorkflow } from '../src/lib/academics/report-card-postgres-workflow-writer.ts';
 import { executeFixtureCanonicalReportCommand } from '../src/lib/academics/report-card-postgres-canonical-writer.ts';
 import { buildApprovedReportSnapshot } from '../src/lib/academics/report-card-approved-snapshot.ts';
@@ -724,6 +725,7 @@ BEGIN
 END $$`);
     const reportRelations=['report_cards','report_card_snapshots','report_card_audit','report_card_operation_receipts','report_card_releases'];
     for(const name of reportRelations) await bound.unsafe('CREATE TRIGGER fixture_restricted_insert_failure BEFORE INSERT ON '+table(name)+' FOR EACH ROW EXECUTE FUNCTION '+table('fixture_restricted_insert_failure')+'()');
+    for(const name of ['report_cards','report_card_releases']) await bound.unsafe('CREATE TRIGGER fixture_restricted_update_failure BEFORE UPDATE ON '+table(name)+' FOR EACH ROW EXECUTE FUNCTION '+table('fixture_restricted_insert_failure')+'()');
     for(const statement of security.statements) await bound.unsafe(statement);
     const asRole=async role=>{
      await bound.unsafe('SET LOCAL ROLE '+q(role));
@@ -814,6 +816,34 @@ END $$`);
     assert.equal((await publishRestricted()).kind,'replay');
     assert.equal((await bound.unsafe('SELECT id FROM '+table('report_card_releases')+' WHERE report_id=$1::uuid',[retryCreated.reportId])).length,1);
     console.log('PASS: restricted publication release/audit/receipt failures preserve approval and same-key retry publishes the original snapshot once');
+    const firstRelease=(await bound.unsafe('SELECT id,snapshot_id FROM '+table('report_card_releases')+' WHERE report_id=$1::uuid AND revoked_at IS NULL',[retryCreated.reportId]))[0];
+    const firstApprovedSnapshot=await bound.unsafe('SELECT * FROM '+table('report_card_snapshots')+' WHERE id=$1::uuid',[firstRelease.snapshot_id]);
+    const revokeCommand={action:'revoke',reportId:retryCreated.reportId,releaseId:firstRelease.id,expectedVersion:4,operationKey:'restricted-revoke',reason:'Correct the subject score'};
+    const revokeRestricted=()=>executeFixtureReportRevocation(restrictedDb,schema,revokeCommand,verifyAdmin);
+    assert.deepEqual(await executeFixtureReportRevocation(restrictedDb,schema,revokeCommand,verifyIdentity),{ok:false,code:'forbidden'});
+    await failWithoutWrites(['report_card_releases','report_cards','report_card_audit','report_card_operation_receipts'],revokeRestricted);
+    const revoked=await revokeRestricted();assert.equal(revoked.ok,true,JSON.stringify(revoked));assert.equal(revoked.kind,'applied');assert.equal(revoked.version,5);
+    assert.equal((await revokeRestricted()).kind,'replay');
+    assert.deepEqual(await executeFixtureReportRevocation(restrictedDb,schema,{...revokeCommand,reason:'changed reason'},verifyAdmin),{ok:false,code:'idempotency_conflict'});
+    await expectError('23514',()=>tx.savepoint(inner=>wrap(inner).unsafe('UPDATE '+table('report_card_releases')+' SET revoked_at=NULL WHERE id=$1::uuid',[firstRelease.id])));
+    assert.equal((await bound.unsafe('SELECT id FROM '+table('report_card_releases')+' WHERE report_id=$1::uuid AND revoked_at IS NULL',[retryCreated.reportId])).length,0);
+    console.log('PASS: actual restricted revoke writer rolls back release/report/audit/receipt failures, retries and replays without restoration privileges');
+
+    assert.equal((await executeFixtureReportWorkflow(restrictedDb,schema,{action:'submit',reportId:retryCreated.reportId,expectedVersion:5,operationKey:'restricted-correct-submit'},verifyIdentity)).ok,true);
+    assert.equal((await executeFixtureCanonicalReportCommand(restrictedDb,schema,{action:'approve',reportId:retryCreated.reportId,expectedVersion:6,operationKey:'restricted-correct-approve'},verifyAdmin)).ok,true);
+    const correctedPublication=await executeFixtureCanonicalReportCommand(restrictedDb,schema,{action:'publish',reportId:retryCreated.reportId,expectedVersion:7,operationKey:'restricted-correct-publish'},verifyAdmin);
+    assert.equal(correctedPublication.ok,true,JSON.stringify(correctedPublication));assert.notEqual(correctedPublication.snapshotId,firstRelease.snapshot_id);
+    assert.deepEqual(await bound.unsafe('SELECT * FROM '+table('report_card_snapshots')+' WHERE id=$1::uuid',[firstRelease.snapshot_id]),firstApprovedSnapshot);
+    assert.equal((await revokeRestricted()).kind,'replay');
+    assert.equal((await bound.unsafe('SELECT id FROM '+table('report_card_releases')+' WHERE report_id=$1::uuid AND revoked_at IS NULL',[retryCreated.reportId])).length,1);
+    console.log('PASS: restricted correction resubmits, independently approves and republishes a new snapshot while original release and replay remain historical');
+
+    const secondRelease=(await bound.unsafe('SELECT id FROM '+table('report_card_releases')+' WHERE report_id=$1::uuid AND revoked_at IS NULL',[retryCreated.reportId]))[0];
+    const secondRevoke=await executeFixtureReportRevocation(restrictedDb,schema,{...revokeCommand,releaseId:secondRelease.id,expectedVersion:8,operationKey:'restricted-revoke-second',reason:'Second correction'},verifyAdmin);
+    assert.equal(secondRevoke.ok,true,JSON.stringify(secondRevoke));assert.equal(secondRevoke.version,9);
+    assert.equal((await bound.unsafe('SELECT id FROM '+table('report_card_audit')+" WHERE report_id=$1::uuid AND action='revoke'",[retryCreated.reportId])).length,2);
+    assert.equal((await bound.unsafe('SELECT id FROM '+table('report_card_releases')+' WHERE report_id=$1::uuid AND revoked_at IS NULL',[retryCreated.reportId])).length,0);
+    console.log('PASS: repeated restricted corrections retain distinct revoke events and snapshots without resurrecting an earlier publication');
     throw rollbackSecurity;
    }),error=>error===rollbackSecurity);
    assert.equal((await sql.unsafe(rolePreflight.query,rolePreflight.parameters)).length,0);
@@ -821,7 +851,7 @@ END $$`);
    assert.equal(flags[0].relrowsecurity,false);
    assert.equal((await sql.unsafe('SELECT id FROM '+table('report_cards')+' WHERE student_id IN ($1::uuid,$2::uuid)',[securityPupil.studentId,failurePupil.studentId])).length,0);
    console.log('PASS: temporary security roles, grants, policies and workload writes roll back together without persistent role changes');
-  } else console.log('SKIPPED: seven restricted-role groups require REPORT_CARD_TEST_ROLE_ADMIN_CONFIRM=DISPOSABLE_ROLE_ADMIN_TEST_ONLY and a local role-admin test connection; 41 owner-run groups do not prove restricted access');
+  } else console.log('SKIPPED: ten restricted-role groups require REPORT_CARD_TEST_ROLE_ADMIN_CONFIRM=DISPOSABLE_ROLE_ADMIN_TEST_ONLY and a local role-admin test connection; 43 owner-run groups do not prove restricted access');
 
   const revocationTime='2026-10-19T12:00:00.000Z';
   const revokeAudit={...reportAuditRow,id:randomUUID(),action:'revoke',before_stage:'published',after_stage:'draft',before_version:4,after_version:5,
@@ -882,6 +912,37 @@ END $$`);
   assert.equal((await sql.unsafe('SELECT reason FROM '+table('report_card_audit')+' WHERE release_id=$1::uuid',[reportReleaseRow.id]))[0].reason,revokeAudit.reason);
   assert.equal((await sql.unsafe('SELECT id FROM '+table('report_card_releases')+' WHERE report_id=$1::uuid AND revoked_at IS NULL',[reportA])).length,0);
   console.log('PASS: fixture withdrawal report/release/audit/receipt changes roll back on collision, retry atomically and preserve the original snapshot');
+
+  const concurrentRelease=(await sql.unsafe('SELECT id FROM '+table('report_card_releases')+' WHERE report_id=$1::uuid AND revoked_at IS NULL',[guardCreated.reportId]))[0];
+  const concurrentRevoke={action:'revoke',reportId:guardCreated.reportId,releaseId:concurrentRelease.id,expectedVersion:4,operationKey:'actual-concurrent-revoke',reason:'Correct publication'};
+  const runActualRevoke=(command,auth=adminAuth)=>executeFixtureReportRevocation(writerDb,schema,command,async()=>({authUserId:auth}));
+  const concurrentRevocations=await Promise.all([runActualRevoke(concurrentRevoke),runActualRevoke(concurrentRevoke)]);
+  assert.equal(concurrentRevocations.every(r=>r.ok),true,JSON.stringify(concurrentRevocations));
+  assert.deepEqual(concurrentRevocations.map(r=>r.kind).sort(),['applied','replay']);
+  assert.deepEqual(await runActualRevoke({...concurrentRevoke,reason:'changed intent'}),{ok:false,code:'idempotency_conflict'});
+  assert.equal((await runWriter({reportId:guardCreated.reportId,action:'publish',expectedVersion:3,operationKey:'workflow-guard-publish'})).kind,'replay');
+  console.log('PASS: actual revoke writer serializes concurrent same-key withdrawal and preserves historical publish replay after source changes');
+
+  const retryRevokeRelease=(await sql.unsafe('SELECT id FROM '+table('report_card_releases')+' WHERE report_id=$1::uuid AND revoked_at IS NULL',[retryPublication.reportId]))[0];
+  const retryRevokeCommand={action:'revoke',reportId:retryPublication.reportId,releaseId:retryRevokeRelease.id,expectedVersion:4,operationKey:'actual-revoke-failure-retry',reason:'Withdraw stale publication'};
+  await sql.unsafe(`CREATE FUNCTION ${table('fixture_actual_revoke_failure')}() RETURNS trigger LANGUAGE plpgsql SET search_path=pg_catalog AS $$
+BEGIN
+ IF current_setting('${schema}.revoke_fail_relation',true)=TG_TABLE_NAME THEN RAISE EXCEPTION 'injected actual revoke failure'; END IF;
+ RETURN NEW;
+END $$`);
+  for(const name of ['report_cards','report_card_releases','report_card_audit','report_card_operation_receipts'])await sql.unsafe('CREATE TRIGGER fixture_actual_revoke_failure BEFORE INSERT OR UPDATE ON '+table(name)+' FOR EACH ROW EXECUTE FUNCTION '+table('fixture_actual_revoke_failure')+'()');
+  const beforeActualRevoke=async()=>{
+   const state={};for(const name of ['report_cards','report_card_releases','report_card_snapshots','report_card_audit','report_card_operation_receipts'])state[name]=await sql.unsafe('SELECT * FROM '+table(name)+' ORDER BY id');return state;
+  };
+  const beforeRevokeFailure=await beforeActualRevoke();
+  for(const name of ['report_card_releases','report_cards','report_card_audit','report_card_operation_receipts']){
+   const failDb={...sql,begin:callback=>client.begin(async tx=>{const bound=wrap(tx);await bound.unsafe('SELECT pg_catalog.set_config($1,$2,true)',[schema+'.revoke_fail_relation',name]);return callback(bound);})};
+   assert.deepEqual(await executeFixtureReportRevocation(failDb,schema,retryRevokeCommand,async()=>({authUserId:adminAuth})),{ok:false,code:'transaction_failed'});
+   assert.deepEqual(await beforeActualRevoke(),beforeRevokeFailure);
+  }
+  assert.deepEqual(await runActualRevoke(retryRevokeCommand,authUser),{ok:false,code:'forbidden'});
+  assert.equal((await runActualRevoke(retryRevokeCommand)).kind,'applied');assert.equal((await runActualRevoke(retryRevokeCommand)).kind,'replay');
+  console.log('PASS: actual outer revoke transaction rolls back every injected persistence failure and withdraws stale-source publication on same-key retry');
 
  } finally {
   try { await sql.unsafe('DROP SCHEMA IF EXISTS ' + q(schema) + ' CASCADE'); } finally { await client.end(); }
