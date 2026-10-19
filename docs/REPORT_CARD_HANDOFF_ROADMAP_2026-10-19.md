@@ -243,3 +243,10 @@ Next after local gates: restricted independent-session concurrency, least-privil
 The user ran the 53-group harness: first 51 groups passed, then the owner concurrent revoke test failed with two invalid_release outcomes; the final group was not reached. An earlier active-release guard test restored published_at with now(), breaking equality with immutable release.released_at. The fixture now saves/restores its original timestamp and immediately asserts exact active-release equality. Revoke validation remains strict.
 
 A new unit regression demonstrates mismatch rejection and successful exact restoration. All 63 selected tests, syntax and whitespace passed here. Expected offline count is 377; full local TypeScript/ESLint and complete 53-group PostgreSQL rerun are pending. Do not mark 53 groups verified or advance the roadmap past this repair until that run passes. Latest explicitly confirmed full offline count remains 357. See `REPORT_CARD_REVOKE_WRITER_REVIEW.md`.
+
+
+## Latest repair — narrow decoded receipt outcome before replay validation
+
+User's offline rerun stopped at TypeScript: ten TS18046 errors from accessing an unknown receipt outcome in the revoke adapter. An explicit runtime object predicate now narrows the value to Record<string, unknown> before field checks; malformed outcomes reject as invalid_receipt. No assertion cast, suppression, SQL or authorization relaxation was introduced. One new regression covers primitive/array/encoded/missing-field outcomes and no mutation.
+
+All 64 selected tests plus syntax/whitespace passed here. Expected offline count is 378; full local TypeScript/ESLint and the complete 53 PostgreSQL groups are still pending. Do not advance beyond these repairs or mark the expanded suite verified before both local gates pass. Latest explicitly verified full offline count remains 357; first 51 groups of the prior expanded PostgreSQL run passed before the now-repaired fixture timestamp mismatch.
