@@ -49,3 +49,8 @@ The guard test now saves the original published_at, restores that exact timestam
 The user reran the full offline gate and TypeScript stopped with ten TS18046 diagnostics on the same receipt-outcome expression. The generic decoded helper was called without a type argument, leaving the outcome unknown at compile time. Node type-stripped unit tests did not expose that type error. No new full offline pass or PostgreSQL rerun is claimed.
 
 The revoke adapter now reads the raw receipt outcome and applies an explicit runtime predicate narrowing to Record<string, unknown> before any property access. Individual outcome fields still must match the durable release/snapshot/audit/version facts. No assertion cast or suppression was added. Non-object outcomes are rejected as invalid_receipt. A new regression covers null, arrays, numbers, booleans, JSON-encoded strings and missing fields without mutation. All 64 selected offline tests, syntax and whitespace checks passed here. Expected full offline count is 378; full local TypeScript/ESLint and the complete 53-group PostgreSQL rerun remain pending. No SQL changed or executed in this repair.
+
+
+## Verified PostgreSQL rerun — 2026-10-19
+
+The user supplied all 53 PASS groups with clean completion after the timestamp repair, including the final owner concurrency and failure-recovery groups. These PostgreSQL tests are now user-verified in the disposable database. The full 378-test offline gate remains pending a successful local output after the receipt type-narrowing repair; the last supplied offline log stopped at TypeScript. No code, SQL or privileges changed in this status update. Continue the next documented milestone after that gate passes.
