@@ -90,7 +90,7 @@ export async function loadFixtureCompleteAssessment(tx: SqlClient, schema: strin
 /** Complete source content AND the existing active reviewer/admin policy, under
  * the same caller-owned transaction and discovery lock. No workflow writes.
  */
-export async function readFixtureVerifiedCanonicalAssessment(tx: SqlClient, schema: string, selector: Selector, verifiedIdentity: VerifiedIdentity): Promise<(Candidate & { sourceVersionId: string }) | Failure> {
+export async function readFixtureVerifiedCanonicalAssessment(tx: SqlClient, schema: string, selector: Selector, verifiedIdentity: VerifiedIdentity): Promise<(Candidate & { sourceVersionId: string; documents: { input: CompleteAssessmentSource; source: StoredAssessmentSource; finals: readonly StoredAssessmentFinalization[]; reviews: readonly StoredAssessmentReview[] } }) | Failure> {
  const loaded = await loadFixtureCompleteAssessment(tx, schema, selector, verifiedIdentity);
  if (!loaded.ok) return loaded;
  try {
@@ -109,6 +109,6 @@ export async function readFixtureVerifiedCanonicalAssessment(tx: SqlClient, sche
   const reviews: StoredAssessmentReview[] = reviewRows.map(r => ({ ...scoped(r), scopeId: d.textField(r.scopeId), rosterId: d.textField(r.rosterId), sourceVersionId: d.textField(r.sourceVersionId), reviewerMembershipId: d.textField(r.reviewerMembershipId) }));
   const verified = verifyAssessmentSourceContent(loaded.input, source, finals, reviews);
   if (!verified.ok) return { ok: false, code: verified.code === 'invalid_source' ? 'incomplete_source' : verified.code };
-  return { ...loaded, sourceVersionId: source.id };
+  return { ...loaded, sourceVersionId: source.id, documents: { input: loaded.input, source, finals, reviews } };
  } catch { return { ok: false, code: 'read_failed' }; }
 }
