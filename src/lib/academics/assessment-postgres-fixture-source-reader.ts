@@ -129,3 +129,7 @@ export async function readFixtureRelationalAssessment(
   return { ok: true, source: { identity, scopeId: scope.id as string, revision: scope.revision as number, sourceVersionId, subjects } };
  } catch { return { ok: false, code: 'read_failed' }; }
 }
+
+// Shared selected-column decoders for the complete-scope fixture reader. JSON
+// config documents still require semantic validation by the persistence policy.
+export const fixtureAssessmentDecoders = { textField, nullableText, integerField, booleanField, enumField, decoded, decodeIdentityRows, decodePlacementRows };
