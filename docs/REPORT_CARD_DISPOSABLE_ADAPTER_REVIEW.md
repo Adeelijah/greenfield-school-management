@@ -17,7 +17,7 @@ These differ from the earlier simplified concurrency suite; **do not point the a
 ## Next review gates
 
 1. Retain the passing disposable fixture harness and JSONB round-trip checks.
-2. Confirm the expanded denial, receipt-conflict and audit/release failure/retry tests locally.
+2. Preserve the user-confirmed expanded denial, receipt-conflict and audit/release failure/retry tests.
 3. Implement authoritative enrollment/source gates and canonical immutable snapshots inside the transaction.
 4. Resolve the reviewed Drizzle schema constraints and RLS/guardian policy before any migration or production use.
 
@@ -33,11 +33,11 @@ Use the same `REPORT_CARD_TEST_DATABASE_URL` and `REPORT_CARD_TEST_CONFIRM` as t
 node --experimental-strip-types .\scripts\report-card-postgres-adapter-integration.mjs
 ```
 
-The user reported all six original integration groups passing after commit `3d7f54c`: fixture JSONB round trips, concurrent submissions and JSONB writes, duplicate-key replay, cross-school membership rejection, receipt-failure rollback, and approval/single publication. This was a user-run PostgreSQL 18 check, not a database run by the assistant. The newly expanded cases have not yet been run against PostgreSQL. Fixture memberships and projections are fictional and inserted by the test harness; they do not establish real production authentication, authoritative enrollment, canonical snapshot persistence, RLS or guardian access. The test harness creates and removes only its randomly generated `rc_it_...` schema inside the explicitly named disposable database.
+The user reported all six original integration groups passing after commit `3d7f54c`: fixture JSONB round trips, concurrent submissions and JSONB writes, duplicate-key replay, cross-school membership rejection, receipt-failure rollback, and approval/single publication. This was a user-run PostgreSQL 18 check, not a database run by the assistant. The user subsequently ran the expanded harness: all 11 integration groups passed on 2026-10-19. Fixture memberships and projections are fictional and inserted by the test harness; they do not establish real production authentication, authoritative enrollment, canonical snapshot persistence, RLS or guardian access. The test harness creates and removes only its randomly generated `rc_it_...` schema inside the explicitly named disposable database.
 
 
-## Expanded Phase A coverage — pending local PostgreSQL verification
+## Expanded Phase A coverage — user-verified on 2026-10-19
 
 The harness now checks exact rejection codes and compares all report, audit, receipt and release rows before/after denied operations. New cases cover an existing other-school report ID, missing actor, missing assignment, suspended membership, stale command/source revisions, invalid approval stage, conflicting receipt fingerprints, audit insertion failure, and release insertion failure. Audit, receipt and release failures are followed by retry and replay with the same operation key to check rollback does not poison idempotency or duplicate publication. All data remains fictional; only generated disposable tables are altered.
 
-Local contributor verification: JavaScript syntax check and 51 existing Report Cards offline tests passed. The expanded SQL cases remain unverified until the user reruns the harness. No production schema, application wiring, credentials, RLS or migrations were changed.
+Local contributor verification: JavaScript syntax check and 51 existing Report Cards offline tests passed. The user confirmed all 11 PostgreSQL integration groups and the full offline gate (189 tests, TypeScript, ESLint with one unrelated unused-import warning, whitespace) passed. No production schema, application wiring, credentials, RLS or migrations were changed.
