@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFixtureRelationalAssessment } from '../src/lib/academics/assessment-postgres-fixture-source-reader.ts';
 import { randomBytes, randomUUID, createHash } from 'node:crypto';
 import { loadFixtureCompleteAssessment, readFixtureVerifiedCanonicalAssessment } from '../src/lib/academics/assessment-postgres-canonical-reader.ts';
+import { executeFixtureReportWorkflow } from '../src/lib/academics/report-card-postgres-workflow-writer.ts';
 import { executeFixtureCanonicalReportCommand } from '../src/lib/academics/report-card-postgres-canonical-writer.ts';
 import { buildApprovedReportSnapshot } from '../src/lib/academics/report-card-approved-snapshot.ts';
 import { canonicalizeSnapshotValue } from '../src/lib/academics/report-card-canonical-snapshot.ts';
@@ -499,6 +500,104 @@ if (!url || process.env.REPORT_CARD_TEST_CONFIRM !== 'DISPOSABLE_REPORT_CARD_TES
   assert.deepEqual(await runWriter(publishCommand(barrierPupil,'canonical-stale-publish')),{ok:false,code:'incomplete_source'});
   assert.equal((await runWriter(barrierCommand)).kind,'replay'); assert.equal(await reportCount('report_card_releases',barrierPupil),0);
   console.log('PASS: actual writer rejects forged snapshots, blocks interleaved source edits and preserves historical replay');
+
+  const workflowPupils=[];
+  for(let i=0;i<4;i++){
+   const pupil={studentId:randomUUID(),enrollmentId:randomUUID()};
+   await insert(sql,'students',{id:pupil.studentId,school_id:ids.school,admission_number:'FICTION-WORKFLOW-'+i,first_name:'Fictional',last_name:'Workflow-'+i});
+   await insert(sql,'enrollments',{id:pupil.enrollmentId,school_id:ids.school,student_id:pupil.studentId,class_id:ids.class,session_id:ids.session});
+   await insert(sql,'assessment_scores',{...scoreRow,id:randomUUID(),roster_id:nextRoster,enrollment_id:pupil.enrollmentId,student_id:pupil.studentId,numeric_score:'75.0000'});
+   workflowPupils.push(pupil);
+  }
+  expectedPupilCount=11;await seal();
+  const runWorkflow=(command,auth=authUser)=>executeFixtureReportWorkflow(writerDb,schema,command,async()=>({authUserId:auth}));
+  const createCommand=(pupil,key)=>({action:'create',studentId:pupil.studentId,enrollmentId:pupil.enrollmentId,classId:ids.class,sessionId:ids.session,termId:ids.term,operationKey:key});
+  const firstCreation=createCommand(workflowPupils[0],'workflow-create-first');
+  const creations=await Promise.all([runWorkflow(firstCreation),runWorkflow(firstCreation)]);
+  assert.equal(creations.every(r=>r.ok),true,JSON.stringify(creations));assert.deepEqual(creations.map(r=>r.kind).sort(),['applied','replay']);
+  const firstWorkflow={...workflowPupils[0],reportId:creations[0].reportId};
+  assert.equal((await sql.unsafe('SELECT count(*)::int AS n FROM '+table('report_cards')+' WHERE student_id=$1::uuid',[firstWorkflow.studentId]))[0].n,1);
+  const crossActor=await Promise.all([runWorkflow(createCommand(workflowPupils[1],'workflow-create-teacher')),runWorkflow(createCommand(workflowPupils[1],'workflow-create-admin'),adminAuth)]);
+  assert.equal(crossActor.filter(r=>r.ok).length,1,JSON.stringify(crossActor));assert.equal(crossActor.find(r=>!r.ok).code,'duplicate_report');
+  const secondWorkflow={...workflowPupils[1],reportId:crossActor.find(r=>r.ok).reportId};
+  const creationAudit=(await sql.unsafe('SELECT action,before_version,after_version FROM '+table('report_card_audit')+" WHERE report_id=$1::uuid AND action='create'",[firstWorkflow.reportId]))[0];
+  assert.equal(creationAudit.before_version,0);assert.equal(creationAudit.after_version,1);
+  console.log('PASS: persisted creation serializes actor retries and cross-actor duplicate identities with a version-zero audit');
+
+  const firstSubmission={action:'submit',reportId:firstWorkflow.reportId,expectedVersion:1,operationKey:'workflow-submit-first'};
+  const submissions=await Promise.all([runWorkflow(firstSubmission),runWorkflow(firstSubmission)]);
+  assert.equal(submissions.every(r=>r.ok),true,JSON.stringify(submissions));assert.deepEqual(submissions.map(r=>r.kind).sort(),['applied','replay']);
+  const firstReturn={action:'return',reportId:firstWorkflow.reportId,expectedVersion:2,operationKey:'workflow-return-first',reason:'  Review the result  '};
+  assert.equal((await runWorkflow(firstReturn,adminAuth)).ok,true);
+  assert.equal((await runWorkflow({action:'submit',reportId:firstWorkflow.reportId,expectedVersion:3,operationKey:'workflow-resubmit-first'})).ok,true);
+  const beforeReopenApproval=await runWriter({reportId:firstWorkflow.reportId,action:'approve',expectedVersion:4,operationKey:'workflow-approve-first'});assert.equal(beforeReopenApproval.ok,true,JSON.stringify(beforeReopenApproval));
+  const oldWorkflowSnapshot=(await sql.unsafe('SELECT id,content_hash,assessment_source_version_id FROM '+table('report_card_snapshots')+' WHERE id=$1::uuid',[beforeReopenApproval.snapshotId]))[0];
+  assert.equal((await runWorkflow({action:'reopen',reportId:firstWorkflow.reportId,expectedVersion:5,operationKey:'workflow-reopen-first'},adminAuth)).ok,true);
+  const retainedReason=(await sql.unsafe('SELECT reason FROM '+table('report_card_audit')+" WHERE report_id=$1::uuid AND action='return'",[firstWorkflow.reportId]))[0].reason;
+  assert.equal(retainedReason,'Review the result');assert.equal((await sql.unsafe('SELECT return_reason FROM '+table('report_cards')+' WHERE id=$1::uuid',[firstWorkflow.reportId]))[0].return_reason,null);
+  assert.equal(await reportCount('report_card_snapshots',firstWorkflow),1);
+  console.log('PASS: persisted submission, return, resubmission, approval and reopen preserve immutable reason and snapshot history');
+
+  assert.equal((await runWorkflow({action:'submit',reportId:secondWorkflow.reportId,expectedVersion:1,operationKey:'workflow-submit-second'})).ok,true);
+  await sql.unsafe('UPDATE '+table('assessment_scores')+' SET version=version+1 WHERE id=$1::uuid',[canonicalScore]);
+  assert.equal((await runWorkflow({action:'return',reportId:secondWorkflow.reportId,expectedVersion:2,operationKey:'workflow-return-stale',reason:'Recheck source'},adminAuth)).ok,true);
+  assert.deepEqual(await runWorkflow({action:'submit',reportId:secondWorkflow.reportId,expectedVersion:3,operationKey:'workflow-resubmit-second'}),{ok:false,code:'incomplete_source'});
+  const refreshedWorkflowSource=await seal();
+  assert.equal((await runWorkflow({action:'submit',reportId:firstWorkflow.reportId,expectedVersion:6,operationKey:'workflow-submit-refreshed'})).ok,true);
+  assert.equal((await runWorkflow({action:'submit',reportId:secondWorkflow.reportId,expectedVersion:3,operationKey:'workflow-resubmit-second'})).ok,true);
+  assert.equal((await sql.unsafe('SELECT assessment_source_version_id FROM '+table('report_cards')+' WHERE id=$1::uuid',[firstWorkflow.reportId]))[0].assessment_source_version_id,refreshedWorkflowSource);
+  assert.deepEqual((await sql.unsafe('SELECT id,content_hash,assessment_source_version_id FROM '+table('report_card_snapshots')+' WHERE id=$1::uuid',[oldWorkflowSnapshot.id]))[0],oldWorkflowSnapshot);
+  const refreshedApproval=await runWriter({reportId:firstWorkflow.reportId,action:'approve',expectedVersion:7,operationKey:'workflow-approve-refreshed'});assert.equal(refreshedApproval.ok,true,JSON.stringify(refreshedApproval));
+  assert.notEqual(refreshedApproval.snapshotId,oldWorkflowSnapshot.id);assert.equal(await reportCount('report_card_snapshots',firstWorkflow),2);
+  assert.equal((await runWriter({reportId:firstWorkflow.reportId,action:'publish',expectedVersion:8,operationKey:'workflow-publish-refreshed'})).ok,true);
+  assert.equal((await runWorkflow(firstCreation)).kind,'replay');assert.equal((await runWorkflow(firstSubmission)).kind,'replay');
+  assert.deepEqual(await runWorkflow({action:'reopen',reportId:firstWorkflow.reportId,expectedVersion:9,operationKey:'workflow-reopen-published'},adminAuth),{ok:false,code:'invalid_transition'});
+  console.log('PASS: submission refreshes a complete current source while stale recovery, old snapshots and historical replay remain safe');
+
+  await sql.unsafe('CREATE FUNCTION '+table('fixture_fail_report_workflow')+"() RETURNS trigger LANGUAGE plpgsql AS $$ DECLARE pupil uuid; payload jsonb; BEGIN payload:=to_jsonb(NEW); IF TG_TABLE_NAME='report_cards' THEN pupil:=(payload->>'student_id')::uuid; ELSE SELECT student_id INTO pupil FROM "+table('report_cards')+" WHERE id=(payload->>'report_id')::uuid; END IF; IF pupil::text=TG_ARGV[0] THEN RAISE EXCEPTION 'injected report workflow fixture failure' USING ERRCODE='P0001'; END IF; RETURN NEW; END $$");
+  const failWorkflow=(name,pupil)=>sql.unsafe('CREATE TRIGGER fixture_fail_workflow_insert BEFORE INSERT ON '+table(name)+' FOR EACH ROW EXECUTE FUNCTION '+table('fixture_fail_report_workflow')+"('"+pupil.studentId+"')");
+  const clearWorkflow=name=>sql.unsafe('DROP TRIGGER fixture_fail_workflow_insert ON '+table(name));
+  const retryWorkflowPupil=workflowPupils[2],retryCreation=createCommand(retryWorkflowPupil,'workflow-create-retry');
+  for(const name of ['report_cards','report_card_audit','report_card_operation_receipts']){
+   await failWorkflow(name,retryWorkflowPupil);
+   try{assert.deepEqual(await runWorkflow(retryCreation),{ok:false,code:'transaction_failed'});}finally{await clearWorkflow(name);}
+   assert.equal((await sql.unsafe('SELECT count(*)::int AS n FROM '+table('report_cards')+' WHERE student_id=$1::uuid',[retryWorkflowPupil.studentId]))[0].n,0);
+  }
+  const retryCreated=await runWorkflow(retryCreation);assert.equal(retryCreated.ok,true,JSON.stringify(retryCreated));retryWorkflowPupil.reportId=retryCreated.reportId;
+  const transitionState=async pupil=>({row:(await sql.unsafe('SELECT stage,version,return_reason,assessment_source_version_id,assessment_revision FROM '+table('report_cards')+' WHERE id=$1::uuid',[pupil.reportId]))[0],audit:await reportCount('report_card_audit',pupil),receipts:await reportCount('report_card_operation_receipts',pupil),snapshots:await reportCount('report_card_snapshots',pupil)});
+  const failTransition=async(command,auth)=>{
+   const before=await transitionState(retryWorkflowPupil);
+   for(const name of ['report_card_audit','report_card_operation_receipts']){
+    await failWorkflow(name,retryWorkflowPupil);try{assert.deepEqual(await runWorkflow(command,auth),{ok:false,code:'transaction_failed'});}finally{await clearWorkflow(name);}
+    assert.deepEqual(await transitionState(retryWorkflowPupil),before);
+   }
+   assert.equal((await runWorkflow(command,auth)).ok,true);assert.equal((await runWorkflow(command,auth)).kind,'replay');
+  };
+  await failTransition({action:'submit',reportId:retryCreated.reportId,expectedVersion:1,operationKey:'workflow-submit-retry'},authUser);
+  await failTransition({action:'return',reportId:retryCreated.reportId,expectedVersion:2,operationKey:'workflow-return-retry',reason:'Review'},adminAuth);
+  assert.equal((await runWorkflow({action:'submit',reportId:retryCreated.reportId,expectedVersion:3,operationKey:'workflow-resubmit-retry'})).ok,true);
+  assert.equal((await runWriter({reportId:retryCreated.reportId,action:'approve',expectedVersion:4,operationKey:'workflow-approve-retry'})).ok,true);
+  await failTransition({action:'reopen',reportId:retryCreated.reportId,expectedVersion:5,operationKey:'workflow-reopen-retry'},adminAuth);
+  console.log('PASS: creation and every persisted correction transition roll back audit/receipt failures and retry without orphan state');
+
+  const guardPupil=workflowPupils[3],guardCreation=createCommand(guardPupil,'workflow-shared-family-key');
+  await sql.unsafe('UPDATE '+table('teacher_class_assignments')+' SET ended_at=now() WHERE id=$1::uuid',[ids.assignment]);
+  try{assert.deepEqual(await runWorkflow(guardCreation),{ok:false,code:'forbidden'});}finally{await sql.unsafe('UPDATE '+table('teacher_class_assignments')+' SET ended_at=NULL WHERE id=$1::uuid',[ids.assignment]);}
+  assert.deepEqual(await runWorkflow({...guardCreation,enrollmentId:randomUUID(),operationKey:'workflow-foreign-enrollment'}),{ok:false,code:'invalid_reference'});
+  assert.deepEqual(await runWorkflow({action:'return',reportId:secondWorkflow.reportId,expectedVersion:4,operationKey:'workflow-teacher-return',reason:'Review'}),{ok:false,code:'forbidden'});
+  assert.deepEqual(await runWorkflow({action:'return',reportId:secondWorkflow.reportId,expectedVersion:4,operationKey:'workflow-empty-return',reason:' '},adminAuth),{ok:false,code:'invalid'});
+  const guardCreated=await runWorkflow(guardCreation,adminAuth);assert.equal(guardCreated.ok,true,JSON.stringify(guardCreated));guardPupil.reportId=guardCreated.reportId;
+  const guardSubmission={action:'submit',reportId:guardCreated.reportId,expectedVersion:1,operationKey:'workflow-guard-submit'};
+  assert.deepEqual(await runWorkflow(guardSubmission,adminAuth),{ok:false,code:'forbidden'});assert.equal((await runWorkflow(guardSubmission)).ok,true);
+  assert.deepEqual(await runWriter({reportId:guardCreated.reportId,action:'approve',expectedVersion:2,operationKey:'workflow-shared-family-key'}),{ok:false,code:'idempotency_conflict'});
+  assert.equal((await runWriter({reportId:guardCreated.reportId,action:'approve',expectedVersion:2,operationKey:'workflow-guard-approve'})).ok,true);
+  assert.equal((await runWriter({reportId:guardCreated.reportId,action:'publish',expectedVersion:3,operationKey:'workflow-guard-publish'})).ok,true);
+  await sql.unsafe('UPDATE '+table('report_cards')+" SET stage='approved',published_at=NULL WHERE id=$1::uuid",[guardCreated.reportId]);
+  try{assert.deepEqual(await runWorkflow({action:'reopen',reportId:guardCreated.reportId,expectedVersion:4,operationKey:'workflow-active-release'},adminAuth),{ok:false,code:'active_release'});}finally{await sql.unsafe('UPDATE '+table('report_cards')+" SET stage='published',published_at=now() WHERE id=$1::uuid",[guardCreated.reportId]);}
+  await expectError('23514',()=>insert(sql,'report_card_audit',{...reportAuditRow,id:randomUUID(),report_id:guardCreated.reportId,action:'create',before_stage:'draft',after_stage:'draft',before_version:1,after_version:2,snapshot_id:null,snapshot_report_version:null}));
+  await expectError('23514',()=>insert(sql,'report_card_audit',{...reportAuditRow,id:randomUUID(),report_id:guardCreated.reportId,action:'return',before_stage:'submitted',after_stage:'returned',before_version:2,after_version:3,snapshot_id:null,snapshot_report_version:null,reason:null}));
+  console.log('PASS: workflow roles, assignment, cross-family keys, active release and immutable creation/return audit guards fail closed');
+
 
 
 
