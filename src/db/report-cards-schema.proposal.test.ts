@@ -13,6 +13,15 @@ test('report identity is unique and student, class, session are school scoped',(
  for(const name of ['report_cards_school_student_fk','report_cards_school_class_fk','report_cards_school_session_fk','report_cards_school_submitter_fk','report_cards_school_approver_fk']) assert.ok(fks(t).includes(name));
  assert.ok(checks(t).includes('report_cards_version_positive'));
 });
+test('term FK binds school, session and term together to the reviewed composite target',()=>{
+ const termFk=cfg(proposal.proposedReportCards).foreignKeys.find(f=>f.getName()==='report_cards_school_session_term_fk');
+ assert.ok(termFk);
+ const reference=termFk.reference();
+ assert.deepEqual(reference.columns.map(c=>c.name),['school_id','session_id','term_id']);
+ assert.deepEqual(reference.foreignColumns.map(c=>c.name),['school_id','session_id','id']);
+ assert.ok(indexes(proposal.proposedTermsCompositeTarget).includes('terms_school_session_id_unique'));
+ assert.equal(fks(proposal.proposedReportCards).includes('report_cards_term_fk'),false);
+});
 test('snapshots and audit use school-scoped report, actor and snapshot references',()=>{
  assert.ok(fks(proposal.proposedReportSnapshots).includes('report_snapshots_school_report_fk'));
  for(const name of ['report_audit_school_report_fk','report_audit_school_actor_fk','report_audit_school_snapshot_fk']) assert.ok(fks(proposal.proposedReportAudit).includes(name));
