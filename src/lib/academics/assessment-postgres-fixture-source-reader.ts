@@ -15,6 +15,51 @@ const decoded = <T>(value: unknown): T => {
  if (!value || typeof value !== 'object' || Array.isArray(value)) throw Error('Decoded object required');
  return value as T;
 };
+const textField = (value: unknown): string => {
+ if (typeof value !== 'string' || !value.trim()) throw Error('Invalid selected text field');
+ return value;
+};
+const nullableText = (value: unknown): string | null => value === null ? null : textField(value);
+const integerField = (value: unknown): number => {
+ if (typeof value !== 'number' || !Number.isSafeInteger(value)) throw Error('Invalid selected integer field');
+ return value;
+};
+const booleanField = (value: unknown): boolean => {
+ if (typeof value !== 'boolean') throw Error('Invalid selected boolean field');
+ return value;
+};
+const enumField = <T extends string>(value: unknown, allowed: readonly T[]): T => {
+ const found = allowed.find(option => option === value);
+ if (found === undefined) throw Error('Invalid selected enum field');
+ return found;
+};
+const nullableDate = (value: unknown): Date | null => {
+ if (value === null) return null;
+ if (!(value instanceof Date) || !Number.isFinite(value.getTime())) throw Error('Invalid selected timestamp field');
+ return new Date(value.getTime());
+};
+const scopedIdentity = (row: Record<string, unknown>) => ({ id: textField(row.id), schoolId: textField(row.schoolId) });
+function decodeIdentityRows(rows: Record<keyof PersistedIdentityRows, Record<string, unknown>[]>): PersistedIdentityRows {
+ return {
+  users: rows.users.map(r => ({ id: textField(r.id), authUserId: textField(r.authUserId) })),
+  memberships: rows.memberships.map(r => ({ ...scopedIdentity(r), userId: textField(r.userId), role: enumField(r.role, ['admin', 'teacher', 'bursar'] as const), status: enumField(r.status, ['active', 'suspended'] as const) })),
+  schools: rows.schools.map(r => ({ id: textField(r.id), finalPrimaryYear: r.finalPrimaryYear === null ? null : integerField(r.finalPrimaryYear) })),
+ };
+}
+function decodePlacementRows(rows: Record<keyof PersistedPlacementRows, Record<string, unknown>[]>): PersistedPlacementRows {
+ const status = (value: unknown) => enumField(value, ['active', 'graduated', 'withdrawn'] as const);
+ const calendar = (r: Record<string, unknown>) => ({ ...scopedIdentity(r), startsOn: textField(r.startsOn), endsOn: textField(r.endsOn), isCurrent: booleanField(r.isCurrent) });
+ return {
+  students: rows.students.map(r => ({ ...scopedIdentity(r), status: status(r.status) })),
+  enrollments: rows.enrollments.map(r => ({ ...scopedIdentity(r), studentId: textField(r.studentId), classId: textField(r.classId), sessionId: textField(r.sessionId), status: status(r.status) })),
+  classes: rows.classes.map(r => ({ ...scopedIdentity(r), levelId: nullableText(r.levelId), sectionId: nullableText(r.sectionId) })),
+  levels: rows.levels.map(r => ({ ...scopedIdentity(r), stage: enumField(r.stage, ['creche', 'nursery', 'primary'] as const), primaryYear: r.primaryYear === null ? null : integerField(r.primaryYear), isActive: booleanField(r.isActive) })),
+  sections: rows.sections.map(r => ({ ...scopedIdentity(r), levelId: textField(r.levelId), isActive: booleanField(r.isActive) })),
+  sessions: rows.sessions.map(calendar),
+  terms: rows.terms.map(r => ({ ...calendar(r), sessionId: textField(r.sessionId) })),
+  assignments: rows.assignments.map(r => ({ ...scopedIdentity(r), teacherMembershipId: textField(r.teacherMembershipId), classId: textField(r.classId), sessionId: textField(r.sessionId), endedAt: nullableDate(r.endedAt) })),
+ };
+}
 /** connection must be one already-open transaction. This is READ-ONLY and takes
  * the shared discovery gate before relational discovery. Never upgrade it into
  * a source write; a future writing adapter must take an exclusive gate first.
@@ -38,7 +83,7 @@ export async function readFixtureRelationalAssessment(
   if (users.length !== 1) return { ok: false, code: 'forbidden' };
   const memberships = await connection.unsafe('SELECT id,school_id AS "schoolId",user_id AS "userId",role,status FROM ' + table('memberships') + ' WHERE user_id=$1::uuid ORDER BY school_id,id FOR SHARE', [users[0].id]);
   const schools = await connection.unsafe('SELECT s.id,s.final_primary_year AS "finalPrimaryYear" FROM ' + table('schools') + ' s WHERE s.id IN (SELECT school_id FROM ' + table('memberships') + ' WHERE user_id=$1::uuid) ORDER BY s.id FOR SHARE', [users[0].id]);
-  const mapped = mapPersistedReportIdentity(auth.authUserId, { users, memberships, schools } as PersistedIdentityRows);
+  const mapped = mapPersistedReportIdentity(auth.authUserId, decodeIdentityRows({ users, memberships, schools }));
   if (!mapped.ok) return { ok: false, code: 'forbidden' };
   const { identity } = mapped; const schoolId = identity.membership.schoolId;
   const params = [schoolId, selector.classId, selector.sessionId, selector.termId];
@@ -55,7 +100,7 @@ export async function readFixtureRelationalAssessment(
   const sessions = await connection.unsafe('SELECT id,school_id AS "schoolId",starts_on::text AS "startsOn",ends_on::text AS "endsOn",is_current AS "isCurrent" FROM ' + table('academic_sessions') + ' WHERE school_id=$1::uuid AND id=$2::uuid FOR SHARE', [schoolId, selector.sessionId]);
   const terms = await connection.unsafe('SELECT id,school_id AS "schoolId",session_id AS "sessionId",starts_on::text AS "startsOn",ends_on::text AS "endsOn",is_current AS "isCurrent" FROM ' + table('terms') + ' WHERE school_id=$1::uuid AND id=$2::uuid FOR SHARE', [schoolId, selector.termId]);
   const assignments = await connection.unsafe('SELECT id,school_id AS "schoolId",teacher_membership_id AS "teacherMembershipId",class_id AS "classId",session_id AS "sessionId",ended_at AS "endedAt" FROM ' + table('teacher_class_assignments') + ' WHERE school_id=$1::uuid AND teacher_membership_id=$2::uuid ORDER BY id FOR SHARE', [schoolId, identity.membership.id]);
-  const placement = mapPersistedReportPlacement(identity, { schoolId, ...selector }, selector.enrollmentId, { students, enrollments, classes, levels, sections, sessions, terms, assignments } as PersistedPlacementRows);
+  const placement = mapPersistedReportPlacement(identity, { schoolId, ...selector }, selector.enrollmentId, decodePlacementRows({ students, enrollments, classes, levels, sections, sessions, terms, assignments }));
   if (!placement.ok) return { ok: false, code: placement.code === 'forbidden' ? 'forbidden' : 'invalid_reference' };
   const roster = await connection.unsafe('SELECT id,subject_id,config_version_id FROM ' + table('assessment_subject_roster') + ' WHERE school_id=$1::uuid AND scope_id=$2::uuid AND is_active=true ORDER BY subject_id FOR SHARE', [schoolId, scope.id]);
   const sourceVersions = await connection.unsafe('SELECT id FROM ' + table('assessment_source_versions') + ' WHERE school_id=$1::uuid AND scope_id=$2::uuid AND revision=$3 FOR SHARE', [schoolId, scope.id, scope.revision]);
