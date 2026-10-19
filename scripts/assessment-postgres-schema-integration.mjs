@@ -2,6 +2,7 @@
 import assert from 'node:assert/strict';
 import { randomBytes, randomUUID } from 'node:crypto';
 import postgres from 'postgres';
+import { assessmentWriteGuardDDL } from './lib/assessment-disposable-write-guards.mjs';
 import { getTableConfig } from 'drizzle-orm/pg-core';
 import { assessmentFixtureDDL, fixtureTables, fixtureIdentifier as q } from './lib/assessment-disposable-schema.mjs';
 
@@ -136,6 +137,82 @@ if (!url || process.env.REPORT_CARD_TEST_CONFIRM !== 'DISPOSABLE_REPORT_CARD_TES
   assert.equal((await sql.unsafe('SELECT revision FROM ' + table('assessment_scopes') + ' WHERE id=$1::uuid', [ids.scope]))[0].revision, 2);
   assert.equal((await sql.unsafe('SELECT count(*)::int AS n FROM ' + table('assessment_audit') + " WHERE action='score_change'"))[0].n, 1);
   console.log('PASS: guarded source writes roll back receipt collisions and serialize revision changes');
+
+  // Build additional terms/classes before installing candidate source guards.
+  const secondTerm = randomUUID(), secondSection = randomUUID(), secondClass = randomUUID();
+  const secondTermScope = randomUUID(), destinationScope = randomUUID(), newScope = randomUUID();
+  await insert(sql, 'terms', { id: secondTerm, school_id: ids.school, session_id: ids.session, name: 'Second Term', starts_on: '2027-01-01', ends_on: '2027-04-01' });
+  await insert(sql, 'academic_sections', { id: secondSection, school_id: ids.school, level_id: ids.level, name: 'Maple', display_order: 2 });
+  await insert(sql, 'classes', { id: secondClass, school_id: ids.school, name: 'Primary 5 Maple', section: 'Maple', level_id: ids.level, section_id: secondSection });
+  await insert(sql, 'assessment_scopes', { ...scopeRow, id: secondTermScope, term_id: secondTerm });
+  await insert(sql, 'assessment_scopes', { ...scopeRow, id: destinationScope, class_id: secondClass });
+  const guards = assessmentWriteGuardDDL(schema);
+  for (const statement of guards.statements) await sql.unsafe(statement);
+  const revisions = async () => Object.fromEntries((await sql.unsafe('SELECT id,revision FROM ' + table('assessment_scopes') + ' ORDER BY id')).map(row => [row.id, row.revision]));
+  const assertIncrement = (before, after, affected) => {
+   assert.deepEqual(Object.keys(after).sort(), Object.keys(before).sort());
+   for (const id of Object.keys(before)) assert.equal(after[id], before[id] + (affected.includes(id) ? 1 : 0), id);
+  };
+  const phantomEnrollment = randomUUID();
+  const enrollmentRow = { id: phantomEnrollment, school_id: ids.school, student_id: ids.otherStudent, class_id: ids.class, session_id: ids.session };
+  const pendingScope = { ...scopeRow, id: newScope, class_id: secondClass, term_id: secondTerm };
+  const boundedWrite = work => client.begin(async tx => {
+   const bound = wrap(tx); await bound.unsafe("SET LOCAL lock_timeout='150ms'"); await bound.unsafe("SET LOCAL statement_timeout='2s'"); return work(bound);
+  });
+  await client.begin(async tx => {
+   const bound = wrap(tx); assert.equal((await bound.unsafe(guards.readGate)).length, 1);
+   const beforeCount = (await bound.unsafe('SELECT count(*)::int AS n FROM ' + table('enrollments')))[0].n;
+   await expectError('55P03', () => boundedWrite(other => insert(other, 'enrollments', enrollmentRow)));
+   await expectError('55P03', () => boundedWrite(other => insert(other, 'assessment_scopes', pendingScope)));
+   assert.equal((await bound.unsafe('SELECT count(*)::int AS n FROM ' + table('enrollments')))[0].n, beforeCount);
+   assert.equal((await bound.unsafe('SELECT count(*)::int AS n FROM ' + table('assessment_scopes') + ' WHERE id=$1::uuid', [newScope]))[0].n, 0);
+  });
+  let beforeGuards = await revisions();
+  await insert(sql, 'enrollments', enrollmentRow);
+  let afterGuards = await revisions();
+  assertIncrement(beforeGuards, afterGuards, [ids.scope, secondTermScope]);
+  await insert(sql, 'assessment_scopes', pendingScope);
+  assert.equal((await revisions())[newScope], 2);
+  console.log('PASS: shared discovery gate blocks phantom enrollment/scope inserts; later inserts invalidate all relevant terms');
+
+  beforeGuards = await revisions();
+  await client.begin(async tx => {
+   const bound = wrap(tx);
+   await bound.unsafe('UPDATE ' + table('enrollments') + ' SET class_id=$1::uuid WHERE id=$2::uuid', [secondClass, phantomEnrollment]);
+   await bound.unsafe('UPDATE ' + table('assessment_scores') + ' SET numeric_score=88,version=version+1 WHERE id=$1::uuid', [editableScore]);
+   await bound.unsafe('UPDATE ' + table('assessment_scores') + ' SET numeric_score=89,version=version+1 WHERE id=$1::uuid', [editableScore]);
+  });
+  afterGuards = await revisions();
+  assertIncrement(beforeGuards, afterGuards, [ids.scope, secondTermScope, destinationScope, newScope]);
+  console.log('PASS: enrollment transfer invalidates old/new class terms once even with repeated score writes');
+
+  beforeGuards = await revisions();
+  let rejectedTransaction;
+  await expectError('23505', () => client.begin(async tx => {
+   const bound = wrap(tx); rejectedTransaction = (await bound.unsafe('SELECT pg_current_xact_id()::text AS id'))[0].id;
+   await bound.unsafe('UPDATE ' + table('enrollments') + ' SET class_id=$1::uuid WHERE id=$2::uuid', [ids.class, phantomEnrollment]);
+   await insert(bound, 'assessment_operation_receipts', receiptRow);
+  }));
+  assert.deepEqual(await revisions(), beforeGuards);
+  assert.equal((await sql.unsafe('SELECT class_id FROM ' + table('enrollments') + ' WHERE id=$1::uuid', [phantomEnrollment]))[0].class_id, secondClass);
+  assert.equal((await sql.unsafe('SELECT count(*)::int AS n FROM ' + table('fixture_source_write_claims') + ' WHERE transaction_id=$1', [rejectedTransaction]))[0].n, 0);
+  console.log('PASS: failed receipt rolls back guarded enrollment, revision fan-out and transaction claims');
+
+  beforeGuards = await revisions();
+  await sql.unsafe('DELETE FROM ' + table('enrollments') + ' WHERE id=$1::uuid', [phantomEnrollment]);
+  assertIncrement(beforeGuards, await revisions(), [destinationScope, newScope]);
+  await expectError('P0001', () => sql.unsafe('TRUNCATE ' + table('enrollments') + ' CASCADE'));
+  await expectError('P0001', () => sql.unsafe('DELETE FROM ' + table('assessment_scopes') + ' WHERE id=$1::uuid', [newScope]));
+  console.log('PASS: deletes invalidate former enrollment scopes while truncate and scope deletion are blocked');
+
+  beforeGuards = await revisions();
+  const currentSource = randomUUID(), currentReview = randomUUID();
+  await insert(sql, 'assessment_source_versions', { ...sourceRow, id: currentSource, revision: beforeGuards[ids.scope] });
+  await insert(sql, 'assessment_teacher_reviews', { ...reviewRow, id: currentReview, roster_id: nextRoster, source_version_id: currentSource });
+  await insert(sql, 'assessment_finalizations', { ...finalRow, id: randomUUID(), roster_id: nextRoster, source_version_id: currentSource, teacher_review_id: currentReview });
+  assert.deepEqual(await revisions(), beforeGuards);
+  console.log('PASS: source materialization, review and finalization preserve the academic source revision');
+
  } finally {
   try { await sql.unsafe('DROP SCHEMA IF EXISTS ' + q(schema) + ' CASCADE'); } finally { await client.end(); }
  }
