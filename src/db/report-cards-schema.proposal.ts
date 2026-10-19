@@ -26,7 +26,7 @@ export const proposedEnrollmentCompositeTarget = pgTable('enrollments', {
 },t=>[uniqueIndex('enrollments_report_binding_unique').on(t.schoolId,t.id,t.studentId,t.classId,t.sessionId)]);
 
 export const proposedReportStage = pgEnum('report_card_stage', ['draft','submitted','returned','approved','published']);
-export const proposedReportAction = pgEnum('report_card_action', ['create','submit','return','approve','publish','reopen']);
+export const proposedReportAction = pgEnum('report_card_action', ['create','submit','return','approve','publish','reopen','revoke']);
 
 export const proposedReportCards = pgTable('report_cards', {
  id:uuid('id').defaultRandom().primaryKey(),
@@ -109,9 +109,12 @@ export const proposedReportAudit = pgTable('report_card_audit',{
  afterVersion:integer('after_version').notNull(),
  snapshotId:uuid('snapshot_id'),
  snapshotReportVersion:integer('snapshot_report_version'),
+ releaseId:uuid('release_id'),
  occurredAt:timestamp('occurred_at',{withTimezone:true}).defaultNow().notNull(),
 },t=>[
  index('report_audit_school_report_idx').on(t.schoolId,t.reportId,t.occurredAt),
+ uniqueIndex('report_audit_revoke_release_unique').on(t.schoolId,t.releaseId).where(sql`${t.action} = 'revoke'`),
+ foreignKey({columns:[t.schoolId,t.reportId,t.releaseId,t.snapshotId,t.snapshotReportVersion,t.beforeVersion],foreignColumns:[proposedReportReleases.schoolId,proposedReportReleases.reportId,proposedReportReleases.id,proposedReportReleases.snapshotId,proposedReportReleases.snapshotReportVersion,proposedReportReleases.reportVersion],name:'report_audit_exact_release_fk'}).onDelete('restrict'),
  foreignKey({columns:[t.schoolId,t.reportId],foreignColumns:[proposedReportCards.schoolId,proposedReportCards.id],name:'report_audit_school_report_fk'}).onDelete('restrict'),
  foreignKey({columns:[t.schoolId,t.actorMembershipId],foreignColumns:[memberships.schoolId,memberships.id],name:'report_audit_school_actor_fk'}).onDelete('restrict'),
  foreignKey({columns:[t.schoolId,t.reportId,t.snapshotId,t.snapshotReportVersion],foreignColumns:[proposedReportSnapshots.schoolId,proposedReportSnapshots.reportId,proposedReportSnapshots.id,proposedReportSnapshots.reportVersion],name:'report_audit_school_snapshot_fk'}).onDelete('restrict'),
@@ -119,16 +122,19 @@ export const proposedReportAudit = pgTable('report_card_audit',{
  check('report_audit_snapshot_binding_valid',sql`
   (${t.action} = 'approve' AND ${t.snapshotId} IS NOT NULL AND ${t.snapshotReportVersion} IS NOT NULL AND ${t.snapshotReportVersion} = ${t.afterVersion}) OR
   (${t.action} = 'publish' AND ${t.snapshotId} IS NOT NULL AND ${t.snapshotReportVersion} IS NOT NULL AND ${t.snapshotReportVersion} + 1 = ${t.afterVersion}) OR
-  (${t.action} NOT IN ('approve','publish') AND ${t.snapshotId} IS NULL AND ${t.snapshotReportVersion} IS NULL)
+  (${t.action} = 'revoke' AND ${t.snapshotId} IS NOT NULL AND ${t.snapshotReportVersion} IS NOT NULL AND ${t.snapshotReportVersion} + 1 = ${t.beforeVersion}) OR
+  (${t.action} NOT IN ('approve','publish','revoke') AND ${t.snapshotId} IS NULL AND ${t.snapshotReportVersion} IS NULL)
  `),
- check('report_audit_reason_valid',sql`(${t.action} = 'return' AND ${t.reason} IS NOT NULL AND length(trim(${t.reason})) > 0) OR (${t.action} <> 'return' AND ${t.reason} IS NULL)`),
+ check('report_audit_release_binding_valid',sql`(${t.action} = 'revoke' AND ${t.releaseId} IS NOT NULL) OR (${t.action} <> 'revoke' AND ${t.releaseId} IS NULL)`),
+ check('report_audit_reason_valid',sql`(${t.action} IN ('return','revoke') AND ${t.reason} IS NOT NULL AND length(trim(${t.reason})) BETWEEN 1 AND 2000) OR (${t.action} NOT IN ('return','revoke') AND ${t.reason} IS NULL)`),
  check('report_audit_stage_transition_valid',sql`
   (${t.action} = 'create' AND ${t.beforeStage} = 'draft' AND ${t.afterStage} = 'draft') OR
   (${t.action} = 'submit' AND ${t.beforeStage} IN ('draft','returned') AND ${t.afterStage} = 'submitted') OR
   (${t.action} = 'return' AND ${t.beforeStage} = 'submitted' AND ${t.afterStage} = 'returned') OR
   (${t.action} = 'approve' AND ${t.beforeStage} = 'submitted' AND ${t.afterStage} = 'approved') OR
   (${t.action} = 'publish' AND ${t.beforeStage} = 'approved' AND ${t.afterStage} = 'published') OR
-  (${t.action} = 'reopen' AND ${t.beforeStage} = 'approved' AND ${t.afterStage} = 'draft')
+  (${t.action} = 'reopen' AND ${t.beforeStage} = 'approved' AND ${t.afterStage} = 'draft') OR
+  (${t.action} = 'revoke' AND ${t.beforeStage} = 'published' AND ${t.afterStage} = 'draft')
  `),
 ]);
 
@@ -162,6 +168,7 @@ export const proposedReportReleases = pgTable('report_card_releases',{
  revokedAt:timestamp('revoked_at',{withTimezone:true}),
 },t=>[
  uniqueIndex('report_releases_school_report_version_unique').on(t.schoolId,t.reportId,t.reportVersion),
+ uniqueIndex('report_releases_audit_target_unique').on(t.schoolId,t.reportId,t.id,t.snapshotId,t.snapshotReportVersion,t.reportVersion),
  uniqueIndex('report_releases_one_active_unique').on(t.schoolId,t.reportId).where(sql`${t.revokedAt} IS NULL`),
  foreignKey({columns:[t.schoolId,t.reportId,t.snapshotId,t.snapshotReportVersion],foreignColumns:[proposedReportSnapshots.schoolId,proposedReportSnapshots.reportId,proposedReportSnapshots.id,proposedReportSnapshots.reportVersion],name:'report_releases_exact_snapshot_fk'}).onDelete('restrict'),
  foreignKey({columns:[t.schoolId,t.publishedBy],foreignColumns:[memberships.schoolId,memberships.id],name:'report_releases_school_publisher_fk'}).onDelete('restrict'),
