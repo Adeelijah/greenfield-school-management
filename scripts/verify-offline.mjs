@@ -30,6 +30,7 @@ const tests = [
   'src/lib/academics/report-card-memory-adapter.test.ts',
   'src/lib/academics/report-card-snapshot-readiness.test.ts',
   'src/lib/academics/report-card-canonical-snapshot.test.ts',
+  'src/lib/academics/report-card-academic-payload.test.ts',
   'src/components/greenfield-date-picker-layout.test.ts',
 ];
 
