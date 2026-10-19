@@ -1,7 +1,9 @@
 // Opt-in, schema-faithful fixture tests only. Never imports Drizzle Kit/config/env.
 import assert from 'node:assert/strict';
 import { readFixtureRelationalAssessment } from '../src/lib/academics/assessment-postgres-fixture-source-reader.ts';
-import { randomBytes, randomUUID } from 'node:crypto';
+import { randomBytes, randomUUID, createHash } from 'node:crypto';
+import { loadFixtureCompleteAssessment, readFixtureVerifiedCanonicalAssessment } from '../src/lib/academics/assessment-postgres-canonical-reader.ts';
+import { canonicalizeSnapshotValue } from '../src/lib/academics/report-card-canonical-snapshot.ts';
 import postgres from 'postgres';
 import { assessmentWriteGuardDDL } from './lib/assessment-disposable-write-guards.mjs';
 import { getTableConfig } from 'drizzle-orm/pg-core';
@@ -246,6 +248,78 @@ if (!url || process.env.REPORT_CARD_TEST_CONFIRM !== 'DISPOSABLE_REPORT_CARD_TES
   await sql.unsafe('UPDATE ' + table('assessment_scores') + ' SET numeric_score=numeric_score WHERE id=$1::uuid', [editableScore]);
   assert.deepEqual(await readRelational(), { ok: false, code: 'incomplete_source' });
   console.log('PASS: relational read holds discovery/authority locks and later score edits invalidate old finalization');
+
+  // Complete scope: a second active pupil must contribute scores and results.
+  const canonicalEnrollment = randomUUID(), canonicalScore = randomUUID();
+  await insert(sql, 'enrollments', { ...enrollmentRow, id: canonicalEnrollment });
+  await insert(sql, 'assessment_scores', { ...scoreRow, id: canonicalScore, roster_id: nextRoster, enrollment_id: canonicalEnrollment, student_id: ids.otherStudent, numeric_score: '69.9950' });
+  const scopeSelector = { classId: ids.class, sessionId: ids.session, termId: ids.term };
+  const verifyIdentity = async () => ({ authUserId: authUser });
+  const readCanonical = () => client.begin(tx => readFixtureVerifiedCanonicalAssessment(wrap(tx), schema, scopeSelector, verifyIdentity));
+  // Fixture sealing always takes the EXCLUSIVE discovery gate before touching
+  // scores or invoking candidate reads; never upgrade a shared read transaction.
+  const seal = (bad = null) => client.begin(async tx => {
+   const bound = wrap(tx);
+   await bound.unsafe(guards.readGate.replace('FOR SHARE', 'FOR UPDATE'));
+   await bound.unsafe('UPDATE ' + table('assessment_scores') + ' SET version=version+1 WHERE id=$1::uuid', [editableScore]);
+   const loaded = await loadFixtureCompleteAssessment(bound, schema, scopeSelector, verifyIdentity);
+   assert.equal(loaded.ok, true, JSON.stringify(loaded));
+   assert.equal(loaded.input.students.length, 2);
+   const sourceId = randomUUID();
+   await insert(bound, 'assessment_source_versions', { id: sourceId, school_id: ids.school, scope_id: ids.scope, revision: loaded.input.scope.revision,
+    source_manifest: bad === 'manifest' ? { fixture: true } : JSON.parse(loaded.materialized.manifest.canonicalJson), content_hash: loaded.materialized.manifest.sha256 });
+   for (const subject of loaded.materialized.subjects) {
+    const reviewId = randomUUID();
+    await insert(bound, 'assessment_teacher_reviews', { ...reviewRow, id: reviewId, roster_id: subject.rosterId, source_version_id: sourceId });
+    const results = JSON.parse(subject.results.canonicalJson);
+    if (bad === 'results') results.students[0].result.total = '100.00';
+    await insert(bound, 'assessment_finalizations', { ...finalRow, id: randomUUID(), roster_id: subject.rosterId, source_version_id: sourceId, teacher_review_id: reviewId, results,
+     content_hash: bad === 'results' ? createHash('sha256').update(canonicalizeSnapshotValue(results)).digest('hex') : subject.results.sha256 });
+   }
+   return sourceId;
+  });
+  const sealedSource = await seal();
+  const verifiedCanonical = await readCanonical();
+  assert.equal(verifiedCanonical.ok, true, JSON.stringify(verifiedCanonical));
+  assert.equal(verifiedCanonical.sourceVersionId, sealedSource);
+  assert.equal(verifiedCanonical.input.enrollments.length, 2);
+  const completeResults = JSON.parse(verifiedCanonical.materialized.subjects[0].results.canonicalJson);
+  assert.equal(completeResults.students.find(s => s.studentId === ids.otherStudent).result.total, '70.00');
+  console.log('PASS: complete locked SQL scope round trips canonical JSONB and recalculates every pupil');
+
+  await seal('manifest');
+  assert.deepEqual(await readCanonical(), { ok: false, code: 'source_mismatch' });
+  await seal('results');
+  assert.deepEqual(await readCanonical(), { ok: false, code: 'finalization_mismatch' });
+  await seal();
+  assert.equal((await readCanonical()).ok, true);
+  console.log('PASS: canonical reader rejects minimal manifests and forged results with recomputed hashes');
+
+  const beforeConflict = await revisions();
+  await expectError('23505', () => insert(sql, 'enrollments', { ...enrollmentRow, id: randomUUID(), class_id: secondClass }));
+  assert.deepEqual(await revisions(), beforeConflict);
+  await assert.rejects(() => client.begin(async tx => {
+   const bound = wrap(tx);
+   await bound.unsafe(guards.readGate.replace('FOR SHARE', 'FOR UPDATE'));
+   await bound.unsafe('DELETE FROM ' + table('assessment_scores') + ' WHERE id=$1::uuid', [canonicalScore]);
+   assert.deepEqual(await loadFixtureCompleteAssessment(bound, schema, scopeSelector, verifyIdentity), { ok: false, code: 'incomplete_source' });
+   throw Error('intentional complete-source fixture rollback');
+  }), error => error.message === 'intentional complete-source fixture rollback');
+  assert.deepEqual(await revisions(), beforeConflict);
+  assert.equal((await readCanonical()).ok, true);
+  console.log('PASS: duplicate enrollment is constrained and missing second-pupil score rejects without poisoned revisions');
+
+  await client.begin(async tx => {
+   const verified = await readFixtureVerifiedCanonicalAssessment(wrap(tx), schema, scopeSelector, verifyIdentity);
+   assert.equal(verified.ok, true, JSON.stringify(verified));
+   await expectError('55P03', () => boundedWrite(other => other.unsafe('UPDATE ' + table('assessment_scores') + ' SET version=version+1 WHERE id=$1::uuid', [canonicalScore])));
+   await expectError('55P03', () => boundedWrite(other => insert(other, 'enrollments', { ...enrollmentRow, id: randomUUID() })));
+   await expectError('55P03', () => boundedWrite(other => other.unsafe('UPDATE ' + table('memberships') + " SET status='suspended' WHERE id=$1::uuid", [ids.admin])));
+  });
+  await sql.unsafe('UPDATE ' + table('assessment_scores') + ' SET version=version+1 WHERE id=$1::uuid', [canonicalScore]);
+  assert.deepEqual(await readCanonical(), { ok: false, code: 'incomplete_source' });
+  console.log('PASS: canonical read holds source/authority locks and later second-pupil edits invalidate finalization');
+
 
 
  } finally {
