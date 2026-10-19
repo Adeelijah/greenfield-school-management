@@ -32,6 +32,7 @@ const tests = [
   'src/lib/academics/report-card-canonical-snapshot.test.ts',
   'src/lib/academics/report-card-academic-payload.test.ts',
   'src/lib/academics/report-card-trusted-source.test.ts',
+  'src/lib/academics/report-card-transaction-port.test.ts',
   'src/components/greenfield-date-picker-layout.test.ts',
 ];
 
