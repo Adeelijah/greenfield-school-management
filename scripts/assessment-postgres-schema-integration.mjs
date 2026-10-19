@@ -1,5 +1,6 @@
 // Opt-in, schema-faithful fixture tests only. Never imports Drizzle Kit/config/env.
 import assert from 'node:assert/strict';
+import { readFixtureRelationalAssessment } from '../src/lib/academics/assessment-postgres-fixture-source-reader.ts';
 import { randomBytes, randomUUID } from 'node:crypto';
 import postgres from 'postgres';
 import { assessmentWriteGuardDDL } from './lib/assessment-disposable-write-guards.mjs';
@@ -212,6 +213,40 @@ if (!url || process.env.REPORT_CARD_TEST_CONFIRM !== 'DISPOSABLE_REPORT_CARD_TES
   await insert(sql, 'assessment_finalizations', { ...finalRow, id: randomUUID(), roster_id: nextRoster, source_version_id: currentSource, teacher_review_id: currentReview });
   assert.deepEqual(await revisions(), beforeGuards);
   console.log('PASS: source materialization, review and finalization preserve the academic source revision');
+
+  // Read actual base/proposal relations under the discovery barrier.
+  const nextTeacherLink = randomUUID();
+  await insert(sql, 'assessment_teacher_subjects', { id: nextTeacherLink, school_id: ids.school, roster_id: nextRoster, class_assignment_id: ids.assignment });
+  const authUser = (await sql.unsafe('SELECT auth_user_id FROM ' + table('school_users') + ' WHERE id=$1::uuid', [ids.teacherUser]))[0].auth_user_id;
+  const selector = { studentId: ids.student, enrollmentId: ids.enrollment, classId: ids.class, sessionId: ids.session, termId: ids.term };
+  const readRelational = (selected = selector) => client.begin(tx => readFixtureRelationalAssessment(wrap(tx), schema, selected, async () => ({ authUserId: authUser })));
+  const relational = await readRelational();
+  assert.equal(relational.ok, true, JSON.stringify(relational));
+  assert.equal(relational.source.identity.membership.id, ids.teacher);
+  assert.equal(relational.source.subjects[0].scores[0].numericScore, '89.0000');
+  assert.equal(relational.source.subjects[0].teacherReviewId, currentReview);
+  assert.equal(relational.source.revision, (await revisions())[ids.scope]);
+  console.log('PASS: relational reader joins verified identity, enrollment, pinned config, scores and current finalized source');
+
+  assert.deepEqual(await readRelational({ ...selector, enrollmentId: randomUUID() }), { ok: false, code: 'invalid_reference' });
+  assert.deepEqual(await readRelational({ ...selector, termId: ids.otherTerm }), { ok: false, code: 'invalid_reference' });
+  await sql.unsafe('UPDATE ' + table('assessment_teacher_subjects') + ' SET is_active=false WHERE id=$1::uuid', [nextTeacherLink]);
+  try { assert.deepEqual(await readRelational(), { ok: false, code: 'forbidden' }); }
+  finally { await sql.unsafe('UPDATE ' + table('assessment_teacher_subjects') + ' SET is_active=true WHERE id=$1::uuid', [nextTeacherLink]); }
+  await sql.unsafe('UPDATE ' + table('memberships') + " SET status='suspended' WHERE id=$1::uuid", [ids.admin]);
+  try { assert.deepEqual(await readRelational(), { ok: false, code: 'incomplete_source' }); }
+  finally { await sql.unsafe('UPDATE ' + table('memberships') + " SET status='active' WHERE id=$1::uuid", [ids.admin]); }
+  console.log('PASS: relational reader rejects forged enrollment, wrong term, missing subject permission and suspended finalizer');
+
+  await client.begin(async tx => {
+   assert.equal((await readFixtureRelationalAssessment(wrap(tx), schema, selector, async () => ({ authUserId: authUser }))).ok, true);
+   await expectError('55P03', () => boundedWrite(other => insert(other, 'enrollments', { ...enrollmentRow, id: randomUUID() })));
+   await expectError('55P03', () => boundedWrite(other => other.unsafe('UPDATE ' + table('memberships') + " SET status='suspended' WHERE id=$1::uuid", [ids.admin])));
+  });
+  await sql.unsafe('UPDATE ' + table('assessment_scores') + ' SET numeric_score=numeric_score WHERE id=$1::uuid', [editableScore]);
+  assert.deepEqual(await readRelational(), { ok: false, code: 'incomplete_source' });
+  console.log('PASS: relational read holds discovery/authority locks and later score edits invalidate old finalization');
+
 
  } finally {
   try { await sql.unsafe('DROP SCHEMA IF EXISTS ' + q(schema) + ' CASCADE'); } finally { await client.end(); }
