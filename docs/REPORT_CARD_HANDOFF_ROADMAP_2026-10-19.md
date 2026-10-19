@@ -257,3 +257,12 @@ All 64 selected tests plus syntax/whitespace passed here. Expected offline count
 User supplied the complete successful rerun: all 53 PostgreSQL groups passed, including exact timestamp restoration, outer concurrent same-key withdrawal, restricted correction/republication/repeated history and final outer failure rollback. PostgreSQL verification for this milestone is complete in the disposable environment. No additional SQL or production change was made for this status update.
 
 The repaired full offline gate is still unconfirmed: its last supplied output stopped at TS18046 before the receipt-object narrowing fix. Run the current verify-offline.mjs and require TypeScript, ESLint, all 378 tests and whitespace to pass. No further database rerun is required solely for this documentation update. Once the offline gate passes, continue restricted independent-session concurrency and least-privilege login/authority work without another approval request. Preserve no-merge/deploy/production restrictions.
+
+
+## Latest continuation — independent restricted-role sessions
+
+User confirmed all 378 offline tests passed after the repair, alongside the complete 53-group PostgreSQL run. The next harness extension prepares a separately generated, briefly committed fictional schema and NOLOGIN roles so distinct backends can exercise the restricted workflow. Clone ordering respects audit/release FKs and schema-local enum casts; gates/claims are recreated without advancing copied source revisions. An owner-only per-run marker controls exact cleanup, including an intentional workload-error probe.
+
+A bounded offline rendezvous verifies two distinct backend PIDs and the exact restricted role before paired workloads. Seven new tests raise expected offline count to 385; all 71 selected tests, syntax and whitespace passed here. Four prepared PostgreSQL groups raise opt-in expectation to 57 (43 owner, ten prior restricted, four independent-session groups). New SQL has not been executed here. Same existing local role-admin setup/test/cleanup block applies. See `REPORT_CARD_INDEPENDENT_ROLE_SESSIONS.md` for committed fixture cleanup and interruption limits.
+
+Next after gates: actual least-privilege LOGIN/session credentials and final verified server identity/membership scope, then controlled server read/command and UI integration. Current workload role is restricted, but the session login is still the trusted admin harness. Preserve no-merge/deploy/production changes and do not claim live auth or login isolation from these tests alone.
