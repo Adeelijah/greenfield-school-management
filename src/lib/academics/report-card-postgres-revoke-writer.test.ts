@@ -78,3 +78,11 @@ test('a restaged fixture must restore the exact publication timestamp before rev
  f.tables.report_cards![0]!.publishedAt=original;
  const restored=await f.revoke();assert.equal(restored.ok,true,JSON.stringify(restored));
 });
+
+test('receipt replay requires a decoded object and rejects null, arrays, primitives and encoded JSON',async()=>{
+ for(const value of [null,[],0,true,'{"ok":true}',{}]){
+  const f=await fixture();assert.equal((await f.revoke()).ok,true);
+  f.tables.report_card_operation_receipts!.find(r=>r.operationKey===f.command.operationKey)!.outcome=value;
+  const before=structuredClone(f.tables);assert.deepEqual(await f.revoke(),{ok:false,code:'invalid_receipt'});assert.deepEqual(f.tables,before);
+ }
+});
