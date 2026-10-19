@@ -5,7 +5,7 @@ import type { ApprovedReportBinding } from './report-card-approved-snapshot';
 // @ts-expect-error Node type stripping requires explicit source extension.
 import { fixtureAssessmentDecoders as d } from './assessment-postgres-fixture-source-reader.ts';
 // @ts-expect-error Node type stripping requires explicit source extension.
-import { mapPersistedReportIdentity } from './report-card-persisted-model-map.ts';
+import { lockFixtureReportActor } from './report-card-postgres-command-context.ts';
 // @ts-expect-error Node type stripping requires explicit source extension.
 import { readFixtureVerifiedCanonicalAssessment } from './assessment-postgres-canonical-reader.ts';
 // @ts-expect-error Node type stripping requires explicit source extension.
@@ -29,15 +29,10 @@ export async function executeFixtureCanonicalReportCommand(db: SqlDatabase, sche
  const table = (name: string) => '"' + schema + '"."' + name + '"';
  try {
   return await db.begin(async tx => {
-   const auth = await verifiedIdentity(); if (!auth?.authUserId?.trim()) return abort('unauthenticated');
-   if ((await tx.unsafe('SELECT id FROM ' + table('fixture_source_write_gate') + ' WHERE id=1 FOR SHARE')).length !== 1) return abort('transaction_failed');
-   const users = await tx.unsafe('SELECT id,auth_user_id AS "authUserId" FROM ' + table('school_users') + ' WHERE auth_user_id=$1::uuid FOR SHARE', [auth.authUserId]);
-   if (users.length !== 1) return abort('forbidden');
-   const memberships = await tx.unsafe('SELECT id,school_id AS "schoolId",user_id AS "userId",role,status FROM ' + table('memberships') + ' WHERE user_id=$1::uuid ORDER BY id FOR SHARE', [users[0]!.id]);
-   const schools = await tx.unsafe('SELECT id,final_primary_year AS "finalPrimaryYear" FROM ' + table('schools') + ' WHERE id IN (SELECT school_id FROM ' + table('memberships') + ' WHERE user_id=$1::uuid) ORDER BY id FOR SHARE', [users[0]!.id]);
-   const mapped = mapPersistedReportIdentity(auth.authUserId, d.decodeIdentityRows({ users, memberships, schools }));
-   if (!mapped.ok || mapped.identity.membership.role !== 'admin') return abort('forbidden');
-   const schoolId = mapped.identity.school.id, actorId = mapped.identity.membership.id;
+   const lockedActor = await lockFixtureReportActor(tx,schema,verifiedIdentity);
+   if (!lockedActor.ok) return abort(lockedActor.code);
+   if (lockedActor.identity.membership.role !== 'admin') return abort('forbidden');
+   const schoolId = lockedActor.identity.school.id, actorId = lockedActor.identity.membership.id;
    const reports = await tx.unsafe('SELECT id,school_id AS "schoolId",enrollment_id AS "enrollmentId",student_id AS "studentId",class_id AS "classId",session_id AS "sessionId",term_id AS "termId",assessment_scope_id AS "assessmentScopeId",assessment_source_version_id AS "assessmentSourceVersionId",assessment_revision AS "assessmentRevision",stage,version,submitted_by AS "submittedBy",approved_by AS "approvedBy" FROM ' + table('report_cards') + ' WHERE school_id=$1::uuid AND id=$2::uuid FOR UPDATE', [schoolId, command.reportId]);
    if (reports.length !== 1) return abort('not_found');
    const row = reports[0]!;
@@ -60,7 +55,7 @@ export async function executeFixtureCanonicalReportCommand(db: SqlDatabase, sche
    if (!report.submittedBy || report.submittedBy === actorId) return abort('forbidden');
    const submitters = await tx.unsafe('SELECT m.id FROM ' + table('memberships') + ' m JOIN ' + table('teacher_class_assignments') + " a ON a.school_id=m.school_id AND a.teacher_membership_id=m.id WHERE m.school_id=$1::uuid AND m.id=$2::uuid AND m.role='teacher' AND m.status='active' AND a.class_id=$3::uuid AND a.session_id=$4::uuid AND a.ended_at IS NULL FOR SHARE OF m,a", [schoolId, report.submittedBy, report.classId, report.sessionId]);
    if (submitters.length !== 1) return abort('forbidden');
-   const loaded = await readFixtureVerifiedCanonicalAssessment(tx, schema, { classId: report.classId, sessionId: report.sessionId, termId: report.termId }, async () => ({ authUserId: auth.authUserId }));
+   const loaded = await readFixtureVerifiedCanonicalAssessment(tx, schema, { classId: report.classId, sessionId: report.sessionId, termId: report.termId }, async () => ({ authUserId: lockedActor.authUserId }));
    if (!loaded.ok) return abort(loaded.code);
    if (loaded.identity.membership.id !== actorId || loaded.input.scope.id !== report.assessmentScopeId || loaded.input.scope.revision !== report.assessmentRevision || loaded.sourceVersionId !== report.assessmentSourceVersionId) return abort('stale_source');
    const now = new Date().toISOString();
