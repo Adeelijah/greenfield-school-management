@@ -34,3 +34,7 @@ Four PostgreSQL groups extend `assessment-postgres-schema-integration.mjs` from 
 Run the full offline gate (expected 282 tests), then the opt-in disposable PostgreSQL harness (expected nineteen PASS groups). These new PostgreSQL groups are prepared, not assistant-executed. Existing minimal fixture manifests intentionally remain invalid for the new verifier; only newly sealed complete documents pass.
 
 After both gates pass, reconcile the real report proposal's enrollment/source/snapshot references and immutable release bindings, then build the schema-faithful report writer on top of this complete provenance boundary. Keep grants/RLS, real server auth, routes and publication disconnected until their separate roadmap stages.
+
+## User verification
+
+The user confirmed all 282 offline tests and all nineteen PostgreSQL groups passed on 2026-10-19. The next report-binding schema/fixture milestone is documented in `REPORT_CARD_SNAPSHOT_BINDING_REVIEW.md`; its new assertions are prepared and unverified until the expanded gate runs.
