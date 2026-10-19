@@ -213,6 +213,15 @@ See `ASSESSMENT_DISPOSABLE_SECURITY_REVIEW.md`. Next: review and implement immut
 
 User verified all 45 PostgreSQL groups. `report-card-release-correction.ts` now prepares the pure withdrawal plan: active same-school admin, exact current release and approved snapshot, mandatory reason, optimistic report version, one-way release timestamp and published-to-draft correction. It preserves snapshots/publication provenance and permits stale-source withdrawal; subsequent submit must refresh a complete current source and repeat approval/publication. The module does not authenticate, persist or replay receipts.
 
-Twelve new tests raise the expected full offline count from 345 to 357. All 38 selected tests plus syntax/whitespace passed here. Full TypeScript/ESLint remain pending local verification; latest explicitly confirmed full offline count is 337. No SQL/harness changed; 45 PostgreSQL groups remain user-verified. See `REPORT_CARD_RELEASE_CORRECTION_REVIEW.md`.
+Twelve new tests raise the expected full offline count from 345 to 357. All 38 selected tests plus syntax/whitespace passed here. The user subsequently confirmed all 357 offline tests passed. No SQL/harness changed; 45 PostgreSQL groups remain user-verified. See `REPORT_CARD_RELEASE_CORRECTION_REVIEW.md`.
 
 Next: proposal audit/release binding and one-way revocation guards, then actual transactional revoke writer with actor-wide idempotency, restricted privileges and rollback/retry/history tests. Restricted independent-session concurrency and final login/live-auth contract still precede route/UI release. No merge, deployment, production schema or live authorization changes.
+
+
+## Latest continuation — revocation audit binding and one-way history guards
+
+User verified all 357 offline tests and the preceding 45 PostgreSQL groups. The isolated proposal adds revoke audit action/release ID, exact historical release/snapshot/publication-version FK, one revoke audit per release and action-specific reason/stage checks. A fixture-only guard builder freezes original release facts, allows one monotonic revoked_at transition and rejects restoration/deletion/truncation. No release privilege was broadened. Pure correction keys now match the receipt column's 128-character bound.
+
+Three metadata tests and four guard tests raise expected offline count to 364. All 42 selected policy/guard/writer tests plus syntax/whitespace passed here. Full TypeScript/ESLint and new metadata assertions are pending local verification. Three new owner-run SQL groups prepare audit substitutions, one-way history and rollback/retry of manual atomic fixture withdrawal: expected 48 total with existing role-admin opt-in (41 owner-run plus seven restricted). New SQL was not executed here. See `REPORT_CARD_REVOCATION_BINDING_REVIEW.md`.
+
+Next after gates: actual canonical revoke transaction writer and narrowly controlled revoked_at access with restricted rollback/retry/history tests. This batch provides metadata/guards, not an authenticated revoke endpoint or a requirement that every owner update have an audit. Independent-session concurrency, final login/auth integration and UI remain later. Preserve no-merge/deploy/production changes.
