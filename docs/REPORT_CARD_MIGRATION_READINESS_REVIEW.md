@@ -15,7 +15,7 @@ ALTER TABLE terms
   UNIQUE (school_id, session_id, id);
 ```
 
-After that constraint exists, replace the report proposal's **temporary, insufficient** `term_id -> terms.id` FK with:
+The current review proposal already describes the following composite FK through a shadow target declaration. That is source metadata only; it does not prove this prerequisite or FK exists in a database:
 
 ```sql
 -- REVIEW ONLY — DO NOT EXECUTE
@@ -44,10 +44,10 @@ Snapshot insertion is append-only; a transition's audit row references its snaps
 - Add database-enforced append-only rules for snapshots, audit and receipts. Explicitly review grants, RLS `USING`/`WITH CHECK` policies, service-role bypass, and rollback semantics.
 - Guardian access stays disabled until authenticated login-to-guardian binding is built, tested, and checked on each read against active student relationship, published version and non-revoked release.
 
-## 4. Disposable PostgreSQL integration-test plan (not executed)
+## 4. Disposable PostgreSQL integration-test plan (historical plan; see current evidence)
 
 Provision an isolated database only after approval; apply reviewed migrations to that database only. Test cross-school FK rejection, wrong-session term rejection, duplicate report identity, optimistic version races, duplicate operation key conflict/replay, rollback after audit/receipt/release failure, immutable snapshot attempts, unauthorized role and guardian access, revoked/stale release reads, and migration rollback/reapply. Record PostgreSQL version, RLS roles and results.
 
 ## Decision before executable migration
 
-The present Drizzle proposal still contains a **deliberately incomplete** single-column term FK. It must not be migrated in its current form. Decide the canonical snapshot schema and enrollment binding, then update the proposal to a fully school/session-scoped term FK before any SQL generation. The schema proposal tests only inspect metadata; they do not validate PostgreSQL behavior.
+The current proposal uses a school/session/term composite FK and now also proposes exact enrollment/scope/source/snapshot/release references. Both shadow target declarations remain excluded from migration entrypoints. See `REPORT_CARD_SNAPSHOT_BINDING_REVIEW.md` for the new prerequisite and version policy. The preceding academic source reader passed 282 offline tests and nineteen disposable PostgreSQL groups; the newly expanded report-binding fixture is not yet verified. No production schema or SQL changes have been applied. Canonical report payload construction, transactional writer enforcement, privileges/RLS and reviewed rollback/migration plans remain required before SQL generation or rollout.
