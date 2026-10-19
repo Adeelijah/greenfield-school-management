@@ -22,3 +22,15 @@ These differ from the earlier simplified concurrency suite; **do not point the a
 4. Resolve the reviewed Drizzle schema constraints and RLS/guardian policy before any migration or production use.
 
 No migration, production database connection, deployment or merge is part of this change.
+
+## PostgreSQL port integration harness
+
+`scripts/report-card-postgres-adapter-integration.mjs` now creates disposable fixture tables and invokes **`executeReportTransaction` via `disposableReportTransactionRunner`**. It loads fictional memberships, class assignments and assessment projections from the disposable PostgreSQL transaction itself. It tests conflicting submissions, same-key replay, cross-school membership rejection, receipt-failure rollback, and approval/publication serialization.
+
+Use the same `REPORT_CARD_TEST_DATABASE_URL` and `REPORT_CARD_TEST_CONFIRM` as the earlier disposable smoke tests, then run:
+
+```powershell
+node .\scripts\report-card-postgres-adapter-integration.mjs
+```
+
+This script has **not been run in the contributor's local PostgreSQL instance**; its results must be confirmed by the user. Fixture memberships and projections are fictional and inserted by the test harness; they do not establish real production authentication, authoritative enrollment, canonical snapshot persistence, RLS or guardian access. The test harness creates and removes only its randomly generated `rc_it_...` schema inside the explicitly named disposable database.
