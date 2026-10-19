@@ -27,8 +27,12 @@ function normalize(value: unknown, seen: WeakSet<object>): SnapshotValue {
   seen.add(value);
   try {
     if (Array.isArray(value)) {
-      if (Object.keys(value).length !== value.length || value.some((_, i) => !Object.hasOwn(value, i))) throw new Error('Sparse or decorated snapshot array');
-      return value.map(item => normalize(item, seen));
+      if (Object.keys(value).length !== value.length) throw new Error('Sparse or decorated snapshot array');
+      return Array.from({ length: value.length }, (_, i) => {
+        const descriptor = Object.getOwnPropertyDescriptor(value, String(i));
+        if (!descriptor || !Object.hasOwn(descriptor, 'value')) throw new Error('Snapshot array accessor not allowed');
+        return normalize(descriptor.value, seen);
+      });
     }
     const proto = Object.getPrototypeOf(value);
     if (proto !== Object.prototype && proto !== null) throw new Error('Non-plain snapshot object');
@@ -43,6 +47,11 @@ function normalize(value: unknown, seen: WeakSet<object>): SnapshotValue {
   } finally {
     seen.delete(value);
   }
+}
+
+/** Strict canonical JSON shared by review-stage assessment provenance checks. */
+export function canonicalizeSnapshotValue(value: unknown): string {
+  return JSON.stringify(normalize(value, new WeakSet()));
 }
 
 export function canonicalizeReportSnapshot(input: SnapshotInput): CanonicalSnapshot {
