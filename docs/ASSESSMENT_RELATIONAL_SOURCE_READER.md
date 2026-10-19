@@ -41,3 +41,7 @@ The full expected offline suite is 250 tests and the expanded PostgreSQL suite h
 ## Continue after verification
 
 Next, build a projection/recalculation boundary from this relational bundle, including observational text keys, complete canonical source manifests and comparison with immutable finalized data. Reconcile source/workflow versions and real report snapshot bindings before composing a schema-faithful report writer. Continue automatically on passing local results under the user's standing authorization; no production schema/auth/database/deployment changes are implied.
+
+## User verification — 2026-10-19
+
+After replacing unsafe selected-row assertions with typed field decoders, the user confirmed the full offline gate passed with 251 tests, and all fifteen schema-faithful PostgreSQL groups passed. This verifies the fixture reader, including source/authority locking and later-edit invalidation. It does not establish production authorization or canonical manifest correctness.
