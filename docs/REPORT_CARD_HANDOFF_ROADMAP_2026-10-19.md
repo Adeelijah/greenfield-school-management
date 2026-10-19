@@ -181,6 +181,13 @@ Continue with academic parent revision fan-out (including old/new placement scop
 
 User verified 326 offline tests and all 35 PostgreSQL groups. Seven academic parent families now prepare fixture-only BEFORE UPDATE/DELETE invalidation of their dependent scopes, including complete class/session/term fan-out and pre-cascade enrollment discovery. The existing transaction/scope claim protocol deduplicates overlapping parent and score changes and rolls back revisions with failed receipts. Authority-only changes retain transaction gate locking without changing academic revisions.
 
-Two added offline assertions raise the expected full count to 328; three prepared PostgreSQL groups raise the harness to 38. All 52 selected offline tests plus syntax/whitespace passed here. Full local gate and SQL execution are pending. See `ASSESSMENT_AUTHORITY_LOCK_REVIEW.md` for conservative no-op update behavior and boundaries.
+Two added offline assertions raise the expected full count to 328; three prepared PostgreSQL groups raise the harness to 38. All 52 selected offline tests plus syntax/whitespace passed here. The user subsequently confirmed all 328 offline tests and all 38 PostgreSQL groups passed. See `ASSESSMENT_AUTHORITY_LOCK_REVIEW.md` for conservative no-op update behavior and boundaries.
 
 Next after verification: restricted fixture reader/writer grants and RLS with adversarial role/tenant tests, then immutable release/revocation policy before routes. Owner-run tests still do not demonstrate deployed authorization. No production schema, migration, live auth or route changed.
+
+
+## Latest continuation — restricted fixture role preflight
+
+User verified 328 offline tests and all 38 PostgreSQL groups. A catalog-only query plan and strict offline role-evidence validator now prepare the restricted reader/writer prerequisites: generated role names, exact rows, no privileged flags, no object ownership and no outgoing role memberships. Nine tests raise the expected offline count to 337. No SQL was executed or added to the PostgreSQL harness; its 38 groups remain user-verified. Full new offline gate is pending local verification.
+
+See `ASSESSMENT_RESTRICTED_ROLE_PREFLIGHT.md`. This is a prerequisite, not implemented grants/RLS or a security certificate. Next: controlled role-admin fixture setup, explicit execution-role checks and the restricted privilege/function boundary. Resolve locking-reader UPDATE privilege requirements without broadening access blindly; do not use caller-controlled GUC values as identity. Keep direct client access denied. Release/revocation policy, live auth, route/UI integration and deployment remain later.
