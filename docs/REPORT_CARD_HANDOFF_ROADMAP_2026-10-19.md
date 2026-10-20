@@ -275,3 +275,12 @@ User supplied all 57 PostgreSQL groups passed, including committed independent-s
 Eight new offline tests prepare an expected full count of 393 (previous expected 385); latest explicitly confirmed full offline count remains 378. All 82 selected offline tests, script syntax and whitespace passed here. Two added SQL groups prepare an expected 59 with existing disposable role-admin opt-in. No new SQL was executed by the assistant; full local offline and expanded PostgreSQL gates remain pending. See REPORT_CARD_INDEPENDENT_ROLE_SESSIONS.md for authentication and interruption limits. Generated LOGIN state can remain after forced termination/server outage; no broad cleanup or production role changes are performed.
 
 Next after these gates: final server identity/membership scope contract, then controlled server read/command integration and UI. Preserve no merge, deployment, production changes, live auth or real pupil data. Continue automatically after passing gates within standing authorization.
+
+
+## Verified LOGIN result and server authority review — 2026-10-20
+
+User supplied the complete 59-group PostgreSQL run: generated least-privilege LOGIN, independent restricted sessions, denial checks and exact role/schema cleanup all passed. The full 393-test offline gate remains unconfirmed; latest explicitly supplied full offline count is 378. No extra database rerun is needed for this documentation-only continuation.
+
+Source review of server auth helpers, persisted identity mapping and fixture command context found a membership-completeness gap: the app requires exactly one active membership, while a fixed-school service role can hide an additional active membership in another school. Do not equate one visible membership with globally unambiguous authority or wire live report routes on that assumption. REPORT_CARD_SERVER_AUTHORITY_CONTRACT.md records the exact existing boundaries, proposed complete actor-only authority lookup and negative/concurrent acceptance cases. No auth code, RLS, grants or runtime behavior changed.
+
+The execution environment is unavailable; this batch reviewed GitHub source and updates documentation only, with no new executed tests or SQL. Continue next with the outstanding offline gate, then isolated complete authority resolution and a server-only verified identity bridge. Preserve standing scoped development authorization and the no-merge/deployment/production-change constraints.
