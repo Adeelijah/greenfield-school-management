@@ -284,3 +284,10 @@ User supplied the complete 59-group PostgreSQL run: generated least-privilege LO
 Source review of server auth helpers, persisted identity mapping and fixture command context found a membership-completeness gap: the app requires exactly one active membership, while a fixed-school service role can hide an additional active membership in another school. Do not equate one visible membership with globally unambiguous authority or wire live report routes on that assumption. REPORT_CARD_SERVER_AUTHORITY_CONTRACT.md records the exact existing boundaries, proposed complete actor-only authority lookup and negative/concurrent acceptance cases. No auth code, RLS, grants or runtime behavior changed.
 
 The execution environment is unavailable; this batch reviewed GitHub source and updates documentation only, with no new executed tests or SQL. Continue next with the outstanding offline gate, then isolated complete authority resolution and a server-only verified identity bridge. Preserve standing scoped development authorization and the no-merge/deployment/production-change constraints.
+
+
+## Verified offline baseline — 2026-10-20
+
+User supplied the complete offline result: TypeScript/ESLint gate completed, all 393 tests passed with zero failures/skips, and tracked Git whitespace checks passed. Together with the previously supplied 59 PostgreSQL groups, the disposable LOGIN milestone's pending verification gates are complete. Older pending-count notes above are historical.
+
+Next implementation remains complete actor membership resolution under fixed-school RLS, followed by the server-only verified identity bridge and isolated integration tests described in REPORT_CARD_SERVER_AUTHORITY_CONTRACT.md. The execution environment remains unavailable, so no new implementation or tests were performed for this status update. No database rerun is required for this documentation-only change. Preserve no merge, deployment, live authorization or production database changes.
