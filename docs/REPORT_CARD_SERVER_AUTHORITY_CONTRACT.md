@@ -59,3 +59,10 @@ A mocked auth callback or successful local PostgreSQL login does not verify real
 ## Next work
 
 First obtain the outstanding full offline result on the current branch. Then implement and test the complete authority lookup and its server-only verified-identity bridge in isolation. Only after those gates pass should teacher/admin read and command routes be wired. Existing 59-group SQL results remain valid for their tested fixture scope; this document adds no test groups.
+
+
+## Verified offline baseline — 2026-10-20
+
+User supplied the complete offline result: TypeScript/ESLint gate completed, all 393 tests passed with zero failures/skips, and tracked Git whitespace checks passed. Together with the previously supplied 59 PostgreSQL groups, the disposable LOGIN milestone's pending verification gates are complete. Older pending-count notes above are historical.
+
+Next implementation remains complete actor membership resolution under fixed-school RLS, followed by the server-only verified identity bridge and isolated integration tests described in REPORT_CARD_SERVER_AUTHORITY_CONTRACT.md. The execution environment remains unavailable, so no new implementation or tests were performed for this status update. No database rerun is required for this documentation-only change. Preserve no merge, deployment, live authorization or production database changes.
