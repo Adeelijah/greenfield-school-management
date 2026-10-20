@@ -44,3 +44,9 @@ Cleanup requires a functioning local connection and a running process. Forced te
 Eight new login planning/evidence/URL tests raise expected full offline count from 385 to 393. All 82 selected login, role, synchronization, history, correction and writer tests passed here, along with integration-script syntax and whitespace checks. Full local TypeScript/ESLint and the expanded SQL remain pending. PostgreSQL expectation is 59 groups with the existing role-admin opt-in, or 43 owner groups with explicit skips for ten earlier restricted and six independent-session/login groups. Use the same complete local postgres admin setup/test/cleanup block; no extra confirmation or dependency is introduced. Setup now explicitly grants/revokes database CONNECT, so use the existing local disposable database administrator.
 
 Next after local gates: final verified server identity/membership scope, then controlled server read/command integration and route/UI QA. No merge, deployment or production schema/grants/RLS.
+
+## User verification — 2026-10-20
+
+The user supplied all 59 PostgreSQL groups passing, including the actual generated LOGIN, RESET ROLE and privilege-denial checks, concurrent restricted workloads and exact cleanup after the intentional error. These prepared SQL gates are now verified in the user's local disposable environment. The full 393-test offline gate is still unconfirmed. The assistant executed no SQL.
+
+The next source review is REPORT_CARD_SERVER_AUTHORITY_CONTRACT.md. It identifies the unresolved difference between globally unambiguous active membership and one membership visible through fixed-school RLS. Login isolation does not resolve that server authorization gap; report routes remain unwired.
