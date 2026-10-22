@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import postgres from 'postgres';
+import { awaitFixtureAuthorityLock, cleanupFixtureAuthority } from './lib/actor-authority-fixture-lifecycle.mjs';
 
 const url = process.env.REPORT_CARD_TEST_DATABASE_URL;
 const confirmed = process.env.REPORT_CARD_TEST_CONFIRM === 'DISPOSABLE_REPORT_CARD_TEST_ONLY';
@@ -28,6 +29,8 @@ if (!url || !confirmed || !roleAdminConfirmed) {
   const q = value => '"' + value.replaceAll('"', '""') + '"';
   const t = name => `${q(schema)}.${q(name)}`;
   const owner = q(ownerRole), runtime = q(runtimeRole);
+  const created = { schema: false, owner: false, runtime: false };
+  let held, heldSuspension, workloadError;
   let holdingResolve;
   let lockedResolve;
   let suspensionResolve;
@@ -65,8 +68,11 @@ if (!url || !confirmed || !roleAdminConfirmed) {
   const membershipC = randomUUID();
   try {
     await db.unsafe(`CREATE ROLE ${owner} NOLOGIN NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION`);
+    created.owner = true;
     await db.unsafe(`CREATE ROLE ${runtime} NOLOGIN NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION`);
+    created.runtime = true;
     await db.unsafe(`CREATE SCHEMA ${q(schema)}`);
+    created.schema = true;
     await db.unsafe(`GRANT USAGE ON SCHEMA ${q(schema)} TO ${owner},${runtime}`);
     await db.unsafe(`CREATE TABLE ${t('schools')} (id uuid PRIMARY KEY,final_primary_year integer NOT NULL)`);
     await db.unsafe(`CREATE TABLE ${t('school_users')} (id uuid PRIMARY KEY,auth_user_id uuid NOT NULL UNIQUE,display_name text NOT NULL)`);
@@ -113,14 +119,15 @@ if (!url || !confirmed || !roleAdminConfirmed) {
     assert.equal(oneActive[0].active_membership_count, 1);
     console.log('PASS: one active membership plus a suspended historical membership resolves exactly once');
 
-    const held = db.begin(async tx => {
+    held = db.begin(async tx => {
+      await tx.unsafe("SET LOCAL statement_timeout='10s'");
       await tx.unsafe(`SET LOCAL ROLE ${runtime}`);
       const rows = await tx.unsafe(`SELECT * FROM ${t('lock_report_card_actor')}($1::uuid)`, [authUserId]);
       assert.equal(rows.length, 1);
       lockedResolve();
       await holdingGate;
     });
-    await lockedGate;
+    await awaitFixtureAuthorityLock(held, lockedGate);
     await assert.rejects(db.begin(async tx => {
       await tx.unsafe(`SET LOCAL lock_timeout='200ms'`);
       await tx.unsafe(`INSERT INTO ${t('memberships')} VALUES ($1::uuid,$2::uuid,$3::uuid,'teacher','active')`, [membershipC, schoolC, userId]);
@@ -132,14 +139,15 @@ if (!url || !confirmed || !roleAdminConfirmed) {
     console.log('PASS: concurrent membership insertion waits on the actor anchor and later ambiguity is denied');
 
     await db.unsafe(`UPDATE ${t('memberships')} SET status='suspended' WHERE id=$1::uuid`, [membershipC]);
-    const heldSuspension = db.begin(async tx => {
+    heldSuspension = db.begin(async tx => {
+      await tx.unsafe("SET LOCAL statement_timeout='10s'");
       await tx.unsafe(`SET LOCAL ROLE ${runtime}`);
       const rows = await tx.unsafe(`SELECT * FROM ${t('lock_report_card_actor')}($1::uuid)`, [authUserId]);
       assert.equal(rows.length, 1);
       suspensionLockedResolve();
       await suspensionGate;
     });
-    await suspensionLockedGate;
+    await awaitFixtureAuthorityLock(heldSuspension, suspensionLockedGate);
     // Use PostgreSQL's lock timeout as deterministic evidence that authority
     // cannot be suspended while a report transaction retains its membership lock.
     await assert.rejects(db.begin(async tx => {
@@ -151,13 +159,21 @@ if (!url || !confirmed || !roleAdminConfirmed) {
     await db.unsafe(`UPDATE ${t('memberships')} SET status='suspended' WHERE id=$1::uuid`, [membershipA]);
     assert.equal((await localActor(authUserId)).length, 0, 'later requests must lose access after membership suspension');
     console.log('PASS: membership suspension is serialized and subsequent authority resolution denies');
+  } catch (error) {
+    workloadError = error;
+    throw error;
   } finally {
     holdingResolve?.();
     suspensionResolve?.();
-    try { await db.unsafe(`DROP SCHEMA IF EXISTS ${q(schema)} CASCADE`); } catch {}
-    try { await db.unsafe(`DROP ROLE IF EXISTS ${runtime}`); } catch {}
-    try { await db.unsafe(`DROP ROLE IF EXISTS ${owner}`); } catch {}
-    await db.end();
+    // Release and drain every holder before attempting schema/role cleanup.
+    await Promise.allSettled([held, heldSuspension].filter(Boolean));
+    try {
+      await cleanupFixtureAuthority(db, {schema, ownerRole, runtimeRole}, created);
+    } catch (cleanupError) {
+      if (workloadError) throw new AggregateError([workloadError, cleanupError], 'Authority workload and cleanup failed');
+      throw cleanupError;
+    } finally { await db.end(); }
   }
   console.log('PASS: exact generated fixture schema and role cleanup completed');
 }
+
