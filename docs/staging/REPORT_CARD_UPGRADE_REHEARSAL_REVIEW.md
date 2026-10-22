@@ -54,3 +54,7 @@ try {
 ```
 
 Expected: eight PASS groups ending in exact generated schema cleanup. Never paste a password or connection URL into chat. A skipped invocation is not a test pass. Review a failure before proceeding to coordinated source/authority security installation preparation; do not enable application routes or apply the public dependency draft based on a prepared harness alone.
+
+## Windows line-ending regression repair
+
+The user's installed verifier passed TypeScript/ESLint and 480 of 481 tests; only the LF/CRLF planner test failed. Its fixture preparation replaced LF in text already checked out as CRLF, creating CRCRLF. The test now normalizes checkout text to LF before constructing the two input variants. The same failure was reproduced with an isolated CRLF checkout before the repair; afterward all eight planner tests passed in both LF and CRLF temporary checkouts. Planner/runtime SQL, harnesses and dependency draft are unchanged. Full 481-test verification still needs the user's rerun; no PostgreSQL upgrade results were supplied in this log.

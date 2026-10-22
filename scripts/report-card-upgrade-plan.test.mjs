@@ -4,8 +4,11 @@ import { readFileSync } from 'node:fs';
 import { reportUpgradeSourcePlan, reportUpgradeProposalPlan, upgradeFixtureSchema, upgradeProposalTables } from './lib/report-card-upgrade-plan.mjs';
 const schema = 'rc_it_0123456789abcdef';
 const root = new URL('../', import.meta.url);
-const baseline = readFileSync(new URL('drizzle/0000_broad_slayback.sql', root), 'utf8');
-const dependencies = readFileSync(new URL('docs/staging/REPORT_CARD_ACADEMIC_DEPENDENCIES_REVIEW.sql', root), 'utf8');
+// Canonicalize checkout text before constructing distinct LF/CRLF test inputs.
+// Replacing LF directly in an existing CRLF checkout would create CRCRLF.
+const readLF = path => readFileSync(new URL(path, root), 'utf8').replaceAll('\r\n', '\n');
+const baseline = readLF('drizzle/0000_broad_slayback.sql');
+const dependencies = readLF('docs/staging/REPORT_CARD_ACADEMIC_DEPENDENCIES_REVIEW.sql');
 const fakeProposal = () => [
   ...['assessment_config_state', 'assessment_mode', 'report_card_stage', 'report_card_action'].map(n => `CREATE TYPE "${schema}"."${n}" AS ENUM ('draft')`),
   ...upgradeProposalTables.map(n => `CREATE TABLE "${schema}"."${n}" (id uuid PRIMARY KEY)`),
