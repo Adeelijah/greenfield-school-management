@@ -1,5 +1,6 @@
 // OPT-IN local disposable semantic-baseline upgrade rehearsal. No env loader,
-// Drizzle configuration, application adapter, public writes or role creation.
+// Drizzle configuration, application adapter or public writes. Transactional
+// role creation additionally requires the explicit disposable role-admin token.
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { randomBytes, randomUUID } from 'node:crypto';
@@ -10,6 +11,7 @@ import { assessmentFixtureDDL } from './lib/assessment-disposable-schema.mjs';
 import { reportUpgradeSourcePlan, reportUpgradeProposalPlan, upgradeFixtureSchema } from './lib/report-card-upgrade-plan.mjs';
 import { reportUpgradeGuardPlan } from './lib/report-card-upgrade-guards.mjs';
 import { awaitFixtureAuthorityLock } from './lib/actor-authority-fixture-lifecycle.mjs';
+import { probeUpgradeSecurity } from './lib/report-card-upgrade-security-probe.mjs';
 
 const url = process.env.REPORT_CARD_TEST_DATABASE_URL;
 if (!url || process.env.REPORT_CARD_TEST_CONFIRM !== 'DISPOSABLE_REPORT_CARD_TEST_ONLY') {
@@ -255,6 +257,10 @@ if (!url || process.env.REPORT_CARD_TEST_CONFIRM !== 'DISPOSABLE_REPORT_CARD_TES
     } finally { releaseRead(); await holder; }
     await client.begin(tx => tx.unsafe('UPDATE ' + table('school_users') + ' SET id=id WHERE false'));
     console.log('PASS: upgraded shared source gate blocks zero-row authority writes before discovery and releases after the reader ends');
+    if (process.env.REPORT_CARD_TEST_ROLE_ADMIN_CONFIRM === 'DISPOSABLE_ROLE_ADMIN_TEST_ONLY') {
+      const authorityReview = await readFile(new URL('../docs/security/REPORT_CARD_ACTOR_AUTHORITY_REVIEW.sql', import.meta.url), 'utf8');
+      await probeUpgradeSecurity(client, schema, ids.school, userId, authorityReview);
+    } else console.log('SKIPPED: four upgraded security groups require the explicit disposable role-admin confirmation.');
     throw cleanupProbe;
   } catch (error) { if (error !== cleanupProbe) failure = error; }
   finally {

@@ -33,3 +33,7 @@ Six new pure guard-composition tests passed alongside 14 existing source/planner
 Pull report-cards-foundation and run `node .\scripts\verify-offline.mjs`. Then rerun the credential-cleaning PowerShell block in [REPORT_CARD_UPGRADE_REHEARSAL_REVIEW.md](REPORT_CARD_UPGRADE_REHEARSAL_REVIEW.md#opt-in-local-run); the command remains `node --experimental-strip-types .\scripts\report-card-postgres-upgrade-integration.mjs`. It needs the explicit local disposable URL and test confirmation, with no role-admin token. Expected final output is exact generated-schema cleanup after all 13 groups.
 
 Next after these gates: reconcile least-privilege runtime roles/RLS and complete membership resolution with this upgraded layout in a separately opted-in fixture. Do not install public SQL, enable routes or infer production readiness from this test package.
+
+## Verified guard gate and security continuation
+
+The user clarified the full 487-test gate passed before both SQL suites; supplied output verified all 13 upgrade and 64 main groups. The guard layer and parent-row correction are confirmed. REPORT_CARD_UPGRADE_SECURITY_REVIEW.md prepares a composed role/RLS/complete-resolver plan and four optional transactional role-admin probes on the upgraded layout. Expected full offline becomes 493 and optional upgrade total 17; these additions are not PostgreSQL-executed here. These SET LOCAL role probes do not establish an unprivileged LOGIN or SDK request. Existing main/standalone suites are unchanged.
