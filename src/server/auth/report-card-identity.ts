@@ -56,7 +56,13 @@ export async function resolveReportCardActorInTransaction(
   try {
     if (!verifiedIdentity?.[verifiedIdentityBrand] || !verifiedIdentity.authUserId) return null;
     const result = await tx.execute(sql`select * from public.lock_report_card_actor(${verifiedIdentity.authUserId}::uuid)`);
-    return decodeReportCardActorAuthority(verifiedIdentity.authUserId, transactionRows(result));
+    const authority = decodeReportCardActorAuthority(verifiedIdentity.authUserId, transactionRows(result));
+    // Refresh role/configuration, but never switch the request to another school
+    // or principal. A changed binding requires a newly verified request.
+    if (!authority || authority.schoolId !== verifiedIdentity.schoolId ||
+      authority.schoolUserId !== verifiedIdentity.schoolUserId ||
+      authority.membershipId !== verifiedIdentity.membershipId) return null;
+    return authority;
   } catch {
     return null;
   }
@@ -106,3 +112,4 @@ export async function withVerifiedReportCardActorTransaction<T>(
     return null;
   }
 }
+
