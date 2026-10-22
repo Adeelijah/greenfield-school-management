@@ -63,3 +63,27 @@ test('server bridge is server-only, fails closed, and refreshes authority inside
   assert.doesNotMatch(bridge, /export async function resolveVerifiedReportCardIdentity\([^)]/);
 });
 
+
+
+test('both authority resolvers acquire the shared statement gate before actor reads', () => {
+  for (const name of ['resolve_report_card_actor', 'lock_report_card_actor']) {
+    const body = sql.slice(sql.indexOf('CREATE FUNCTION public.' + name + '('), sql.indexOf('ALTER FUNCTION public.' + name + '('));
+    const gate = body.indexOf("pg_catalog.pg_advisory_xact_lock_shared(pg_catalog.hashtextextended('greenfield.report-card.authority-gate.v1', 0))");
+    assert.ok(gate >= 0 && gate < body.indexOf('SELECT su.id INTO actor_user_id'));
+  }
+});
+
+test('authority writers gate before row discovery on every parent and assignment table', () => {
+  for (const table of ['school_users', 'memberships', 'schools', 'teacher_class_assignments']) {
+    assert.match(sql, new RegExp('BEFORE INSERT OR UPDATE OR DELETE OR TRUNCATE ON public\\.' + table + '\\s+FOR EACH STATEMENT EXECUTE FUNCTION public\\.lock_report_card_authority_write_gate\\(\\)'));
+  }
+  const body = sql.slice(sql.indexOf('CREATE FUNCTION public.lock_report_card_authority_write_gate()'), sql.indexOf('ALTER FUNCTION public.lock_report_card_authority_write_gate()'));
+  assert.match(body, /pg_catalog\.pg_advisory_xact_lock\(pg_catalog\.hashtextextended\('greenfield\.report-card\.authority-gate\.v1', 0\)\)/);
+});
+
+test('statement gate rejects truncate and exposes no callable privileged helper to app roles', () => {
+  const body = sql.slice(sql.indexOf('CREATE FUNCTION public.lock_report_card_authority_write_gate()'), sql.indexOf('ALTER FUNCTION public.lock_report_card_authority_write_gate()'));
+  assert.match(body, /TG_OP = 'TRUNCATE'[\s\S]*?RAISE EXCEPTION[\s\S]*?ERRCODE='P0001'/);
+  assert.match(body, /SECURITY DEFINER[\s\S]*?SET search_path = pg_catalog[\s\S]*?SET row_security = on/);
+  assert.match(sql, /REVOKE ALL ON FUNCTION public\.lock_report_card_authority_write_gate\(\) FROM PUBLIC, anon, authenticated/);
+});
