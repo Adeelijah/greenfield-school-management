@@ -88,3 +88,10 @@ Do not wire this to full writers until source-gate/authority-gate ordering and r
 The user verified all eight standalone PostgreSQL groups, including writer-first membership/parent operations, rollback and reader-first assignment guards, plus exact cleanup. Main fixture replay/access-loss coverage remains verified at 61 groups. These remain separate from actual Supabase request integration.
 
 The unused server bridge now requires transaction-refreshed schoolId, schoolUserId and membershipId to match the branded request identity. Role/status/configuration are still re-read under locks. A changed principal requires a new verified request and cannot silently switch a command to another school or membership. Eleven new tests execute actual bridge source with offline dependency stubs, including a reproduced/fixed cross-school rebind. See REPORT_CARD_IDENTITY_BRIDGE_BEHAVIOR_REVIEW.md. Expected offline count is 427, pending full local verification; latest explicitly confirmed full gate is 413. No SQL, routes or live auth settings changed in this batch.
+
+
+## Complete fixture command boundary — 2026-10-22
+
+Full offline 427 is now user-verified. The next fixture boundary checks the exact generated writer role, locks source before complete authority, and keeps existing adapters in the same physical transaction. Failed outcomes and caught SQL errors abort the outer transaction. Derived fixture-only helper DDL enforces the same source/advisory order and grants complete resolver EXECUTE only to that writer, with a separate non-login authority owner. Existing school clamps remain.
+
+REPORT_CARD_COMPLETE_FIXTURE_BOUNDARY_REVIEW.md records 15 new offline tests (expected full count 442) and three new main SQL groups (expected 64), all pending full local/SQL verification. All 49 selected offline checks passed here. Existing standalone eight and main 61 SQL groups are verified. No SQL, route, migration or live auth change was performed here. Trusted fixture bindings do not replace the real SDK request bridge or configured school runtime mapping; those integrations remain next.

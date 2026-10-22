@@ -339,3 +339,12 @@ Eleven new offline tests execute the actual unused server bridge and decoder wit
 All 34 selected authority/static/lifecycle/behavior tests, script syntax and scoped whitespace passed locally. Expected full offline count is now 427; full local TypeScript/ESLint remains pending. No SQL or DB connection occurred here. SQL draft/harnesses are unchanged, so no additional PostgreSQL rerun is needed solely for this batch. See REPORT_CARD_IDENTITY_BRIDGE_BEHAVIOR_REVIEW.md.
 
 Next after offline verification: combined source/authority lock order, explicit runtime role mapping and real verified-request/complete-authority/report transaction integration in an isolated environment. Preserve all unrelated work and no merge/deploy/production/live-auth changes.
+
+
+## Verified 427 offline tests and combined fixture continuation — 2026-10-22
+
+User confirmed all current tests passed, verifying the requested 427-test offline gate. Standalone authority eight groups and main 61 groups remain verified. The next batch prepares one exact-writer transaction boundary combining source discovery, complete authority and existing workflow/canonical/revoke adapters. It rejects hidden membership ambiguity/principal drift and aborts on failed outcomes or caught SQL errors, preserving rollback across reused command callbacks.
+
+A fixture-only DDL builder adapts the reviewed authority functions with source-before-advisory lock order, narrow non-login owner policies and writer-only EXECUTE. It leaves service school clamps intact and extends exact cleanup for the generated owner. Eleven boundary and four DDL tests raise expected full offline count to 442 across 58 files; all 49 selected tests, syntax and scoped whitespace passed here. Full installed TypeScript/ESLint gate remains pending. Three prepared SQL groups raise main expectation to 64; new SQL was not executed here. Standalone eight-group harness is unchanged. See REPORT_CARD_COMPLETE_FIXTURE_BOUNDARY_REVIEW.md.
+
+Next after these gates: real verified-request command integration, explicit application runtime role/configuration and controlled staging migration/security preparation. The server SDK bridge is not wired into the fixture-only binding callback or routes. Preserve unrelated work and no merge, deployment, production database or live authorization changes.

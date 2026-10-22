@@ -1,5 +1,8 @@
 // Opt-in, schema-faithful fixture tests only. Never imports Drizzle Kit/config/env.
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
+import { completeFixtureAuthorityDDL } from './lib/report-card-complete-fixture-ddl.mjs';
+import { executeCompleteFixtureReport } from '../src/lib/academics/report-card-complete-fixture-boundary.ts';
 import { readFixtureRelationalAssessment } from '../src/lib/academics/assessment-postgres-fixture-source-reader.ts';
 import { randomBytes, randomUUID, createHash } from 'node:crypto';
 import { loadFixtureCompleteAssessment, readFixtureVerifiedCanonicalAssessment } from '../src/lib/academics/assessment-postgres-canonical-reader.ts';
@@ -956,6 +959,8 @@ END $$`);
    const sessionSchema='rc_it_'+randomBytes(8).toString('hex');
    const sessionFixture=assessmentFixtureDDL(sessionSchema,{includeReports:true});
    const sessionSecurity=fixtureSecurityPlan(sessionSchema,ids.school);
+   const completePlan=completeFixtureAuthorityDDL(sessionSchema,await readFile(new URL('../docs/security/REPORT_CARD_ACTOR_AUTHORITY_REVIEW.sql',import.meta.url),'utf8'));
+   const completeHolders=[],completeReleases=[];
    const sessionTable=sessionFixture.table,runToken=randomBytes(24).toString('hex');
    const loginPlan=disposableLoginPlan(sessionSchema),loginPassword=randomBytes(32).toString('hex');
    const databaseName=decodeURIComponent(parsed.pathname.slice(1));
@@ -989,6 +994,7 @@ BEGIN RAISE EXCEPTION 'independent fixture history is append-only' USING ERRCODE
      const preflight=fixtureRolePreflightPlan(sessionSchema);
      assert.equal(inspectFixtureRestrictedRoles(sessionSchema,await bound.unsafe(preflight.query,preflight.parameters)).ok,true);
      for(const statement of sessionSecurity.statements)await bound.unsafe(statement);
+     for(const statement of completePlan.statements)await bound.unsafe(statement);
      // Secret is generated in memory and never printed or saved. Hex validation
      // precedes interpolation because CREATE ROLE PASSWORD cannot bind a value.
      disposableLoginURL(url,sessionSchema,loginPassword);
@@ -1111,6 +1117,79 @@ BEGIN RAISE EXCEPTION 'independent fixture history is append-only' USING ERRCODE
     assert.deepEqual(await reportHistory(),historyBefore);
     console.log('PASS: suspended teacher/admin cannot replay submission, approval, publication or revocation; reactivation replays history without new writes');
 
+    // Combine the complete authority helper and real fixture writers in ONE
+    // restricted transaction. The helper itself also enforces source-before-
+    // authority ordering, so direct private helper entry cannot invert gates.
+    const teacherBinding={authUserId:authUser,schoolUserId:ids.teacherUser,membershipId:ids.teacher,schoolId:ids.school};
+    const adminBinding={authUserId:adminAuth,schoolUserId:ids.adminUser,membershipId:ids.admin,schoolId:ids.school};
+    const completeTeacher=work=>executeCompleteFixtureReport(writer,sessionSchema,teacherBinding,work);
+    const completeAdmin=work=>executeCompleteFixtureReport(writer,sessionSchema,adminBinding,work);
+    assert.equal((await completeTeacher((db,identity)=>executeFixtureReportWorkflow(db,sessionSchema,independentSubmit,identity))).kind,'replay');
+    for(const command of adminReplays)assert.equal((await completeAdmin((db,identity)=>executeFixtureCanonicalReportCommand(db,sessionSchema,command,identity))).kind,'replay');
+    assert.equal((await completeAdmin((db,identity)=>executeFixtureReportRevocation(db,sessionSchema,independentRevoke,identity))).kind,'replay');
+    await expectError('42501',()=>reader.begin(bound=>bound.unsafe('SELECT * FROM '+sessionTable('lock_report_card_actor')+'($1::uuid)',[authUser])));
+    await expectError('42501',()=>loginClient.begin(tx=>tx.unsafe('SET LOCAL ROLE '+q(completePlan.owner))));
+    assert.deepEqual(await executeCompleteFixtureReport(writerDb,sessionSchema,teacherBinding,async()=>({ok:true})),{ok:false,code:'forbidden'});
+    const hiddenMembership=randomUUID();
+    await sql.unsafe('INSERT INTO '+sessionTable('memberships')+" (id,school_id,user_id,role,status) VALUES ($1::uuid,$2::uuid,$3::uuid,'teacher','active')",[hiddenMembership,ids.foreignSchool,ids.teacherUser]);
+    await writer.begin(async bound=>{assert.equal((await bound.unsafe('SELECT id FROM '+sessionTable('memberships')+" WHERE user_id=$1::uuid AND status='active'",[ids.teacherUser])).length,1);});
+    let hiddenWork=false;
+    assert.deepEqual(await completeTeacher(async()=>{hiddenWork=true;return {ok:true};}),{ok:false,code:'forbidden'});
+    assert.equal(hiddenWork,false);assert.deepEqual(await reportHistory(),historyBefore);
+    await sql.unsafe('DELETE FROM '+sessionTable('memberships')+' WHERE id=$1::uuid',[hiddenMembership]);
+    assert.equal((await completeTeacher((db,identity)=>executeFixtureReportWorkflow(db,sessionSchema,independentSubmit,identity))).kind,'replay');
+    console.log('PASS: complete authority and real restricted writers share one transaction; hidden second membership, reader helper access and owner fallback are denied');
+
+    const completeReturn={action:'return',reportId:reportA,expectedVersion:10,operationKey:'complete-boundary-return',reason:'Complete authority transaction rollback check'};
+    const rejectedBoundary=await completeAdmin(async(db,identity)=>{
+     const applied=await executeFixtureReportWorkflow(db,sessionSchema,completeReturn,identity);
+     assert.equal(applied.ok,true,JSON.stringify(applied));
+     return {ok:false,code:'injected_outer_failure'};
+    });
+    assert.deepEqual(rejectedBoundary,{ok:false,code:'injected_outer_failure'});
+    assert.deepEqual(await reportHistory(),historyBefore);
+    const completeReturned=await completeAdmin((db,identity)=>executeFixtureReportWorkflow(db,sessionSchema,completeReturn,identity));
+    assert.equal(completeReturned.ok,true,JSON.stringify(completeReturned));assert.equal(completeReturned.kind,'applied');assert.equal(completeReturned.version,11);
+    const afterCompleteReturn=await reportHistory();
+    assert.equal((await completeAdmin((db,identity)=>executeFixtureReportWorkflow(db,sessionSchema,completeReturn,identity))).kind,'replay');
+    assert.deepEqual(await reportHistory(),afterCompleteReturn);
+    console.log('PASS: complete outer boundary rolls back successful inner writer on rejected outcome; same-key retry applies once and replay adds no writes');
+
+    let signalComplete,releaseComplete;
+    const completeReady=new Promise(resolve=>{signalComplete=resolve;});
+    const completeGate=new Promise(resolve=>{releaseComplete=resolve;});completeReleases.push(releaseComplete);
+    const heldComplete=completeAdmin(async(db,identity)=>{
+     const replay=await executeFixtureReportWorkflow(db,sessionSchema,completeReturn,identity);
+     assert.equal(replay.kind,'replay');signalComplete();await completeGate;return replay;
+    });completeHolders.push(heldComplete);
+    await awaitFixtureAuthorityLock(heldComplete,completeReady);
+    for(const [query,parameters] of [
+     ['UPDATE '+sessionTable('assessment_scores')+' SET version=version+1 WHERE id=$1::uuid',[ids.score]],
+     ['UPDATE '+sessionTable('memberships')+" SET status='suspended' WHERE id=$1::uuid",[ids.admin]],
+    ])await expectError('55P03',()=>client.begin(async tx=>{const bound=wrap(tx);await bound.unsafe("SET LOCAL lock_timeout='200ms'");await bound.unsafe(query,parameters);}));
+    releaseComplete();assert.equal((await heldComplete).kind,'replay');
+    let signalOwner,releaseOwner;
+    const ownerReady=new Promise(resolve=>{signalOwner=resolve;});
+    const ownerGate=new Promise(resolve=>{releaseOwner=resolve;});completeReleases.push(releaseOwner);
+    const heldOwner=client.begin(async tx=>{
+     const bound=wrap(tx);await bound.unsafe("SET LOCAL statement_timeout='10s'");
+     await bound.unsafe('UPDATE '+sessionTable('memberships')+' SET role=role WHERE id=$1::uuid',[ids.admin]);
+     signalOwner();await ownerGate;
+    });heldOwner.catch(()=>{});completeHolders.push(heldOwner);
+    await awaitFixtureAuthorityLock(heldOwner,ownerReady);
+    let blockedCode=null,blockedWork=false;
+    const boundedWriter={unsafe:writer.unsafe,begin:callback=>writer.begin(async bound=>{
+     await bound.unsafe("SET LOCAL lock_timeout='200ms'");
+     return callback({unsafe:async(query,parameters)=>{try{return await bound.unsafe(query,parameters);}catch(error){blockedCode=error.code;throw error;}}});
+    })};
+    assert.deepEqual(await executeCompleteFixtureReport(boundedWriter,sessionSchema,adminBinding,async()=>{blockedWork=true;return {ok:true};}),{ok:false,code:'transaction_failed'});
+    assert.equal(blockedCode,'55P03');assert.equal(blockedWork,false);
+    releaseOwner();await heldOwner;
+    assert.equal((await completeAdmin((db,identity)=>executeFixtureReportWorkflow(db,sessionSchema,completeReturn,identity))).kind,'replay');
+    assert.deepEqual(await reportHistory(),afterCompleteReturn);
+    console.log('PASS: combined source/authority gate blocks source and membership writers in both arrival orders; retry retains exact report history');
+
+
     await writer.begin(async bound=>{
      await bound.unsafe('RESET ROLE');
      const reset=(await bound.unsafe('SELECT session_user AS login,current_user AS role'))[0];
@@ -1126,6 +1205,8 @@ BEGIN RAISE EXCEPTION 'independent fixture history is append-only' USING ERRCODE
     // acknowledgement was lost. Never drop a colliding pre-existing schema.
     if(releaseAssignmentReplay)releaseAssignmentReplay();
     if(assignmentReplay)await Promise.allSettled([assignmentReplay]);
+    for(const release of completeReleases)release();
+    await Promise.allSettled(completeHolders);
     if(loginClient)await loginClient.end();
     const markerExists=(await sql.unsafe('SELECT pg_catalog.to_regclass($1::text) IS NOT NULL AS present',[sessionTable('fixture_run_marker')]))[0].present;
     if(markerExists){
@@ -1134,6 +1215,7 @@ BEGIN RAISE EXCEPTION 'independent fixture history is append-only' USING ERRCODE
      await sql.unsafe('DROP SCHEMA '+q(sessionSchema)+' CASCADE');
      await sql.unsafe('REVOKE CONNECT ON DATABASE '+q(databaseName)+' FROM '+q(loginPlan.login));
      await sql.unsafe('DROP ROLE '+q(loginPlan.login));
+     await sql.unsafe('DROP ROLE '+q(completePlan.owner));
      await sql.unsafe('DROP ROLE '+Object.values(sessionSecurity.roles).map(q).join(','));
     }else if(sessionCommitted)throw Error('Independent fixture marker missing; automatic cleanup refused for '+sessionSchema);
    }
@@ -1141,9 +1223,10 @@ BEGIN RAISE EXCEPTION 'independent fixture history is append-only' USING ERRCODE
    const removed=fixtureRolePreflightPlan(sessionSchema);
    assert.equal((await sql.unsafe(removed.query,removed.parameters)).length,0);
    assert.equal((await sql.unsafe(loginPlan.query,loginPlan.parameters)).length,0);
+   assert.equal((await sql.unsafe('SELECT rolname FROM pg_catalog.pg_roles WHERE rolname=$1::text',[completePlan.owner])).length,0);
    assert.equal((await sql.unsafe('SELECT count(*)::int AS n FROM pg_catalog.pg_namespace WHERE nspname=$1::text',[sessionSchema]))[0].n,0);
    console.log('PASS: committed independent-session fixture and exact temporary roles are removed even after an intentional workload error');
-  }else console.log('SKIPPED: eight independent restricted-session/login/access-loss groups require the existing disposable role-admin confirmation');
+  }else console.log('SKIPPED: eleven independent restricted-session/login/access-loss/complete-authority groups require the existing disposable role-admin confirmation');
 
  } finally {
   try { await sql.unsafe('DROP SCHEMA IF EXISTS ' + q(schema) + ' CASCADE'); } finally { await client.end(); }
