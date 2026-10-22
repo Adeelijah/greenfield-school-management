@@ -28,6 +28,9 @@ test('academic parent invalidation uses old and new identities and deterministic
 test('academic parent triggers discover references before cascade and leave authority changes out of revisions', () => {
  const plan = assessmentAuthorityGuardDDL(schema);
  assert.equal(plan.academicParents.length, 7);
+ const invalidate = plan.statements.find(s => s.startsWith('CREATE FUNCTION'));
+ assert.match(invalidate, /IF TG_OP='DELETE' THEN RETURN OLD; END IF;\s+RETURN NEW;/);
+ assert.doesNotMatch(invalidate, /RETURN NULL/);
  for (const name of plan.academicParents) assert.ok(plan.statements.some(s => s.includes('BEFORE UPDATE OR DELETE ON "'+schema+'"."'+name+'" FOR EACH ROW')));
  for (const name of ['school_users','memberships','teacher_class_assignments','assessment_teacher_subjects']) assert.equal(plan.academicParents.includes(name),false);
 });

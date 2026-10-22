@@ -8,6 +8,8 @@ import { getTableConfig } from 'drizzle-orm/pg-core';
 import * as assembly from '../src/db/report-card-staging-schema.review.ts';
 import { assessmentFixtureDDL } from './lib/assessment-disposable-schema.mjs';
 import { reportUpgradeSourcePlan, reportUpgradeProposalPlan, upgradeFixtureSchema } from './lib/report-card-upgrade-plan.mjs';
+import { reportUpgradeGuardPlan } from './lib/report-card-upgrade-guards.mjs';
+import { awaitFixtureAuthorityLock } from './lib/actor-authority-fixture-lifecycle.mjs';
 
 const url = process.env.REPORT_CARD_TEST_DATABASE_URL;
 if (!url || process.env.REPORT_CARD_TEST_CONFIRM !== 'DISPOSABLE_REPORT_CARD_TEST_ONLY') {
@@ -25,7 +27,7 @@ if (!url || process.env.REPORT_CARD_TEST_CONFIRM !== 'DISPOSABLE_REPORT_CARD_TES
   const plan = reportUpgradeSourcePlan(schema, baseline, dependencies);
   const fixture = assessmentFixtureDDL(schema, { includeReports: true });
   const proposals = reportUpgradeProposalPlan(schema, fixture.statements);
-  const client = postgres(url, { max: 1, prepare: false, connect_timeout: 5, onnotice: () => {} });
+  const client = postgres(url, { max: 2, prepare: false, connect_timeout: 5, connection: { search_path: 'pg_catalog' }, onnotice: () => {} });
   const run = async (tx, statements) => { for (const statement of statements) await tx.unsafe(statement); };
   const snapshot = async tx => {
     const relations = await tx.unsafe(`SELECT c.relname,c.relkind,a.attname,a.attnum,a.attnotnull,
@@ -164,6 +166,95 @@ if (!url || process.env.REPORT_CARD_TEST_CONFIRM !== 'DISPOSABLE_REPORT_CARD_TES
     assert.deepEqual((await client.unsafe('SELECT final_primary_year,structure_version FROM ' + table('schools'))).map(row => ({ ...row })), [{ final_primary_year: null, structure_version: 0 }]);
     assert.deepEqual((await client.unsafe('SELECT level_id,section_id FROM ' + table('classes'))).map(row => ({ ...row })), [{ level_id: null, section_id: null }]);
     console.log('PASS: legacy admissions, guardian links and audit rows survive without inferred school year or class backfill');
+
+    const guardPlan = reportUpgradeGuardPlan(schema);
+    const structural = await snapshot(client);
+    await assert.rejects(client.begin(async tx => { await run(tx, guardPlan.statements); throw inject; }), error => error === inject);
+    assert.deepEqual(await snapshot(client), structural); assert.deepEqual(await legacyData(client), beforeData);
+    assert.equal((await client.unsafe('SELECT p.oid FROM pg_catalog.pg_proc p JOIN pg_catalog.pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname=$1', [schema])).length, 0);
+    console.log('PASS: failed guard installation rolls back protocol tables, functions and triggers without changing upgraded data');
+
+    await client.begin(tx => run(tx, guardPlan.statements));
+    const triggers = await client.unsafe(`SELECT c.relname,t.tgname,t.tgenabled FROM pg_catalog.pg_trigger t
+      JOIN pg_catalog.pg_class c ON c.oid=t.tgrelid JOIN pg_catalog.pg_namespace n ON n.oid=c.relnamespace
+      WHERE n.nspname=$1 AND NOT t.tgisinternal`, [schema]);
+    for (const name of guardPlan.immutable) for (const trigger of ['fixture_upgrade_history_write', 'fixture_upgrade_history_truncate']) assert.ok(triggers.some(t => t.relname === name && t.tgname === trigger && t.tgenabled === 'O'));
+    for (const name of guardPlan.authorityTargets) assert.ok(triggers.some(t => t.relname === name && t.tgname === 'fixture_authority_gate' && t.tgenabled === 'O'));
+    const functions = await client.unsafe(`SELECT p.proname,EXISTS(SELECT 1 FROM pg_catalog.aclexplode(COALESCE(p.proacl,pg_catalog.acldefault('f',p.proowner))) a
+      WHERE a.grantee=0 AND a.privilege_type='EXECUTE') AS public_execute
+      FROM pg_catalog.pg_proc p JOIN pg_catalog.pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname=$1`, [schema]);
+    assert.equal(functions.length, 7); assert.ok(functions.every(f => !f.public_execute));
+    console.log('PASS: upgraded schema installs source, parent, immutable-history and release guards with private helper execution');
+
+    const sessionId = randomUUID(), termId = randomUUID(), scopeId = randomUUID(), enrollmentId = randomUUID();
+    await client.begin(async tx => {
+      await tx.unsafe('INSERT INTO ' + table('academic_sessions') + " (id,school_id,label,starts_on,ends_on) VALUES ($1,$2,'Fixture session','2026-01-01','2026-12-31')", [sessionId, ids.school]);
+      await tx.unsafe('INSERT INTO ' + table('terms') + " (id,school_id,session_id,name,starts_on,ends_on) VALUES ($1,$2,$3,'Fixture term','2026-01-01','2026-04-30')", [termId, ids.school, sessionId]);
+      await tx.unsafe('INSERT INTO ' + table('assessment_scopes') + ' (id,school_id,class_id,session_id,term_id) VALUES ($1,$2,$3,$4,$5)', [scopeId, ids.school, ids.class, sessionId, termId]);
+    });
+    const revision = async () => (await client.unsafe('SELECT revision FROM ' + table('assessment_scopes') + ' WHERE id=$1', [scopeId]))[0].revision;
+    const startRevision = await revision();
+    await client.begin(async tx => {
+      await tx.unsafe('INSERT INTO ' + table('enrollments') + ' (id,school_id,student_id,class_id,session_id) VALUES ($1,$2,$3,$4,$5)', [enrollmentId, ids.school, ids.student, ids.class, sessionId]);
+      const school = await tx.unsafe('UPDATE ' + table('schools') + " SET name='Changed fixture school' WHERE id=$1 RETURNING name", [ids.school]);
+      const changedClass = await tx.unsafe('UPDATE ' + table('classes') + " SET name='Changed fixture class' WHERE id=$1 RETURNING name", [ids.class]);
+      assert.equal(school[0]?.name, 'Changed fixture school'); assert.equal(changedClass[0]?.name, 'Changed fixture class');
+    });
+    assert.equal(await revision(), startRevision + 1);
+    const claims = (await client.unsafe('SELECT transaction_id,scope_id FROM ' + table('fixture_source_write_claims') + ' ORDER BY transaction_id,scope_id')).map(r => ({ ...r }));
+    await assert.rejects(client.begin(async tx => {
+      await tx.unsafe('DELETE FROM ' + table('enrollments') + ' WHERE id=$1', [enrollmentId]);
+      await tx.unsafe('UPDATE ' + table('schools') + " SET name='Rolled-back fixture name' WHERE id=$1", [ids.school]);
+      throw inject;
+    }), error => error === inject);
+    assert.equal(await revision(), startRevision + 1);
+    assert.deepEqual((await client.unsafe('SELECT transaction_id,scope_id FROM ' + table('fixture_source_write_claims') + ' ORDER BY transaction_id,scope_id')).map(r => ({ ...r })), claims);
+    assert.equal((await client.unsafe('SELECT id FROM ' + table('enrollments') + ' WHERE id=$1', [enrollmentId])).length, 1);
+    assert.equal((await client.unsafe('SELECT name FROM ' + table('schools') + ' WHERE id=$1', [ids.school]))[0].name, 'Changed fixture school');
+    const unusedLevel = randomUUID();
+    await client.unsafe('INSERT INTO ' + table('academic_levels') + " (id,school_id,name,stage,progression_order) VALUES ($1,$2,'Unused fixture level','nursery',99)", [unusedLevel, ids.school]);
+    assert.equal((await client.unsafe('DELETE FROM ' + table('academic_levels') + ' WHERE id=$1 RETURNING id', [unusedLevel])).length, 1);
+    assert.equal((await client.unsafe('SELECT id FROM ' + table('academic_levels') + ' WHERE id=$1', [unusedLevel])).length, 0);
+    console.log('PASS: upgraded parent updates/deletes take effect, invalidate once per transaction and roll back rows and revision claims on failure');
+
+    const userId = randomUUID(), memberId = randomUUID(), auditId = randomUUID(), levelId = randomUUID(), configId = randomUUID();
+    await client.begin(async tx => {
+      await tx.unsafe('INSERT INTO ' + table('school_users') + " (id,auth_user_id,display_name) VALUES ($1,$2,'Fixture administrator')", [userId, randomUUID()]);
+      await tx.unsafe('INSERT INTO ' + table('memberships') + " (id,school_id,user_id,role) VALUES ($1,$2,$3,'admin')", [memberId, ids.school, userId]);
+      await tx.unsafe('INSERT INTO ' + table('assessment_audit') + " (id,school_id,scope_id,actor_membership_id,action,before_revision,after_revision) VALUES ($1,$2,$3,$4,'fixture',1,1)", [auditId, ids.school, scopeId, memberId]);
+      await tx.unsafe('INSERT INTO ' + table('academic_levels') + " (id,school_id,name,stage,primary_year,progression_order) VALUES ($1,$2,'Fixture Primary 1','primary',1,1)", [levelId, ids.school]);
+      await tx.unsafe('INSERT INTO ' + table('assessment_config_versions') + ` (id,school_id,config_key,revision,level_id,session_id,term_id,mode,state,components,grading)
+        VALUES ($1,$2,$3,1,$4,$5,$6,'numeric','finalized','[{}]'::jsonb,'{}'::jsonb)`, [configId, ids.school, randomUUID(), levelId, sessionId, termId]);
+    });
+    const denied = callback => assert.rejects(client.begin(callback), error => error.code === 'P0001');
+    for (const name of guardPlan.immutable) {
+      await denied(tx => tx.unsafe('UPDATE ' + table(name) + ' SET id=id WHERE false'));
+      await denied(tx => tx.unsafe('DELETE FROM ' + table(name) + ' WHERE false'));
+      await denied(tx => tx.unsafe('TRUNCATE ' + table(name) + ' CASCADE'));
+    }
+    await denied(tx => tx.unsafe('UPDATE ' + table('assessment_audit') + " SET action='changed' WHERE id=$1", [auditId]));
+    await denied(tx => tx.unsafe('UPDATE ' + table('assessment_config_versions') + " SET state='draft' WHERE id=$1", [configId]));
+    await denied(tx => tx.unsafe('DELETE FROM ' + table('assessment_config_versions') + ' WHERE id=$1', [configId]));
+    await denied(tx => tx.unsafe('TRUNCATE ' + table('report_card_releases') + ' CASCADE'));
+    assert.equal((await client.unsafe('SELECT action FROM ' + table('assessment_audit') + ' WHERE id=$1', [auditId]))[0].action, 'fixture');
+    assert.equal((await client.unsafe('SELECT state FROM ' + table('assessment_config_versions') + ' WHERE id=$1', [configId]))[0].state, 'finalized');
+    console.log('PASS: upgraded history denies zero-row and populated mutations, finalized configuration changes and release truncation');
+
+    let releaseRead, readyRead;
+    const ready = new Promise(resolve => { readyRead = resolve; });
+    const hold = new Promise(resolve => { releaseRead = resolve; });
+    const holder = client.begin(async tx => { await tx.unsafe(guardPlan.readGate); readyRead(); await hold; });
+    try {
+      await awaitFixtureAuthorityLock(holder, ready);
+      for (const name of ['schools', 'school_users', 'memberships']) {
+        await assert.rejects(client.begin(async tx => {
+          await tx.unsafe("SET LOCAL lock_timeout='200ms'");
+          await tx.unsafe('UPDATE ' + table(name) + ' SET id=id WHERE false');
+        }), error => error.code === '55P03');
+      }
+    } finally { releaseRead(); await holder; }
+    await client.begin(tx => tx.unsafe('UPDATE ' + table('school_users') + ' SET id=id WHERE false'));
+    console.log('PASS: upgraded shared source gate blocks zero-row authority writes before discovery and releases after the reader ends');
     throw cleanupProbe;
   } catch (error) { if (error !== cleanupProbe) failure = error; }
   finally {

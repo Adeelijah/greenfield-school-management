@@ -18,6 +18,7 @@ const tests = [
   'scripts/report-card-fixture-commands.test.mjs',
   'scripts/report-card-staging-assembly.test.mjs',
   'scripts/report-card-upgrade-plan.test.mjs',
+  'scripts/report-card-upgrade-guards.test.mjs',
   'scripts/report-card-staging-metadata.test.mjs',
   'scripts/report-card-complete-fixture-ddl.test.mjs',
   'scripts/actor-authority-fixture-lifecycle.test.mjs',

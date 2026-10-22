@@ -31,7 +31,10 @@ BEGIN
  LOOP
   PERFORM ${table('fixture_mark_source_scope')}(target);
  END LOOP;
- RETURN NULL;
+ -- BEFORE ROW must pass the row through after invalidation. NULL would cancel
+ -- the parent mutation while still committing its source revision claim.
+ IF TG_OP='DELETE' THEN RETURN OLD; END IF;
+ RETURN NEW;
 END $$`);
  // BEFORE ROW retains parent/enrollment discovery before a cascading delete.
  // INSERT has no dependent scope yet; later scope/enrollment creation already invalidates.

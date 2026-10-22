@@ -695,6 +695,7 @@ if (!url || process.env.REPORT_CARD_TEST_CONFIRM !== 'DISPOSABLE_REPORT_CARD_TES
    await bound.unsafe('UPDATE '+table('academic_levels')+' SET id=id WHERE id=$1::uuid',[ids.level]);
    await bound.unsafe('UPDATE '+table('schools')+' SET final_primary_year=6 WHERE id=$1::uuid',[ids.school]);
   });
+  assert.equal((await sql.unsafe('SELECT final_primary_year FROM '+table('schools')+' WHERE id=$1::uuid',[ids.school]))[0].final_primary_year,6);
   assertIncrement(beforeParentCommit,await revisions(),allParentScopes);
   assert.equal((await readCanonical()).ok,false);
   await seal();
