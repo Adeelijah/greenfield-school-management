@@ -65,3 +65,10 @@ A mocked auth callback or successful local PostgreSQL login does not verify real
 The prior baseline of 393 offline tests and 59 disposable PostgreSQL groups was user-verified. This continuation's offline gate passed TypeScript, ESLint and 405 tests; the isolated PostgreSQL authority harness is syntax-checked but has not run. No database or SQL was accessed.
 
 The pure decoder, server-only identity bridge, review SQL and 12 offline tests are prepared. Before route integration, a separately authorized local disposable PostgreSQL run must verify hidden second memberships and authority changes racing the actor lock. Assignment removal and historical replay after authority loss also require isolated verification. Review the function-owner policies, runtime role mapping, RLS behavior and lock order. Do not wire report routes or claim runtime authority until these gates pass and the proposed security objects are separately reviewed for installation.
+
+
+## Disposable verification update — 2026-10-22
+
+The user verified the standalone authority harness: hidden second active membership rejection, suspended-history allowance, insertion/suspension serialization and exact cleanup all passed (five groups). The user also verified the full 413-test offline gate. Earlier pending-result notes are historical; live Supabase request authentication, role/policy installation and route wiring remain unverified.
+
+REPORT_CARD_ACCESS_LOSS_REPLAY_REVIEW.md prepares two main harness groups using the actual fixture report writers under the generated LOGIN. They test assignment-removal serialization and denial of historical teacher/admin receipts after authority loss, with no history mutation. Main harness expectation is now 61, pending execution of these additions. These fixture writers still use their original fixture identity context, so this is not proof of the new complete resolver and full writer running together. Writer-first ordering and runtime mapping must be resolved before that integration.
