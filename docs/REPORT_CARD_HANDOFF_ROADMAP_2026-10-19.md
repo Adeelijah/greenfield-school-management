@@ -328,3 +328,14 @@ User supplied all 61 main PostgreSQL groups passed, including restricted in-flig
 The standalone SQL review draft now prepares shared transaction advisory locking before authority discovery and exclusive BEFORE STATEMENT gates on school_users, memberships, schools and teacher_class_assignments, retaining actor/membership/school row locks and blocking authority truncate. This addresses the reverse arrival order left unproven by the prior row-only anchor trigger. Three new static tests raise expected offline count to 416; all 23 selected authority/static/lifecycle tests, CRLF regression, syntax and scoped whitespace passed here. Three prepared SQL groups raise standalone expectation to eight. No database connection or SQL execution occurred here. See REPORT_CARD_AUTHORITY_STATEMENT_GATE_REVIEW.md for conservative scope and integration limits.
 
 Next: full 416-test gate and eight-group standalone disposable run; then common source/authority lock ordering, runtime role mapping and actual authenticated server/complete-authority/report transaction integration. The verified main 61 groups remain separate from the new complete resolver. No main harness rerun is required solely for this draft change. Preserve no merge, deployment, live auth or production changes.
+
+
+## Verified eight authority groups and bridge behavior — 2026-10-22
+
+User supplied all eight standalone authority PostgreSQL groups passed, alongside previously verified main 61 groups and offline 413. Latest requested offline 416 result is not separately supplied. Statement-before-row ordering is verified for the prepared standalone cases, not arbitrary combined source/authority transactions or actual SDK auth.
+
+Eleven new offline tests execute the actual unused server bridge and decoder with SDK/driver/server-only imports intercepted. They cover auth and RPC errors, unbranded identity, locked authority refresh, assignment scope, callback ordering and transaction failure propagation. A failing regression exposed request principal drift: a transaction refresh could switch school, school-user or membership under the same auth ID. The bridge now rejects such rebinds before report work while honoring current locked role/configuration. No route or live auth configuration is changed.
+
+All 34 selected authority/static/lifecycle/behavior tests, script syntax and scoped whitespace passed locally. Expected full offline count is now 427; full local TypeScript/ESLint remains pending. No SQL or DB connection occurred here. SQL draft/harnesses are unchanged, so no additional PostgreSQL rerun is needed solely for this batch. See REPORT_CARD_IDENTITY_BRIDGE_BEHAVIOR_REVIEW.md.
+
+Next after offline verification: combined source/authority lock order, explicit runtime role mapping and real verified-request/complete-authority/report transaction integration in an isolated environment. Preserve all unrelated work and no merge/deploy/production/live-auth changes.
