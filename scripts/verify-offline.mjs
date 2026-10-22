@@ -14,6 +14,7 @@ const tests = [
   'scripts/disposable-session-rendezvous.test.mjs',
   'scripts/disposable-login-plan.test.mjs',
   'scripts/report-card-actor-authority-review.test.mjs',
+  'scripts/report-card-identity-behavior.test.mjs',
   'scripts/actor-authority-fixture-lifecycle.test.mjs',
   'src/components/academics/class-structure.test.ts',
   'src/components/students/academic-progression.test.ts',
