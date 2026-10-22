@@ -310,3 +310,12 @@ Next: run the opted-in authority harness in the local disposable database. Revie
 User's expanded offline run reached 413 tests: 412 passed and one static actor-lock order check failed. Reproduced the same failure locally with the SQL fixture checked out as CRLF: the test searched for a literal LF between the actor predicate and FOR UPDATE. The check now normalizes line endings within its inspection and explicitly exercises both LF and CRLF copies, retaining required clauses and ordering. Only the static test changes; authority SQL and runtime authorization remain unchanged.
 
 All 20 selected authority/static/lifecycle tests passed against CRLF fixture text here, and script syntax/whitespace passed. Expected full offline count remains 413; a complete Windows rerun is pending. The uploaded log contains no standalone authority PostgreSQL execution, so its five groups remain unverified. Continue with that isolated gate after the offline repair passes. No database connection or SQL execution occurred here.
+
+
+## Verified authority gates and access-loss replay coverage — 2026-10-22
+
+User verified all five standalone actor-authority PostgreSQL groups and then all 413 offline tests, TypeScript/ESLint and tracked whitespace. The Windows regression repair and standalone complete-membership fixture gates are now verified. This does not verify live Supabase RPC auth or installation of the SQL review draft.
+
+Two prepared main assessment/report harness groups now exercise actual restricted writer historical replay during/after assignment removal, and teacher/admin membership suspension/reactivation. Report/snapshot/release/audit/receipt history must remain unchanged on denials and replays. Expected main PostgreSQL total rises from 59 to 61 with existing role-admin opt-in; its new groups remain pending. Full offline count stays 413. All 52 selected authority/static/lifecycle/writer tests, script syntax and scoped whitespace passed here. No database connection or SQL execution occurred here. See REPORT_CARD_ACCESS_LOSS_REPLAY_REVIEW.md.
+
+Next after the expanded main harness: resolve writer-first lock ordering, runtime role mapping and actual server auth/transaction integration before report routes are enabled. The standalone complete authority resolver is not yet wired to the full report writers. Preserve no merge, deployment, production/live authorization changes and all unrelated local work.
