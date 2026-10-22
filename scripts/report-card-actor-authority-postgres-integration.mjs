@@ -31,6 +31,7 @@ if (!url || !confirmed || !roleAdminConfirmed) {
   const owner = q(ownerRole), runtime = q(runtimeRole);
   const created = { schema: false, owner: false, runtime: false };
   let held, heldSuspension, workloadError;
+  const additionalHolders = [], additionalReleases = [];
   let holdingResolve;
   let lockedResolve;
   let suspensionResolve;
@@ -51,8 +52,9 @@ if (!url || !confirmed || !roleAdminConfirmed) {
       .trim();
   }
 
-  async function localActor(authUserId) {
+  async function localActor(authUserId, bounded = false) {
     return db.begin(async tx => {
+      if (bounded) await tx.unsafe("SET LOCAL lock_timeout='200ms'");
       await tx.unsafe(`SET LOCAL ROLE ${runtime}`);
       return tx.unsafe(`SELECT * FROM ${t('lock_report_card_actor')}($1::uuid)`, [authUserId]);
     });
@@ -77,6 +79,14 @@ if (!url || !confirmed || !roleAdminConfirmed) {
     await db.unsafe(`CREATE TABLE ${t('schools')} (id uuid PRIMARY KEY,final_primary_year integer NOT NULL)`);
     await db.unsafe(`CREATE TABLE ${t('school_users')} (id uuid PRIMARY KEY,auth_user_id uuid NOT NULL UNIQUE,display_name text NOT NULL)`);
     await db.unsafe(`CREATE TABLE ${t('memberships')} (id uuid PRIMARY KEY,school_id uuid NOT NULL,user_id uuid NOT NULL,role text NOT NULL,status text NOT NULL,UNIQUE(school_id,user_id))`);
+    await db.unsafe(`CREATE TABLE ${t('teacher_class_assignments')} (id uuid PRIMARY KEY,school_id uuid NOT NULL,teacher_membership_id uuid NOT NULL,class_id uuid NOT NULL,session_id uuid NOT NULL,ended_at timestamptz)`);
+    await db.unsafe(`ALTER TABLE ${t('teacher_class_assignments')} ENABLE ROW LEVEL SECURITY`);
+    await db.unsafe(`ALTER TABLE ${t('teacher_class_assignments')} FORCE ROW LEVEL SECURITY`);
+    await db.unsafe(`CREATE POLICY setup_owner ON ${t('teacher_class_assignments')} FOR ALL TO CURRENT_USER USING (true) WITH CHECK (true)`);
+    await db.unsafe(`CREATE POLICY assignment_runtime_read ON ${t('teacher_class_assignments')} FOR SELECT TO ${runtime} USING (school_id='${schoolA}'::uuid)`);
+    await db.unsafe(`CREATE POLICY assignment_runtime_lock ON ${t('teacher_class_assignments')} FOR UPDATE TO ${runtime} USING (school_id='${schoolA}'::uuid) WITH CHECK (false)`);
+    await db.unsafe(`GRANT SELECT, UPDATE(id) ON ${t('teacher_class_assignments')} TO ${runtime}`);
+
 
     for (const name of ['schools', 'school_users', 'memberships']) {
       await db.unsafe(`ALTER TABLE ${t(name)} ENABLE ROW LEVEL SECURITY`);
@@ -95,6 +105,12 @@ if (!url || !confirmed || !roleAdminConfirmed) {
     await db.unsafe(`ALTER FUNCTION ${t('lock_report_card_actor')}(uuid) OWNER TO ${owner}`);
     await db.unsafe(`REVOKE ALL ON FUNCTION ${t('lock_report_card_actor')}(uuid) FROM PUBLIC`);
     await db.unsafe(`GRANT EXECUTE ON FUNCTION ${t('lock_report_card_actor')}(uuid) TO ${runtime}`);
+    await db.unsafe(functionDefinition('lock_report_card_authority_write_gate', 'lock_report_card_authority_write_gate()'));
+    await db.unsafe(`ALTER FUNCTION ${t('lock_report_card_authority_write_gate')}() OWNER TO ${owner}`);
+    await db.unsafe(`REVOKE ALL ON FUNCTION ${t('lock_report_card_authority_write_gate')}() FROM PUBLIC`);
+    for (const name of ['school_users', 'memberships', 'schools', 'teacher_class_assignments']) {
+      await db.unsafe(`CREATE TRIGGER authority_write_gate BEFORE INSERT OR UPDATE OR DELETE OR TRUNCATE ON ${t(name)} FOR EACH STATEMENT EXECUTE FUNCTION ${t('lock_report_card_authority_write_gate')}()`);
+    }
     await db.unsafe(functionDefinition('lock_report_card_membership_actor_anchor', 'lock_report_card_membership_actor_anchor()'));
     await db.unsafe(`ALTER FUNCTION ${t('lock_report_card_membership_actor_anchor')}() OWNER TO ${owner}`);
     await db.unsafe(`REVOKE ALL ON FUNCTION ${t('lock_report_card_membership_actor_anchor')}() FROM PUBLIC`);
@@ -159,14 +175,92 @@ if (!url || !confirmed || !roleAdminConfirmed) {
     await db.unsafe(`UPDATE ${t('memberships')} SET status='suspended' WHERE id=$1::uuid`, [membershipA]);
     assert.equal((await localActor(authUserId)).length, 0, 'later requests must lose access after membership suspension');
     console.log('PASS: membership suspension is serialized and subsequent authority resolution denies');
+
+    // Reverse arrival order: the statement gate must be acquired before any
+    // membership target-row lock, so a reader waits before taking its anchor.
+    await db.unsafe(`UPDATE ${t('memberships')} SET status='active' WHERE id=$1::uuid`, [membershipA]);
+    async function holdWrite(query, parameters, rollback = null) {
+      let signal, release;
+      const ready = new Promise(resolve => { signal = resolve; });
+      const gate = new Promise(resolve => { release = resolve; });
+      additionalReleases.push(release);
+      const work = db.begin(async tx => {
+        await tx.unsafe("SET LOCAL statement_timeout='10s'");
+        await tx.unsafe(query, parameters);
+        signal();
+        await gate;
+        if (rollback) throw rollback;
+      });
+      work.catch(() => {});
+      additionalHolders.push(work);
+      await awaitFixtureAuthorityLock(work, ready);
+      return {work, release};
+    }
+    const membershipWriter = await holdWrite(`UPDATE ${t('memberships')} SET status='suspended' WHERE id=$1::uuid`, [membershipA]);
+    await assert.rejects(localActor(authUserId, true), error => error.code === '55P03');
+    membershipWriter.release();
+    await membershipWriter.work;
+    assert.equal((await localActor(authUserId)).length, 0);
+    await db.unsafe(`UPDATE ${t('memberships')} SET status='active' WHERE id=$1::uuid`, [membershipA]);
+    assert.equal((await localActor(authUserId)).length, 1);
+    console.log('PASS: writer-first membership change blocks authority discovery before actor locks and later requests recheck committed status');
+
+    const rollbackProbe = Error('intentional authority parent rollback');
+    const changedAuthId = randomUUID();
+    const parentWriter = await holdWrite(`UPDATE ${t('school_users')} SET auth_user_id=$1::uuid WHERE id=$2::uuid`, [changedAuthId,userId], rollbackProbe);
+    await assert.rejects(localActor(authUserId, true), error => error.code === '55P03');
+    parentWriter.release();
+    await assert.rejects(parentWriter.work, error => error === rollbackProbe);
+    assert.equal((await localActor(authUserId)).length, 1);
+    assert.equal((await localActor(changedAuthId)).length, 0);
+    const schoolWriter = await holdWrite(`UPDATE ${t('schools')} SET final_primary_year=6 WHERE id=$1::uuid`, [schoolA]);
+    await assert.rejects(localActor(authUserId, true), error => error.code === '55P03');
+    schoolWriter.release();
+    await schoolWriter.work;
+    assert.equal((await localActor(authUserId))[0].final_primary_year, 6);
+    console.log('PASS: school-user and school writers gate before authority reads; rollback preserves identity and commit refreshes school configuration');
+
+    const assignmentId=randomUUID(), classId=randomUUID(), sessionId=randomUUID();
+    await db.unsafe(`INSERT INTO ${t('teacher_class_assignments')} VALUES ($1::uuid,$2::uuid,$3::uuid,$4::uuid,$5::uuid,NULL)`, [assignmentId,schoolA,membershipA,classId,sessionId]);
+    let signalReader, releaseReader;
+    const readerReady=new Promise(resolve=>{signalReader=resolve;});
+    const readerGate=new Promise(resolve=>{releaseReader=resolve;});
+    additionalReleases.push(releaseReader);
+    const assignmentReader=db.begin(async tx=>{
+      await tx.unsafe("SET LOCAL statement_timeout='10s'");
+      await tx.unsafe(`SET LOCAL ROLE ${runtime}`);
+      assert.equal((await tx.unsafe(`SELECT * FROM ${t('lock_report_card_actor')}($1::uuid)`,[authUserId])).length,1);
+      const rows=await tx.unsafe(`SELECT id FROM ${t('teacher_class_assignments')} WHERE school_id=$1::uuid AND teacher_membership_id=$2::uuid AND class_id=$3::uuid AND session_id=$4::uuid AND ended_at IS NULL FOR SHARE`,[schoolA,membershipA,classId,sessionId]);
+      assert.equal(rows.length,1);
+      signalReader();
+      await readerGate;
+    });
+    assignmentReader.catch(()=>{});
+    additionalHolders.push(assignmentReader);
+    await awaitFixtureAuthorityLock(assignmentReader,readerReady);
+    for(const query of [
+      `UPDATE ${t('teacher_class_assignments')} SET ended_at=now() WHERE id='${assignmentId}'::uuid`,
+      `DELETE FROM ${t('memberships')} WHERE false`,
+      `UPDATE ${t('school_users')} SET display_name=display_name WHERE false`,
+      `INSERT INTO ${t('schools')} VALUES ('${randomUUID()}'::uuid,5)`,
+    ])await assert.rejects(db.begin(async tx=>{await tx.unsafe("SET LOCAL lock_timeout='200ms'");await tx.unsafe(query);}),error=>error.code==='55P03');
+    releaseReader();
+    await assignmentReader;
+    await db.unsafe(`UPDATE ${t('teacher_class_assignments')} SET ended_at=now() WHERE id=$1::uuid`,[assignmentId]);
+    assert.equal((await db.unsafe(`SELECT id FROM ${t('teacher_class_assignments')} WHERE id=$1::uuid AND ended_at IS NULL`,[assignmentId])).length,0);
+    for(const name of ['school_users','memberships','schools','teacher_class_assignments'])await assert.rejects(db.unsafe(`TRUNCATE ${t(name)}`),error=>error.code==='P0001');
+    for(const [name,count] of [['school_users',1],['memberships',3],['schools',3],['teacher_class_assignments',1]])assert.equal((await db.unsafe(`SELECT count(*)::int AS n FROM ${t(name)}`))[0].n,count);
+    console.log('PASS: reader-first authority gate blocks assignment and zero-row parent writes before discovery; later assignment ending is visible and all authority truncation is rejected');
+
   } catch (error) {
     workloadError = error;
     throw error;
   } finally {
     holdingResolve?.();
     suspensionResolve?.();
+    for (const release of additionalReleases) release();
     // Release and drain every holder before attempting schema/role cleanup.
-    await Promise.allSettled([held, heldSuspension].filter(Boolean));
+    await Promise.allSettled([held, heldSuspension, ...additionalHolders].filter(Boolean));
     try {
       await cleanupFixtureAuthority(db, {schema, ownerRole, runtimeRole}, created);
     } catch (cleanupError) {
