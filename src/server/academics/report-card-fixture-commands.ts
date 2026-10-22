@@ -54,7 +54,9 @@ export function createVerifiedFixtureReportCommands(db: SqlDatabase, config: Rep
         let outcome: unknown;
         if (command.action === 'approve' || command.action === 'publish') outcome = await executeFixtureCanonicalReportCommand(scoped, runtime.schema, command, verified);
         else if (command.action === 'revoke') outcome = await executeFixtureReportRevocation(scoped, runtime.schema, command, verified);
-        else outcome = await executeFixtureReportWorkflow(scoped, runtime.schema, command, verified);
+        else if (command.action === 'create' || command.action === 'submit' || command.action === 'return' || command.action === 'reopen') {
+          outcome = await executeFixtureReportWorkflow(scoped, runtime.schema, command, verified);
+        } else return { ok: false, code: 'invalid' } as const;
         // Convert failures before returning so the outer transaction rolls back.
         return response(command, outcome);
       });
