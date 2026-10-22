@@ -6,6 +6,8 @@ import { getTableConfig } from 'drizzle-orm/pg-core';
 import * as assembly from '../src/db/report-card-staging-schema.review.ts';
 import * as base from '../src/db/schema.ts';
 import * as proposal from '../src/db/report-cards-schema.proposal.ts';
+import { assessmentFixtureDDL } from './lib/assessment-disposable-schema.mjs';
+import { reportUpgradeProposalPlan, upgradeProposalTables } from './lib/report-card-upgrade-plan.mjs';
 
 const tables = Object.values(assembly).filter(value => value && typeof value === 'object');
 const configs = tables.map(getTableConfig);
@@ -59,5 +61,28 @@ test('extra prerequisite keys cover real columns and the report shadow target me
       const target = prerequisites.get(index.config.name); assert.ok(target);
       assert.deepEqual(index.config.columns.map(c => c.name), target.columns);
     }
+  }
+});
+
+test('actual proposal upgrade selects only 16 new tables and four enums before cyclic FKs', () => {
+  const schema = 'rc_it_0123456789abcdef';
+  const selected = reportUpgradeProposalPlan(schema, assessmentFixtureDDL(schema, { includeReports: true }).statements);
+  const names = selected.filter(s => s.startsWith('CREATE TABLE ')).map(s => /^CREATE TABLE "\w+"\."(\w+)"/.exec(s)[1]);
+  assert.deepEqual([...names].sort(), [...upgradeProposalTables].sort());
+  assert.equal(selected.filter(s => s.startsWith('CREATE TYPE ')).length, 4);
+  const lastTable = selected.reduce((n, s, i) => s.startsWith('CREATE TABLE ') ? i : n, -1);
+  assert.ok(selected.findIndex(s => s.startsWith('ALTER TABLE ')) > lastTable);
+  assert.equal(selected.some(s => /CREATE SCHEMA|CREATE TABLE.*"terms"|CREATE TABLE.*"enrollments"/.test(s)), false);
+});
+
+test('actual proposal upgrade retains every metadata index and FK without adding base constraints', () => {
+  const schema = 'rc_it_0123456789abcdef';
+  const selected = reportUpgradeProposalPlan(schema, assessmentFixtureDDL(schema, { includeReports: true }).statements);
+  for (const config of configs.filter(c => upgradeProposalTables.includes(c.name))) {
+    const table = '"' + schema + '"."' + config.name + '"';
+    const indexes = selected.filter(s => /^CREATE (UNIQUE )?INDEX /.test(s) && s.includes(' ON ' + table + ' '));
+    const fks = selected.filter(s => s.startsWith('ALTER TABLE ' + table + ' ADD CONSTRAINT '));
+    assert.equal(indexes.length, config.indexes.length, config.name + ' indexes');
+    assert.equal(fks.length, config.foreignKeys.length, config.name + ' FKs');
   }
 });

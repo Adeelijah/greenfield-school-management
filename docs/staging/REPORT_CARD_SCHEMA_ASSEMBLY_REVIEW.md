@@ -27,3 +27,8 @@ Expected full offline count becomes **471 across 62 files**. The user's last con
 After the installed metadata/full offline gate, prepare a separately guarded disposable baseline-upgrade harness. It must establish the journaled foundation in an exact generated namespace, adapt the reviewed dependency draft without modifying existing public objects, build only the 16 proposed tables, add all FKs after tables/targets, compare resulting catalog metadata and inject failure to demonstrate rollback. Keep independent schema/role cleanup and explicit local-disposable confirmations. Test both clean apply and an incompatible/partially installed baseline; do not turn errors into success with IF NOT EXISTS. No arbitrary schema name, production connection, existing school data or live security change belongs in that harness.
 
 Source/authority guards, RLS/grants/runtime mapping and real SDK request tests remain separate staging gates in REPORT_CARD_STAGING_PACKAGE_REVIEW.md. Do not enable report routes after table creation alone.
+
+
+## Rehearsal preparation update
+
+The user verified the full 471-test gate, including the four assembly metadata checks. REPORT_CARD_UPGRADE_REHEARSAL_REVIEW.md now describes the separate eight-group opt-in harness and a pure bounded namespace planner. New expectation is 481 offline tests with two actual-emitter checks; installed full verification and the new PostgreSQL run are pending. The baseline is semantic/dependency-ordered because historical 0000 places some FKs before unique indexes; raw journal replay and installed deployment history remain unresolved. The original SQL, journal and dependency draft are unchanged. No SQL was executed here.
