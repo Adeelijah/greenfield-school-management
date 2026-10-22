@@ -12,6 +12,8 @@ import { reportUpgradeSourcePlan, reportUpgradeProposalPlan, upgradeFixtureSchem
 import { reportUpgradeGuardPlan } from './lib/report-card-upgrade-guards.mjs';
 import { awaitFixtureAuthorityLock } from './lib/actor-authority-fixture-lifecycle.mjs';
 import { probeUpgradeSecurity } from './lib/report-card-upgrade-security-probe.mjs';
+import { probeUpgradeLogin } from './lib/report-card-upgrade-login-probe.mjs';
+import { upgradeLoginCleanupPlan } from './lib/report-card-upgrade-login-plan.mjs';
 
 const url = process.env.REPORT_CARD_TEST_DATABASE_URL;
 if (!url || process.env.REPORT_CARD_TEST_CONFIRM !== 'DISPOSABLE_REPORT_CARD_TEST_ONLY') {
@@ -63,7 +65,7 @@ if (!url || process.env.REPORT_CARD_TEST_CONFIRM !== 'DISPOSABLE_REPORT_CARD_TES
     }
     return JSON.parse(JSON.stringify(result));
   };
-  let created = false, failure;
+  let created = false, securityCommitted = false, failure;
   const cleanupProbe = Error('Intentional upgrade fixture cleanup probe');
   try {
     // Fixed private-client session setting; every relation/type is qualified.
@@ -260,20 +262,24 @@ if (!url || process.env.REPORT_CARD_TEST_CONFIRM !== 'DISPOSABLE_REPORT_CARD_TES
     if (process.env.REPORT_CARD_TEST_ROLE_ADMIN_CONFIRM === 'DISPOSABLE_ROLE_ADMIN_TEST_ONLY') {
       const authorityReview = await readFile(new URL('../docs/security/REPORT_CARD_ACTOR_AUTHORITY_REVIEW.sql', import.meta.url), 'utf8');
       await probeUpgradeSecurity(client, schema, ids.school, userId, authorityReview);
-    } else console.log('SKIPPED: four upgraded security groups require the explicit disposable role-admin confirmation.');
+      await probeUpgradeLogin(client, url, schema, ids.school, userId, memberId, authorityReview, () => { securityCommitted = true; });
+    } else console.log('SKIPPED: nine upgraded security/LOGIN groups require the explicit disposable role-admin confirmation.');
     throw cleanupProbe;
   } catch (error) { if (error !== cleanupProbe) failure = error; }
   finally {
     try {
       if (created) {
         upgradeFixtureSchema(schema);
-        await client.unsafe('DROP SCHEMA ' + q + ' CASCADE');
+        const cleanup = upgradeLoginCleanupPlan(schema, decodeURIComponent(parsed.pathname.slice(1)), securityCommitted);
+        await client.begin(async tx => { for (const statement of cleanup.statements) await tx.unsafe(statement); });
         const remaining = await client.unsafe('SELECT nspname FROM pg_catalog.pg_namespace WHERE nspname=$1', [schema]);
         assert.equal(remaining.length, 0, 'Generated upgrade schema remains after cleanup');
+        const roles = await client.unsafe('SELECT rolname FROM pg_catalog.pg_roles WHERE rolname IN ($1::text,$2::text,$3::text,$4::text)', cleanup.roles);
+        assert.equal(roles.length, 0, 'Generated upgrade roles remain after cleanup');
       }
     } catch (cleanupError) { failure = failure ? new AggregateError([failure, cleanupError], 'Upgrade rehearsal and cleanup failed') : cleanupError; }
     finally { await client.end(); }
   }
   if (failure) throw failure;
-  console.log('PASS: exact generated upgrade schema is removed after intentional workload failure');
+  console.log('PASS: exact generated upgrade schema and acknowledged security roles are removed after intentional workload failure');
 }
