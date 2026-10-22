@@ -81,3 +81,10 @@ User verified all 61 main fixture groups, alongside offline 413 and the five sta
 The SQL review draft adds a shared transaction advisory gate before both authority resolvers read rows and an exclusive BEFORE STATEMENT gate for school_users, memberships, schools and teacher_class_assignments. The previous row-anchor trigger alone could invert actor/membership lock order when an update started first. REPORT_CARD_AUTHORITY_STATEMENT_GATE_REVIEW.md documents the correction, truncate prohibition, conservative contention scope and limitations. Three additional static tests prepare offline 416 and three standalone groups prepare eight PASS groups; these expanded gates remain pending local verification. No SQL was executed here.
 
 Do not wire this to full writers until source-gate/authority-gate ordering and runtime privileges are reviewed together. Explicit row-locking owner transactions, cascades and authority writes inside a shared-gate report transaction require separate handling. No route or real Supabase request integration is enabled by this source proposal.
+
+
+## Verified statement gates and request principal stability — 2026-10-22
+
+The user verified all eight standalone PostgreSQL groups, including writer-first membership/parent operations, rollback and reader-first assignment guards, plus exact cleanup. Main fixture replay/access-loss coverage remains verified at 61 groups. These remain separate from actual Supabase request integration.
+
+The unused server bridge now requires transaction-refreshed schoolId, schoolUserId and membershipId to match the branded request identity. Role/status/configuration are still re-read under locks. A changed principal requires a new verified request and cannot silently switch a command to another school or membership. Eleven new tests execute actual bridge source with offline dependency stubs, including a reproduced/fixed cross-school rebind. See REPORT_CARD_IDENTITY_BRIDGE_BEHAVIOR_REVIEW.md. Expected offline count is 427, pending full local verification; latest explicitly confirmed full gate is 413. No SQL, routes or live auth settings changed in this batch.
