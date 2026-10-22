@@ -29,12 +29,19 @@ test('function owner is non-login and non-bypass with narrowly granted complete-
 });
 
 test('transaction resolver locks actor, all membership rows and school before returning authority', () => {
-  const lock = sql.slice(sql.indexOf('CREATE FUNCTION public.lock_report_card_actor('), sql.indexOf('ALTER FUNCTION public.lock_report_card_actor('));
-  const anchorLock = lock.indexOf('WHERE su.auth_user_id = p_verified_auth_user_id\n  FOR UPDATE');
-  const membershipLock = lock.indexOf('WHERE m.user_id = actor_user_id ORDER BY m.id FOR SHARE');
-  const activeCount = lock.indexOf('WHERE m.user_id = actor_user_id AND m.status = \'active\'');
-  assert.ok(anchorLock >= 0 && membershipLock > anchorLock && activeCount > membershipLock);
-  assert.match(lock, /WHERE s\.id = active_school_id FOR SHARE/);
+  // Git can check out the SQL as CRLF on Windows. Exercise both forms and
+  // normalize only line endings; retain the exact required lock clauses/order.
+  for (const ending of ['\n', '\r\n']) {
+    const source = sql.replace(/\r?\n/g, ending);
+    const lock = source.slice(source.indexOf('CREATE FUNCTION public.lock_report_card_actor('), source.indexOf('ALTER FUNCTION public.lock_report_card_actor(')).replace(/\r\n/g, '\n');
+    const anchorClause = 'WHERE su.auth_user_id = p_verified_auth_user_id\n  FOR UPDATE';
+    const membershipClause = 'WHERE m.user_id = actor_user_id ORDER BY m.id FOR SHARE';
+    const anchorLock = lock.indexOf(anchorClause);
+    const membershipLock = lock.indexOf(membershipClause);
+    const activeCount = lock.indexOf("WHERE m.user_id = actor_user_id AND m.status = 'active'");
+    assert.ok(anchorLock >= 0 && membershipLock > anchorLock && activeCount > membershipLock);
+    assert.match(lock, /WHERE s\.id = active_school_id FOR SHARE/);
+  }
   assert.match(sql, /REVOKE ALL ON FUNCTION public\.lock_report_card_actor\(uuid\) FROM PUBLIC, anon, authenticated/);
 });
 
@@ -55,3 +62,4 @@ test('server bridge is server-only, fails closed, and refreshes authority inside
   assert.match(bridge, /and teacher_membership_id = \$\{authority\.membershipId\}::uuid[\s\S]*and class_id = \$\{classId\}::uuid[\s\S]*and session_id = \$\{sessionId\}::uuid[\s\S]*and ended_at is null[\s\S]*for share/);
   assert.doesNotMatch(bridge, /export async function resolveVerifiedReportCardIdentity\([^)]/);
 });
+
