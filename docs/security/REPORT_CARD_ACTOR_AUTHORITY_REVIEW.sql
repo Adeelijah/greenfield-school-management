@@ -76,6 +76,9 @@ DECLARE
 BEGIN
   IF verified_auth_id IS NULL THEN RETURN; END IF;
 
+  -- Shared discovery gate precedes every authority row read.
+  PERFORM pg_catalog.pg_advisory_xact_lock_shared(pg_catalog.hashtextextended('greenfield.report-card.authority-gate.v1', 0));
+
   SELECT su.id INTO actor_user_id
   FROM public.school_users su WHERE su.auth_user_id = verified_auth_id;
   SELECT count(*)::integer INTO actor_user_count
@@ -129,6 +132,9 @@ DECLARE
 BEGIN
   IF p_verified_auth_user_id IS NULL THEN RETURN; END IF;
 
+  -- Every authority writer takes the exclusive gate before row discovery.
+  PERFORM pg_catalog.pg_advisory_xact_lock_shared(pg_catalog.hashtextextended('greenfield.report-card.authority-gate.v1', 0));
+
   SELECT su.id INTO actor_user_id
   FROM public.school_users su
   WHERE su.auth_user_id = p_verified_auth_user_id
@@ -173,6 +179,43 @@ REVOKE ALL ON FUNCTION public.lock_report_card_actor(uuid) FROM PUBLIC, anon, au
 -- GRANT EXECUTE ON FUNCTION public.lock_report_card_actor(uuid)
 --   TO greenfield_report_card_runtime; -- only after runtime role mapping review
 
+-- Conservative database-wide authority gate. Reserve this advisory namespace
+-- for these helpers; parallel report transactions use a shared transaction lock.
+-- Statement triggers take the exclusive lock BEFORE PostgreSQL locks target rows,
+-- including zero-row writes. Never modify authority in a report transaction that
+-- already holds the shared gate, or combine this gate with the fixture source gate
+-- without reviewing their common acquisition order.
+CREATE FUNCTION public.lock_report_card_authority_write_gate()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = pg_catalog
+SET row_security = on
+AS $function$
+BEGIN
+  IF TG_OP = 'TRUNCATE' THEN
+    RAISE EXCEPTION 'report authority truncate is prohibited' USING ERRCODE='P0001';
+  END IF;
+  PERFORM pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended('greenfield.report-card.authority-gate.v1', 0));
+  RETURN NULL;
+END
+$function$;
+ALTER FUNCTION public.lock_report_card_authority_write_gate()
+  OWNER TO greenfield_report_card_authority_owner;
+REVOKE ALL ON FUNCTION public.lock_report_card_authority_write_gate() FROM PUBLIC, anon, authenticated;
+CREATE TRIGGER report_card_authority_write_gate
+  BEFORE INSERT OR UPDATE OR DELETE OR TRUNCATE ON public.school_users
+  FOR EACH STATEMENT EXECUTE FUNCTION public.lock_report_card_authority_write_gate();
+CREATE TRIGGER report_card_authority_write_gate
+  BEFORE INSERT OR UPDATE OR DELETE OR TRUNCATE ON public.memberships
+  FOR EACH STATEMENT EXECUTE FUNCTION public.lock_report_card_authority_write_gate();
+CREATE TRIGGER report_card_authority_write_gate
+  BEFORE INSERT OR UPDATE OR DELETE OR TRUNCATE ON public.schools
+  FOR EACH STATEMENT EXECUTE FUNCTION public.lock_report_card_authority_write_gate();
+CREATE TRIGGER report_card_authority_write_gate
+  BEFORE INSERT OR UPDATE OR DELETE OR TRUNCATE ON public.teacher_class_assignments
+  FOR EACH STATEMENT EXECUTE FUNCTION public.lock_report_card_authority_write_gate();
+
 CREATE FUNCTION public.lock_report_card_membership_actor_anchor()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -211,8 +254,9 @@ CREATE TRIGGER report_card_membership_actor_anchor
 -- Pre-apply review must confirm: FORCE RLS policy role applicability, no
 -- PUBLIC restrictive policy can hide memberships from the owner role, no
 -- other role can SET ROLE to the owner, direct membership DML is serialized
--- by the anchor trigger, and report writers hold lock_report_card_actor's
+-- by the statement gate before row discovery and the actor anchor, and report writers hold lock_report_card_actor's
 -- locks through report/assignment authorization, mutation, audit and receipt.
 -- This artifact is intentionally not journaled or applied.
 
 COMMIT;
+
