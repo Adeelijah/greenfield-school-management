@@ -50,7 +50,7 @@ test('every actual FK closes over selected tables and has an exact nonpartial un
   }
 });
 
-test('extra prerequisite keys cover real columns and the report shadow target metadata exactly', () => {
+test('dependency keys and school FK names match actual and shadow metadata exactly', () => {
   for (const name of extraNames) {
     const target = prerequisites.get(name); assert.ok(target, name);
     const config = byName.get(target.table); assert.ok(config);
@@ -61,6 +61,13 @@ test('extra prerequisite keys cover real columns and the report shadow target me
       const target = prerequisites.get(index.config.name); assert.ok(target);
       assert.deepEqual(index.config.columns.map(c => c.name), target.columns);
     }
+  }
+  for (const table of [base.academicLevels, base.academicSections, base.teacherClassAssignments]) {
+    const config = getTableConfig(table);
+    const fk = config.foreignKeys.find(key => key.reference().foreignTable === base.schools);
+    assert.ok(fk, config.name);
+    const statement = draft.split(';').find(s => s.includes('CREATE TABLE public.' + config.name + ' ('));
+    assert.ok(statement.includes('CONSTRAINT ' + fk.getName() + ' REFERENCES public.schools(id) ON DELETE RESTRICT'), fk.getName());
   }
 });
 

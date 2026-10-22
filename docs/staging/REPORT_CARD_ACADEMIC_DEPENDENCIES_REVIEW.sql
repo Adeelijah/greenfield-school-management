@@ -17,7 +17,7 @@ CREATE UNIQUE INDEX enrollments_school_id_student_id_unique ON public.enrollment
 
 CREATE TABLE public.academic_levels (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  school_id uuid NOT NULL REFERENCES public.schools(id) ON DELETE RESTRICT,
+  school_id uuid NOT NULL CONSTRAINT academic_levels_school_id_schools_id_fk REFERENCES public.schools(id) ON DELETE RESTRICT,
   name varchar(80) NOT NULL,
   stage public.academic_stage NOT NULL,
   primary_year integer,
@@ -33,7 +33,7 @@ CREATE UNIQUE INDEX academic_levels_school_primary_year_unique ON public.academi
 
 CREATE TABLE public.academic_sections (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  school_id uuid NOT NULL REFERENCES public.schools(id) ON DELETE RESTRICT,
+  school_id uuid NOT NULL CONSTRAINT academic_sections_school_id_schools_id_fk REFERENCES public.schools(id) ON DELETE RESTRICT,
   level_id uuid NOT NULL,
   name varchar(40) NOT NULL,
   display_order integer NOT NULL,
@@ -55,7 +55,7 @@ CREATE UNIQUE INDEX classes_school_level_section_unique ON public.classes (schoo
 
 CREATE TABLE public.teacher_class_assignments (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  school_id uuid NOT NULL REFERENCES public.schools(id) ON DELETE RESTRICT,
+  school_id uuid NOT NULL CONSTRAINT teacher_class_assignments_school_id_schools_id_fk REFERENCES public.schools(id) ON DELETE RESTRICT,
   teacher_membership_id uuid NOT NULL,
   class_id uuid NOT NULL,
   session_id uuid NOT NULL,

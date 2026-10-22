@@ -24,6 +24,10 @@ test('assembly is an explicit partial review surface, never a migration or conne
 test('dependency SQL only creates the three selected academic tables and one enum', () => {
   assert.deepEqual([...sql.matchAll(/CREATE TABLE\s+public\.(\w+)/g)].map(m => m[1]), ['academic_levels', 'academic_sections', 'teacher_class_assignments']);
   assert.deepEqual([...sql.matchAll(/CREATE TYPE\s+public\.(\w+)/g)].map(m => m[1]), ['academic_stage']);
+  for (const table of ['academic_levels', 'academic_sections', 'teacher_class_assignments']) {
+    const statement = statements.find(s => s.startsWith('CREATE TABLE public.' + table + ' ('));
+    assert.ok(statement.includes('CONSTRAINT ' + table + '_school_id_schools_id_fk REFERENCES public.schools(id) ON DELETE RESTRICT'), table + ' explicit school FK name');
+  }
   assert.doesNotMatch(sql, /student_lifecycle|student_departures|student_readmissions|audit_events|admission_status|guardian/);
 });
 
