@@ -1,0 +1,57 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
+
+const sql = await readFile(new URL('../docs/security/REPORT_CARD_ACTOR_AUTHORITY_REVIEW.sql', import.meta.url), 'utf8');
+const bridge = await readFile(new URL('../src/server/auth/report-card-identity.ts', import.meta.url), 'utf8');
+
+test('review draft RPC accepts no client identity and derives its actor from Supabase auth.uid()', () => {
+  assert.match(sql, /CREATE FUNCTION public\.resolve_report_card_actor\(\)/);
+  assert.match(sql, /verified_auth_id uuid := auth\.uid\(\)/);
+  assert.match(bridge, /supabase\.rpc\('resolve_report_card_actor'\)/);
+  assert.doesNotMatch(bridge, /rpc\('resolve_report_card_actor'\s*,/);
+  assert.match(bridge, /supabase\.auth\.getUser\(\)/);
+});
+
+test('complete active-membership count is actor-wide and ambiguity returns no authority row', () => {
+  assert.match(sql, /SELECT count\(\*\)::integer INTO active_count[\s\S]*?FROM public\.memberships m[\s\S]*?WHERE m\.user_id = actor_user_id AND m\.status = 'active'/);
+  assert.match(sql, /IF active_count <> 1 THEN RETURN; END IF;/);
+  assert.doesNotMatch(sql.slice(sql.indexOf('CREATE FUNCTION public.resolve_report_card_actor()'), sql.indexOf('ALTER FUNCTION public.resolve_report_card_actor()')), /m\.school_id\s*=/);
+});
+
+test('function owner is non-login and non-bypass with narrowly granted complete-read policies', () => {
+  assert.match(sql, /CREATE ROLE greenfield_report_card_authority_owner[\s\S]*?NOLOGIN NOSUPERUSER NOBYPASSRLS/);
+  for (const table of ['school_users', 'memberships', 'schools']) {
+    assert.match(sql, new RegExp(`CREATE POLICY report_card_authority_owner_read_${table}[\\s\\S]*?ON public\\.${table} FOR SELECT[\\s\\S]*?TO greenfield_report_card_authority_owner USING \\(true\\)`));
+  }
+  assert.match(sql, /REVOKE ALL ON FUNCTION public\.resolve_report_card_actor\(\) FROM PUBLIC, anon, authenticated/);
+  assert.match(sql, /GRANT EXECUTE ON FUNCTION public\.resolve_report_card_actor\(\) TO authenticated/);
+});
+
+test('transaction resolver locks actor, all membership rows and school before returning authority', () => {
+  const lock = sql.slice(sql.indexOf('CREATE FUNCTION public.lock_report_card_actor('), sql.indexOf('ALTER FUNCTION public.lock_report_card_actor('));
+  const anchorLock = lock.indexOf('WHERE su.auth_user_id = p_verified_auth_user_id\n  FOR UPDATE');
+  const membershipLock = lock.indexOf('WHERE m.user_id = actor_user_id ORDER BY m.id FOR SHARE');
+  const activeCount = lock.indexOf('WHERE m.user_id = actor_user_id AND m.status = \'active\'');
+  assert.ok(anchorLock >= 0 && membershipLock > anchorLock && activeCount > membershipLock);
+  assert.match(lock, /WHERE s\.id = active_school_id FOR SHARE/);
+  assert.match(sql, /REVOKE ALL ON FUNCTION public\.lock_report_card_actor\(uuid\) FROM PUBLIC, anon, authenticated/);
+});
+
+test('membership insert/update/delete serializes through the school-user actor anchor', () => {
+  assert.match(sql, /CREATE TRIGGER report_card_membership_actor_anchor\s+BEFORE INSERT OR UPDATE OR DELETE ON public\.memberships/);
+  const trigger = sql.slice(sql.indexOf('CREATE FUNCTION public.lock_report_card_membership_actor_anchor()'), sql.indexOf('ALTER FUNCTION public.lock_report_card_membership_actor_anchor()'));
+  assert.match(trigger, /TG_OP = 'INSERT'[\s\S]*?WHERE su\.id = NEW\.user_id FOR UPDATE/);
+  assert.match(trigger, /TG_OP = 'DELETE'[\s\S]*?WHERE su\.id = OLD\.user_id FOR UPDATE/);
+  assert.match(trigger, /ORDER BY su\.id FOR UPDATE/);
+});
+
+test('server bridge is server-only, fails closed, and refreshes authority inside the supplied transaction', () => {
+  assert.match(bridge, /^import 'server-only';/);
+  assert.match(bridge, /if \(authError \|\| !auth\.user\?\.id\) return null/);
+  assert.match(bridge, /if \(error\) return null/);
+  assert.match(bridge, /lock_report_card_actor\(\$\{verifiedIdentity\.authUserId\}::uuid\)/);
+  assert.match(bridge, /decodeReportCardActorAuthority\(verifiedIdentity\.authUserId, transactionRows\(result\)\)/);
+  assert.match(bridge, /and teacher_membership_id = \$\{authority\.membershipId\}::uuid[\s\S]*and class_id = \$\{classId\}::uuid[\s\S]*and session_id = \$\{sessionId\}::uuid[\s\S]*and ended_at is null[\s\S]*for share/);
+  assert.doesNotMatch(bridge, /export async function resolveVerifiedReportCardIdentity\([^)]/);
+});

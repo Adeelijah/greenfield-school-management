@@ -13,6 +13,7 @@ const tests = [
   'scripts/report-release-disposable-guards.test.mjs',
   'scripts/disposable-session-rendezvous.test.mjs',
   'scripts/disposable-login-plan.test.mjs',
+  'scripts/report-card-actor-authority-review.test.mjs',
   'src/components/academics/class-structure.test.ts',
   'src/components/students/academic-progression.test.ts',
   'src/components/students/class-assignment-validation.test.ts',
@@ -55,6 +56,7 @@ const tests = [
   'src/lib/academics/report-card-postgres-disposable-read-adapter.test.ts',
   'src/lib/academics/report-card-postgres-disposable-trusted-transaction.test.ts',
   'src/lib/academics/report-card-persisted-model-map.test.ts',
+  'src/lib/academics/report-card-actor-authority.test.ts',
   'src/lib/academics/report-card-transaction-port.test.ts',
   'src/components/greenfield-date-picker-layout.test.ts',
 ];

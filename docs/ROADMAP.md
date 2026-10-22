@@ -19,6 +19,7 @@ Status reflects repository code and offline checks, not a deployed installation.
 | Staff and subjects | School-scoped assignment/subject validators, fictional fixtures and responsive Academic Operations preview | Offline foundation verified; no persistence, live membership/assignment reads, or browser inspection |
 | Academic calendar | School-specific sessions, ordered non-overlapping first/second/third terms, calendar/list views, event create/edit/cancel, and pure school-admin planning | Offline domain and static preview foundation; no persistence, live auth, or browser inspection |
 | Assessment configuration, score entry and results | Weighted CA/exam/other components, school-defined numeric grade bands, Creche observational rubric, enrollment-derived eligibility, assignment-bound teacher entry, result preparation/review/finalization | Offline domain/tests and static preview foundation; no score persistence, report-card publication, live auth, or browser inspection |
+| Report cards | Pure report projection and teacher/admin transition planners; immutable snapshot/release/correction transaction fixtures; user-verified baseline of 59 disposable PostgreSQL groups | Isolated persistence/review foundation only. New report actor authority decoder and server-only bridge are not wired; authority SQL/grants/RLS remain an unexecuted draft. No authenticated read/command routes or production schema integration |
 | Fees, invoices, payments, receipts, finance reports | Module names/routes and fictional dashboard metric | Missing domain model, permissions, reconciliation and persistence |
 | Academic/attendance reports and settings/users | Module names/routes | Mostly missing; no verified management workflows |
 
@@ -47,3 +48,7 @@ The [Academic Calendar and Assessment contract](ACADEMIC_CALENDAR_ASSESSMENTS_CO
 ## Production readiness
 
 Require verified auth/session recovery, school provisioning, tenant isolation, database role/grant/RLS tests, migration/recovery procedures, least-privilege backups, observability, audit retention, accessibility and responsive browser QA, data privacy review, and operational incident/rollback plans. Existing security and staging documents are review material; their presence alone does not establish deployment readiness.
+
+## Report-card authority milestone — 2026-10-20
+
+The previous user-verified baseline is 393 offline tests and 59 disposable PostgreSQL groups. This continuation adds a strict decoder for complete actor authority, a server-only Supabase `getUser()`/no-argument RPC bridge, a transaction-bound actor recheck contract, a review-only SECURITY DEFINER/RLS/grant draft, and offline contract tests. The expanded offline gate passed TypeScript, ESLint and 405 tests. These source artifacts are not active runtime authorization: SQL is not applied, the bridge is not called by a route, and the runtime database role has not been mapped. The new opt-in PostgreSQL harness is prepared and syntax-checked, but not run pending explicit authorization for that disposable environment. Report-card route integration is blocked on that evidence and separate review of any SQL/security application.

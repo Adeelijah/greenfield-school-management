@@ -285,9 +285,12 @@ Source review of server auth helpers, persisted identity mapping and fixture com
 
 The execution environment is unavailable; this batch reviewed GitHub source and updates documentation only, with no new executed tests or SQL. Continue next with the outstanding offline gate, then isolated complete authority resolution and a server-only verified identity bridge. Preserve standing scoped development authorization and the no-merge/deployment/production-change constraints.
 
+## Verified offline baseline - 2026-10-20
 
-## Verified offline baseline — 2026-10-20
+The user supplied the prior baseline: all 393 offline tests and all 59 disposable PostgreSQL groups passed. The current actor-authority source batch then passed the offline verifier with 405 tests. No new database connection or SQL execution has been authorized or performed.
 
-User supplied the complete offline result: TypeScript/ESLint gate completed, all 393 tests passed with zero failures/skips, and tracked Git whitespace checks passed. Together with the previously supplied 59 PostgreSQL groups, the disposable LOGIN milestone's pending verification gates are complete. Older pending-count notes above are historical.
+## Report-card authority-resolution continuation - 2026-10-20
 
-Next implementation remains complete actor membership resolution under fixed-school RLS, followed by the server-only verified identity bridge and isolated integration tests described in REPORT_CARD_SERVER_AUTHORITY_CONTRACT.md. The execution environment remains unavailable, so no new implementation or tests were performed for this status update. No database rerun is required for this documentation-only change. Preserve no merge, deployment, live authorization or production database changes.
+The source batch adds `report-card-actor-authority.ts`, requiring one actor-bound row with explicit complete-scope school-user and active-membership counts; `server/auth/report-card-identity.ts`, a server-only verified `getUser()` bridge calling a no-argument `resolve_report_card_actor` RPC and transaction-bound `lock_report_card_actor` recheck; and `docs/security/REPORT_CARD_ACTOR_AUTHORITY_REVIEW.sql`, which remains an unexecuted review draft. Twelve offline tests cover the decoder and static security contracts. The bridge is not referenced by any route, and neither SQL function nor its roles/policies/grants are installed. The opt-in PostgreSQL harness is syntax-checked but unrun.
+
+Before report-card routes can be integrated, run a separately authorized isolated PostgreSQL test proving the helper sees a second active membership hidden by fixed-school RLS and serializes membership insertion/suspension against command execution. Assignment-removal and replay-after-authority-loss also require validation. Then review function-owner role policies, runtime role mapping, RLS interaction and lock order. These source and draft changes are not live authorization or production readiness.
