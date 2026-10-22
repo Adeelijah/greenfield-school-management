@@ -10,6 +10,7 @@ import { buildApprovedReportSnapshot } from '../src/lib/academics/report-card-ap
 import { canonicalizeSnapshotValue } from '../src/lib/academics/report-card-canonical-snapshot.ts';
 import postgres from 'postgres';
 import { disposableLoginPlan, inspectDisposableLogin, disposableLoginURL } from './lib/disposable-login-plan.mjs';
+import { awaitFixtureAuthorityLock } from './lib/actor-authority-fixture-lifecycle.mjs';
 import { disposableSessionRendezvous } from './lib/disposable-session-rendezvous.mjs';
 import { reportReleaseGuardDDL } from './lib/report-release-disposable-guards.mjs';
 import { fixtureSecurityPlan } from './lib/assessment-disposable-security-plan.mjs';
@@ -958,7 +959,7 @@ END $$`);
    const sessionTable=sessionFixture.table,runToken=randomBytes(24).toString('hex');
    const loginPlan=disposableLoginPlan(sessionSchema),loginPassword=randomBytes(32).toString('hex');
    const databaseName=decodeURIComponent(parsed.pathname.slice(1));
-   let sessionCommitted=false,loginClient=null;
+   let sessionCommitted=false,loginClient=null,assignmentReplay=null,releaseAssignmentReplay=null;
    const cleanupProbe=Error('intentional independent-session cleanup probe');
    await assert.rejects((async()=>{
    try {
@@ -1056,6 +1057,60 @@ BEGIN RAISE EXCEPTION 'independent fixture history is append-only' USING ERRCODE
     assert.deepEqual(await executeFixtureCanonicalReportCommand(writer,sessionSchema,{action:'approve',reportId:reportA,expectedVersion:10,operationKey:'independent-teacher-denial'},teacherIdentity),{ok:false,code:'forbidden'});
     assert.equal((await executeFixtureReportRevocation(writer,sessionSchema,independentRevoke,adminIdentity)).kind,'replay');
     console.log('PASS: distinct restricted sessions reject competing stale keys, foreign-school reads, reader writes and teacher approval while historical replay survives');
+
+    // A historical receipt never substitutes for current class/session access.
+    // Keep an actual restricted replay open after its assignment SELECT locks,
+    // then demonstrate that a separate authority writer cannot interleave.
+    const historyTables=['report_cards','report_card_snapshots','report_card_releases','report_card_audit','report_card_operation_receipts'];
+    const reportHistory=async()=>Promise.all(historyTables.map(name=>sql.unsafe('SELECT to_jsonb(r) AS payload FROM '+sessionTable(name)+' r WHERE '+(name==='report_cards'?'id':'report_id')+'=$1::uuid ORDER BY to_jsonb(r)::text',[reportA])));
+    const historyBefore=await reportHistory();
+    const activeAssignments=await sql.unsafe('SELECT a.id FROM '+sessionTable('teacher_class_assignments')+' a JOIN '+sessionTable('report_cards')+' r ON r.school_id=a.school_id AND r.class_id=a.class_id AND r.session_id=a.session_id WHERE r.id=$1::uuid AND a.teacher_membership_id=$2::uuid AND a.ended_at IS NULL',[reportA,ids.teacher]);
+    assert.equal(activeAssignments.length,1);
+    let signalAssignment;
+    const assignmentReady=new Promise(resolve=>{signalAssignment=resolve;});
+    const assignmentGate=new Promise(resolve=>{releaseAssignmentReplay=resolve;});
+    const heldReplayDb={
+     unsafe:()=>{throw Error('Replay requires its restricted transaction');},
+     begin:callback=>writer.begin(bound=>callback({unsafe:async(query,parameters=[])=>{
+      const result=await bound.unsafe(query,parameters);
+      if(query.includes('FROM '+sessionTable('teacher_class_assignments'))&&query.endsWith('FOR SHARE')){signalAssignment();await assignmentGate;}
+      return result;
+     }})),
+    };
+    assignmentReplay=executeFixtureReportWorkflow(heldReplayDb,sessionSchema,independentSubmit,teacherIdentity);
+    try {
+     await awaitFixtureAuthorityLock(assignmentReplay,assignmentReady);
+     await expectError('55P03',()=>client.begin(async tx=>{
+      const bound=wrap(tx);await bound.unsafe("SET LOCAL lock_timeout='200ms'");
+      await bound.unsafe('UPDATE '+sessionTable('teacher_class_assignments')+' SET ended_at=now() WHERE id=$1::uuid',[activeAssignments[0].id]);
+     }));
+    }finally{releaseAssignmentReplay();}
+    assert.equal((await assignmentReplay).kind,'replay');
+    await sql.unsafe('UPDATE '+sessionTable('teacher_class_assignments')+' SET ended_at=now() WHERE id=$1::uuid',[activeAssignments[0].id]);
+    assert.deepEqual(await executeFixtureReportWorkflow(writer,sessionSchema,independentSubmit,teacherIdentity),{ok:false,code:'forbidden'});
+    assert.deepEqual(await executeFixtureReportWorkflow(writer,sessionSchema,{action:'submit',reportId:reportA,expectedVersion:10,operationKey:'assignment-ended-new-key'},teacherIdentity),{ok:false,code:'forbidden'});
+    assert.deepEqual(await reportHistory(),historyBefore);
+    await sql.unsafe('UPDATE '+sessionTable('teacher_class_assignments')+' SET ended_at=NULL WHERE id=$1::uuid',[activeAssignments[0].id]);
+    assert.equal((await executeFixtureReportWorkflow(writer,sessionSchema,independentSubmit,teacherIdentity)).kind,'replay');
+    assert.deepEqual(await reportHistory(),historyBefore);
+    console.log('PASS: restricted in-flight replay blocks assignment removal; ended assignment denies old and new keys without changing report history');
+
+    const adminReplays=[{action:'approve',reportId:reportA,expectedVersion:6,operationKey:'independent-approve'},{action:'publish',reportId:reportA,expectedVersion:7,operationKey:'independent-publish'}];
+    await sql.unsafe("UPDATE "+sessionTable('memberships')+" SET status='suspended' WHERE id=$1::uuid",[ids.teacher]);
+    assert.deepEqual(await executeFixtureReportWorkflow(writer,sessionSchema,independentSubmit,teacherIdentity),{ok:false,code:'forbidden'});
+    assert.deepEqual(await reportHistory(),historyBefore);
+    await sql.unsafe("UPDATE "+sessionTable('memberships')+" SET status='active' WHERE id=$1::uuid",[ids.teacher]);
+    assert.equal((await executeFixtureReportWorkflow(writer,sessionSchema,independentSubmit,teacherIdentity)).kind,'replay');
+    await sql.unsafe("UPDATE "+sessionTable('memberships')+" SET status='suspended' WHERE id=$1::uuid",[ids.admin]);
+    for(const command of adminReplays)assert.deepEqual(await executeFixtureCanonicalReportCommand(writer,sessionSchema,command,adminIdentity),{ok:false,code:'forbidden'});
+    assert.deepEqual(await executeFixtureReportRevocation(writer,sessionSchema,independentRevoke,adminIdentity),{ok:false,code:'forbidden'});
+    assert.deepEqual(await reportHistory(),historyBefore);
+    await sql.unsafe("UPDATE "+sessionTable('memberships')+" SET status='active' WHERE id=$1::uuid",[ids.admin]);
+    for(const command of adminReplays)assert.equal((await executeFixtureCanonicalReportCommand(writer,sessionSchema,command,adminIdentity)).kind,'replay');
+    assert.equal((await executeFixtureReportRevocation(writer,sessionSchema,independentRevoke,adminIdentity)).kind,'replay');
+    assert.deepEqual(await reportHistory(),historyBefore);
+    console.log('PASS: suspended teacher/admin cannot replay submission, approval, publication or revocation; reactivation replays history without new writes');
+
     await writer.begin(async bound=>{
      await bound.unsafe('RESET ROLE');
      const reset=(await bound.unsafe('SELECT session_user AS login,current_user AS role'))[0];
@@ -1069,6 +1124,8 @@ BEGIN RAISE EXCEPTION 'independent fixture history is append-only' USING ERRCODE
    } finally {
     // Marker ownership also permits cleanup if COMMIT succeeded but its client
     // acknowledgement was lost. Never drop a colliding pre-existing schema.
+    if(releaseAssignmentReplay)releaseAssignmentReplay();
+    if(assignmentReplay)await Promise.allSettled([assignmentReplay]);
     if(loginClient)await loginClient.end();
     const markerExists=(await sql.unsafe('SELECT pg_catalog.to_regclass($1::text) IS NOT NULL AS present',[sessionTable('fixture_run_marker')]))[0].present;
     if(markerExists){
@@ -1086,9 +1143,10 @@ BEGIN RAISE EXCEPTION 'independent fixture history is append-only' USING ERRCODE
    assert.equal((await sql.unsafe(loginPlan.query,loginPlan.parameters)).length,0);
    assert.equal((await sql.unsafe('SELECT count(*)::int AS n FROM pg_catalog.pg_namespace WHERE nspname=$1::text',[sessionSchema]))[0].n,0);
    console.log('PASS: committed independent-session fixture and exact temporary roles are removed even after an intentional workload error');
-  }else console.log('SKIPPED: six independent restricted-session/login groups require the existing disposable role-admin confirmation');
+  }else console.log('SKIPPED: eight independent restricted-session/login/access-loss groups require the existing disposable role-admin confirmation');
 
  } finally {
   try { await sql.unsafe('DROP SCHEMA IF EXISTS ' + q(schema) + ' CASCADE'); } finally { await client.end(); }
  }
 }
+
