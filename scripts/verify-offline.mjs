@@ -16,6 +16,8 @@ const tests = [
   'scripts/report-card-actor-authority-review.test.mjs',
   'scripts/report-card-identity-behavior.test.mjs',
   'scripts/report-card-fixture-commands.test.mjs',
+  'scripts/report-card-staging-assembly.test.mjs',
+  'scripts/report-card-staging-metadata.test.mjs',
   'scripts/report-card-complete-fixture-ddl.test.mjs',
   'scripts/actor-authority-fixture-lifecycle.test.mjs',
   'src/components/academics/class-structure.test.ts',
