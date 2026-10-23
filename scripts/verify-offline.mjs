@@ -25,6 +25,7 @@ const tests = [
   'scripts/report-card-coordinated-guards-review.test.mjs',
   'scripts/report-card-staging-security-plan.test.mjs',
   'scripts/report-card-staging-package-review.test.mjs',
+  'scripts/report-card-fresh-foundation-review.test.mjs',
   'scripts/report-card-staging-commands.test.mjs',
   'src/lib/academics/report-card-staging-domain.test.ts',
   'src/lib/academics/report-card-staging-command-boundary.test.ts',

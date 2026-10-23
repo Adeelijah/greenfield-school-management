@@ -1,6 +1,6 @@
 # Isolated staging rehearsal and recovery plan
 
-Status: prepared for target selection, not authorized or executed. Source review date: 2026-10-23. The user confirmed all **556 offline tests** passed after the metadata assertion repair. The **31-group upgraded PostgreSQL rerun for the shared-domain milestone remains pending**. Earlier generated-fixture results do not establish a public Supabase installation or real request authentication.
+Status: prepared for target selection, not authorized or executed. Source review date: 2026-10-23. The user confirmed all **556 offline tests** passed after the metadata assertion repair. The user subsequently reported the **PostgreSQL upgrade rerun passed**. Earlier generated-fixture results do not establish a public Supabase installation or real request authentication.
 
 ## Target record
 
@@ -8,7 +8,7 @@ Complete this record before any connection. A project name/reference or dashboar
 
 | Required field | Current value / rule |
 | --- | --- |
-| Isolated Supabase project name and reference | Not supplied; must differ from the school's production project |
+| Isolated Supabase project name and reference | User-confirmed Greenfield staging: `hweoqkbgmzycyznrbvng`; API URL `https://hweoqkbgmzycyznrbvng.supabase.co` |
 | Operator responsible for the target | Not supplied |
 | Data classification | Fictional accounts and pupils only; no copy of real pupil/guardian data |
 | Authorized first operation | Target identification and separately approved read-only catalog inspection; no installation implied |
@@ -60,7 +60,7 @@ Do not create a generic down migration that deletes snapshots, releases, audit o
 
 ## Authorized rehearsal sequence
 
-1. Complete the existing 31-group local upgrade rerun and record its source SHA. Preserve its generated-fixture cleanup evidence. It remains a regression prerequisite, not proof for the target below.
+1. Record the user's reported passing upgraded PostgreSQL rerun and its source SHA/output when available. It remains generated-fixture evidence, not proof for this public target. The supplied catalog screenshots show zero public tables. Review `REPORT_CARD_FRESH_FOUNDATION_REVIEW.md` and its guarded SQL candidate before authorizing a foundation installation; the existing additive builder cannot run directly against empty public.
 2. Identify the isolated Supabase target, operator and fictional school. Obtain scope for catalog inspection, then reconcile the actual catalog/effective privileges and recovery evidence. No apply command is provided here.
 3. Prepare the exact fixed-school candidate and hashes for the supported baseline. Review all phases together and obtain target-specific authorization for installation, failure injection, temporary fictional data and any account/configuration changes.
 4. On that authorized target, rehearse failure after each phase and verify baseline restoration. Then install the same reviewed candidate and inspect actual catalog, helper ownership, forced RLS, effective privileges and exact role graph.
@@ -72,4 +72,4 @@ Do not create a generic down migration that deletes snapshots, releases, audit o
 
 Retain source SHA; target/project reference; authorized operation scope; school/final-year configuration; candidate and phase hashes; catalog comparison; effective-privilege findings; baseline/restoration evidence; per-failure rollback observations; actual public domain/auth results; and cleanup ownership. Do not record credentials or pupil identities.
 
-The rehearsal is complete only when the actual target's catalog/security and real authenticated requests are evidenced, every injected failure has a recorded recovery result, and unresolved findings have an explicit disposition. Current state: target absent, no catalog inspected, no SQL executed, no restoration performed and no real SDK/JWT result claimed. The offline 556-test result is verified; it is not launch readiness.
+The rehearsal is complete only when the actual target's catalog/security and real authenticated requests are evidenced, every injected failure has a recorded recovery result, and unresolved findings have an explicit disposition. Current state: the user confirmed isolated project `hweoqkbgmzycyznrbvng` and supplied read-only catalog screenshots showing zero public tables. The assistant has not connected or executed SQL; no installation, restoration or real SDK/JWT result is claimed. The offline 556-test result is verified and the upgraded PostgreSQL rerun is user-reported passing. Neither establishes launch readiness.
