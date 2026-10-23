@@ -25,3 +25,8 @@ All 37 existing selected source/guard/security/LOGIN tests and syntax checks pas
 Run the full existing password-prompt PowerShell block with `REPORT_CARD_TEST_CONFIRM=DISPOSABLE_REPORT_CARD_TEST_ONLY` and `REPORT_CARD_TEST_ROLE_ADMIN_CONFIRM=DISPOSABLE_ROLE_ADMIN_TEST_ONLY`, using `node --experimental-strip-types .\scripts\report-card-postgres-upgrade-integration.mjs`. Running the node command alone after cleanup skips execution. The outer harness still closes the restricted pool before its acknowledged exact schema/four-role cleanup, checks absence, and propagates workload or cleanup failure. No broad cleanup or crash-safe guarantee is added.
 
 No migration journal, public SQL draft, production schema, live authentication, configured application role, request route, UI or deployment changes. The main 64 and standalone eight harnesses are unchanged and need no rerun solely for this batch. Next after the expanded upgrade gate: controlled verified server-request integration with explicit runtime mapping; actual SDK authentication and an approved staging installation remain outstanding.
+
+
+## User-verified completion — 2026-10-23
+
+The user confirmed the requested full offline 499/499 and all 27 opted-in upgrade groups passed after commit 86db6b95bfc9840a63e81f99af4046af6f204463. The five workload groups above and final generated schema/role cleanup are now user-verified. No rerun is needed solely for this documentation update. They verify the real fixture command/SQL boundary with trusted fictional identities, not actual Supabase cookies/JWTs or a deployed application role. The next server-entry integration scope is recorded in the handoff roadmap; implementation has not started while the execution environment is unavailable.
