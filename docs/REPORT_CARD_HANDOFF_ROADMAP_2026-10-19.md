@@ -413,3 +413,14 @@ The user's latest all-tests-passed response is recorded as confirmation of full 
 Six pure setup/cleanup tests raise expected full offline to 499 across 66 files; all 37 selected source/guard/security/login checks and script syntax/whitespace passed here. New full gate and expanded 22 upgrade groups remain pending; no database connection or SQL execution occurred here. See staging/REPORT_CARD_UPGRADE_LOGIN_REVIEW.md. Main/standalone suites are unchanged and need no rerun solely for this batch. The generated secret is memory-only; no environment credential inspection or persisted secret is involved. Lost acknowledgement/process interruption is not claimed crash-safe.
 
 Next after both gates: valid complete canonical academic source and actual report commands on this upgraded restricted layout, then real verified server requests. Do not confuse complete authority reads with command/idempotency or SDK authentication tests. Preserve unrelated work and no merge, deploy, live auth or production database changes.
+
+
+## Verified 499/22 and upgraded real-command continuation — 2026-10-23
+
+The user confirmed the full 499-test offline gate and all 22 upgrade groups after rerunning the complete opt-in block. Generated LOGIN isolation, complete authority and exact cleanup on the upgraded layout are now verified; earlier main 64 and standalone authority eight remain verified.
+
+Five additional upgrade groups now prepare a complete fictional two-pupil canonical academic source and real complete-boundary workflow/canonical/revoke commands through the existing actual restricted LOGIN pool. Distinct backend command pairs require one apply/one replay and exact report/audit/receipt/snapshot/release count changes. All seven actions exercise injected post-write adapter failures, same-key retries/replays and successful-inner/failed-outer rollback. Correction snapshots, stale-source withdrawal and current authority checks on historical receipts retain history.
+
+All 37 selected existing checks, script syntax and scoped whitespace passed here. Offline count remains 499 across 66 files; no allowlist or application runtime source changes. Expanded expected upgrade count is 27 with both confirmations; its five new SQL groups remain pending and were not run here. See staging/REPORT_CARD_UPGRADE_WORKFLOW_REVIEW.md. Main/standalone harnesses are unchanged. These are trusted fixture identities, not verified SDK requests or production security proof.
+
+Next after the expanded upgrade gate: controlled verified server-request integration and explicit runtime mapping. Preserve all unrelated work, keep routes disabled, and retain no merge/deployment/live-auth/production database changes.

@@ -8,6 +8,7 @@ import { awaitFixtureAuthorityLock } from './actor-authority-fixture-lifecycle.m
 import { reportUpgradeSecurityPlan, inspectUpgradeSecurityLayout } from './report-card-upgrade-security-plan.mjs';
 import { upgradeLoginSetupPlan } from './report-card-upgrade-login-plan.mjs';
 import { upgradeFixtureSchema } from './report-card-upgrade-plan.mjs';
+import { probeUpgradeWorkflow } from './report-card-upgrade-workflow-probe.mjs';
 
 export async function probeUpgradeLogin(db, adminURL, schema, schoolId, userId, memberId, authorityReview, onCommitted) {
   const q = upgradeFixtureSchema(schema), table = name => q + '."' + name + '"';
@@ -113,5 +114,6 @@ export async function probeUpgradeLogin(db, adminURL, schema, schoolId, userId, 
     await db.unsafe('UPDATE ' + table('memberships') + " SET status='active' WHERE id=$1::uuid", [memberId]);
     assert.equal((await complete()).length, 1);
     console.log('PASS: upgraded LOGIN authority locks block suspension before discovery and later requests recheck committed membership');
+    await probeUpgradeWorkflow(db, restricted, schema, schoolId, userId, memberId);
   } finally { await restricted.end(); }
 }

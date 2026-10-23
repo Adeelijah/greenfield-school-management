@@ -33,3 +33,8 @@ Six new pure login setup/cleanup tests pass. With existing source/guard/security
 Run `git pull origin report-cards-foundation` and `node .\scripts\verify-offline.mjs`. Then rerun the same complete credential-cleaning PostgreSQL block with the role-admin confirmation enabled, using `node --experimental-strip-types .\scripts\report-card-postgres-upgrade-integration.mjs`. Expected upgraded total is **22 PASS groups**, ending in schema-and-role absence after intentional workload failure. Without the role-admin token the nine security/LOGIN groups are explicitly skipped, leaving only 13 ordinary groups. The unchanged main 64 and standalone eight suites need no rerun solely for this batch.
 
 After both gates: construct a valid canonical fictional academic source on this upgraded restricted layout and run the real report workflow through it, then prepare actual verified server-request integration. No production SQL or deployment approval follows from passing fixture tests.
+
+
+## Subsequent verification and workload extension — 2026-10-23
+
+The user subsequently confirmed all 499 offline tests and all 22 upgrade groups passed. The next extension adds five actual restricted report-command groups on the same upgraded schema; expected opted-in total is now 27, with 14 role-admin groups skipped without that token. See REPORT_CARD_UPGRADE_WORKFLOW_REVIEW.md for the new prepared cases, pending SQL gate and SDK/production limits. The original five LOGIN groups above retain their historical scope.
