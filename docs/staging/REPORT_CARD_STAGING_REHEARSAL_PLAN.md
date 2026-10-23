@@ -12,11 +12,11 @@ Complete this record before any connection. A project name/reference or dashboar
 | Operator responsible for the target | Not supplied |
 | Data classification | Fictional accounts and pupils only; no copy of real pupil/guardian data |
 | Authorized first operation | Target identification and separately approved read-only catalog inspection; no installation implied |
-| Fictional school UUID and final Primary year | Not supplied; explicitly choose 5 or 6 after catalog reconciliation |
+| Fictional school UUID and final Primary year | Planned UUID `0c594571-74c5-46fe-a835-a9b217a3a199`; user selected Primary 5; school row/configuration not created |
 | Source revision | Record the immutable reviewed branch SHA and installed SDK/driver versions |
 | Candidate installation hash | Generate from `buildStagingReportInstallationReview` for that school and source; record the SQL hash and all four phase hashes |
 | Inspection identity | Separately authorized catalog operator; never reuse its credentials for the report application |
-| Application identity | `greenfield_app` LOGIN; SET-only access to `greenfield_report_card_runtime`; separate unreachable non-login authority owner |
+| Application identity | Desired `greenfield_app` LOGIN and SET-only runtime mapping retained; actual operator/role graph pending `REPORT_CARD_STAGING_ROLE_PREFLIGHT_REVIEW.sql` inspection |
 | Endpoint state | Report and guardian endpoints disabled throughout installation and failure rehearsal |
 | Restore evidence | Record a completed restoration into a separately named isolated destination before installation approval |
 
@@ -72,4 +72,4 @@ Do not create a generic down migration that deletes snapshots, releases, audit o
 
 Retain source SHA; target/project reference; authorized operation scope; school/final-year configuration; candidate and phase hashes; catalog comparison; effective-privilege findings; baseline/restoration evidence; per-failure rollback observations; actual public domain/auth results; and cleanup ownership. Do not record credentials or pupil identities.
 
-The rehearsal is complete only when the actual target's catalog/security and real authenticated requests are evidenced, every injected failure has a recorded recovery result, and unresolved findings have an explicit disposition. Current state: the user confirmed isolated project `hweoqkbgmzycyznrbvng` and supplied read-only catalog screenshots showing zero public tables. The assistant has not connected or executed SQL; no installation, restoration or real SDK/JWT result is claimed. The offline 556-test result is verified and the upgraded PostgreSQL rerun is user-reported passing. Neither establishes launch readiness.
+The rehearsal is complete only when the actual target's catalog/security and real authenticated requests are evidenced, every injected failure has a recorded recovery result, and unresolved findings have an explicit disposition. Current state: the user confirmed isolated project `hweoqkbgmzycyznrbvng`, supplied the initial zero-public-table catalog result, then explicitly approved and ran the twelve-table foundation and reported 12 / 12 protected tables. The final primary class is user-selected Primary 5. The planned school UUID is recorded in `GREENFIELD_STAGING_TARGET.review.json`; no school seed has been run. The assistant has not connected or executed SQL; the foundation installation is user-reported, while the academic/report installation, restoration and real SDK/JWT evidence remain pending. The offline 556-test result is verified and the upgraded PostgreSQL rerun is user-reported passing. Neither establishes launch readiness.

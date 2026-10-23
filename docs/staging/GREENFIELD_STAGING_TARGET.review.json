@@ -1,0 +1,17 @@
+{
+  "mode": "isolated-staging-review",
+  "projectRef": "hweoqkbgmzycyznrbvng",
+  "projectUrl": "https://hweoqkbgmzycyznrbvng.supabase.co",
+  "schema": "public",
+  "schoolId": "0c594571-74c5-46fe-a835-a9b217a3a199",
+  "schoolName": "Greenfield Staging",
+  "schoolSlug": "greenfield-staging",
+  "finalPrimaryYear": 5,
+  "loginRole": "greenfield_app",
+  "commandRole": "greenfield_report_card_runtime",
+  "authorityOwnerRole": "greenfield_report_card_authority_owner",
+  "foundationStatus": "user-reported-installed-12-protected-tables",
+  "schoolRecordStatus": "planned-not-created",
+  "roleProvisioningStatus": "catalog-evidence-pending",
+  "applicationEnabled": false
+}
