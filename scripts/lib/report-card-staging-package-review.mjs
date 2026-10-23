@@ -32,6 +32,7 @@ export function assembleStagingReportReview(config, sources) {
     ...(managed ? [['managed-bootstrap', managed.bootstrap]] : []),
     ['dependencies', dependencies], ['proposal', proposal], ['guards', guardBody],
     ['policy', policy.statements.map(s => s + ';').join('\n\n')],
+    ...(managed ? [['managed-access', managed.access], ['managed-ownership', managed.ownership]] : []),
     ...(managed ? [['managed-verification', managed.verify]] : []),
   ];
   const sql = '-- REVIEW ONLY: unexecuted, not a deployment authorization.\n' +

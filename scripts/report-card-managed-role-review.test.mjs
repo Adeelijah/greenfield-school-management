@@ -27,11 +27,11 @@ test('temporary owner transfer grants are bounded and only the operator-owned gr
   const plan = managedStagingRoleReview(config, guards);
   const grants = [...plan.guards.matchAll(/^GRANT greenfield_report_card_authority_owner TO postgres WITH (ADMIN FALSE|INHERIT FALSE|SET TRUE) GRANTED BY postgres;$/gm)];
   assert.equal(grants.length, 3);
-  const transfers = [...plan.guards.matchAll(/OWNER TO greenfield_report_card_authority_owner;/g)];
+  const transfers = [...plan.ownership.matchAll(/OWNER TO greenfield_report_card_authority_owner;/g)];
   assert.equal(transfers.length, 4);
-  assert.ok(grants.at(-1).index < transfers[0].index);
-  assert.ok(transfers.at(-1).index < plan.guards.indexOf('REVOKE CREATE ON SCHEMA public'));
-  assert.match(plan.guards, /REVOKE greenfield_report_card_authority_owner FROM postgres GRANTED BY postgres;/);
+  assert.doesNotMatch(plan.guards, /OWNER TO greenfield_report_card_authority_owner;/);
+  assert.ok(transfers.at(-1).index < plan.ownership.indexOf('REVOKE CREATE ON SCHEMA public'));
+  assert.match(plan.ownership, /REVOKE greenfield_report_card_authority_owner FROM postgres GRANTED BY postgres;/);
   assert.doesNotMatch(plan.bootstrap + plan.guards + plan.verify, /GRANT postgres TO|ALTER ROLE postgres|REVOKE greenfield_report_card_authority_owner FROM postgres;/);
   assert.throws(() => managedStagingRoleReview(config, guards.replace('OWNER TO greenfield_report_card_authority_owner;', 'OWNER TO postgres;')));
   assert.deepEqual(managedStagingRoleReview(config, guards.replaceAll('\n', '\r\n')), plan);
@@ -49,14 +49,24 @@ test('managed composition hashes bootstrap and final verification inside the sam
   const sources = { dependencies: read('docs/staging/REPORT_CARD_ACADEMIC_DEPENDENCIES_REVIEW.sql'), guards,
     proposalStatements: ['CREATE TABLE public."report_cards" (id uuid PRIMARY KEY)'] };
   const result = assembleStagingReportReview(config, sources);
-  assert.deepEqual(result.phases.map(p => p.name), ['managed-bootstrap', 'dependencies', 'proposal', 'guards', 'policy', 'managed-verification']);
+  assert.deepEqual(result.phases.map(p => p.name), ['managed-bootstrap', 'dependencies', 'proposal', 'guards', 'policy', 'managed-access', 'managed-ownership', 'managed-verification']);
   assert.equal([...result.sql.matchAll(/^BEGIN;$/gm)].length, 1);
   assert.equal([...result.sql.matchAll(/^COMMIT;$/gm)].length, 1);
   assert.ok(result.sql.indexOf('CREATE ROLE greenfield_app') < result.sql.indexOf('-- Phase: dependencies'));
-  assert.ok(result.sql.indexOf('REVOKE greenfield_report_card_authority_owner FROM postgres GRANTED BY postgres') < result.sql.indexOf('-- Phase: policy'));
+  const ownerPhase = result.sql.indexOf('-- Phase: managed-ownership');
+  for (const statement of result.sql.matchAll(/^(?:GRANT|REVOKE) [^\n]*ON FUNCTION [^\n]+/gm)) assert.ok(statement.index < ownerPhase);
+  assert.ok(result.sql.lastIndexOf('CREATE TRIGGER ') < ownerPhase);
+  assert.ok(result.sql.indexOf('REVOKE greenfield_report_card_authority_owner FROM postgres GRANTED BY postgres') > ownerPhase);
   assert.ok(result.sql.indexOf('-- Phase: managed-verification') < result.sql.lastIndexOf('COMMIT;'));
   assert.equal(result.sha256, createHash('sha256').update(result.sql).digest('hex'));
   assert.throws(() => assembleStagingReportReview({ ...config, roleAdministration: 'unknown' }, sources));
+  const access = managedStagingRoleReview(config, guards).access;
+  assert.equal([...access.matchAll(/^REVOKE ALL ON TABLE /gm)].length, 21);
+  assert.equal([...access.matchAll(/^REVOKE ALL ON FUNCTION /gm)].length, 12);
+  assert.doesNotMatch(access, /REVOKE ALL ON TABLE public\.(?:schools|memberships|admissions|guardians)\b|ALTER DEFAULT PRIVILEGES/);
+  assert.match(access, /FROM PUBLIC,anon,authenticated,service_role/);
+  assert.match(access, /has_any_column_privilege/);
+  assert.match(access, /role_name='authenticated' AND object_name='public.resolve_report_card_actor\(\)'/);
 });
 
 test('fixed offline exporter writes exclusive review files without a database or application enablement', () => {

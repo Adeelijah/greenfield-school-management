@@ -29,8 +29,58 @@ GRANT CREATE ON SCHEMA public TO ${owner};
 REVOKE CREATE ON SCHEMA public FROM ${owner};
 REVOKE ${owner} FROM postgres GRANTED BY postgres;
 `;
-  const guards = source.replace(anchor, anchor + '\n' + temporary).replace(/\nCOMMIT;\s*$/, cleanup + '\nCOMMIT;\n');
-  const bootstrap = `DO $managed_preflight$
+  const authorityFunctions = ['resolve_report_card_actor()', 'lock_report_card_actor(uuid)',
+    'lock_report_card_authority_write_gate()', 'lock_report_card_membership_actor_anchor()'];
+  const transfers = authorityFunctions.map(name => `ALTER FUNCTION public.${name}\n  OWNER TO ${owner};`);
+  let guards = source.replace(anchor, anchor + '\n' + temporary);
+  for (const statement of transfers) {
+    if (guards.split(statement).length !== 2) throw Error('Exact authority ownership statements required');
+    guards = guards.replace(statement, '-- Ownership transfer deferred until all grants and triggers are installed.');
+  }
+  const ownership = transfers.join('\n') + '\n' + cleanup;
+  const newTables = ['academic_levels', 'academic_sections', 'teacher_class_assignments',
+    'assessment_subjects', 'assessment_config_versions', 'assessment_scopes', 'assessment_subject_roster',
+    'assessment_teacher_subjects', 'assessment_scores', 'assessment_source_versions', 'assessment_teacher_reviews',
+    'assessment_finalizations', 'assessment_audit', 'assessment_operation_receipts', 'report_cards',
+    'report_card_snapshots', 'report_card_audit', 'report_card_operation_receipts', 'report_card_releases',
+    'assessment_source_write_gate', 'assessment_source_write_claims'];
+  const functions = ['assessment_lock_source_write()', 'assessment_mark_source_scope(uuid)',
+    'assessment_invalidate_source_rows()', 'assessment_reject_source_truncate()', 'assessment_invalidate_parent_rows()',
+    'report_card_reject_history()', 'report_card_guard_release_history()', ...authorityFunctions,
+    'report_card_restrict_runtime_writes()'];
+  // Scope the reset to objects created by this candidate. Preserve historical
+  // module ACLs and the exact runtime/authority-owner grants already installed.
+  const access = [
+    ...newTables.map(name => `REVOKE ALL ON TABLE public.${name} FROM PUBLIC,anon,authenticated,service_role;`),
+    ...functions.map(name => `REVOKE ALL ON FUNCTION public.${name} FROM PUBLIC,anon,authenticated,service_role;`),
+    'GRANT EXECUTE ON FUNCTION public.resolve_report_card_actor() TO authenticated;',
+    `DO $managed_api_access$
+DECLARE role_name text; object_name text;
+BEGIN
+ IF (SELECT count(*) FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n ON n.oid=c.relnamespace
+  WHERE n.nspname='public' AND c.relname IN (${newTables.map(name => "'" + name + "'").join(',')})
+  AND c.relkind='r' AND c.relrowsecurity AND c.relforcerowsecurity)<>21 THEN
+  RAISE EXCEPTION 'new relation RLS is missing or not forced'; END IF;
+ FOREACH role_name IN ARRAY ARRAY['anon','authenticated','service_role'] LOOP
+  FOREACH object_name IN ARRAY ARRAY[${newTables.map(name => "'public." + name + "'").join(',')}] LOOP
+   IF has_table_privilege(role_name,object_name,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+    OR has_any_column_privilege(role_name,object_name,'SELECT,INSERT,UPDATE,REFERENCES') THEN
+    RAISE EXCEPTION 'unexpected effective API relation access: %, %',role_name,object_name;
+   END IF;
+  END LOOP;
+  FOREACH object_name IN ARRAY ARRAY[${functions.map(name => "'public." + name + "'").join(',')}] LOOP
+   IF has_function_privilege(role_name,object_name,'EXECUTE') IS DISTINCT FROM
+    (role_name='authenticated' AND object_name='public.resolve_report_card_actor()') THEN
+    RAISE EXCEPTION 'unexpected effective API function access: %, %',role_name,object_name;
+   END IF;
+  END LOOP;
+ END LOOP;
+END $managed_api_access$;`,
+  ].join('\n');
+  const bootstrap = `SET LOCAL search_path = pg_catalog;
+SET LOCAL lock_timeout = '5s';
+SET LOCAL statement_timeout = '120s';
+DO $managed_preflight$
 BEGIN
  IF current_user<>'postgres' OR session_user<>'postgres' OR NOT EXISTS (
   SELECT 1 FROM pg_catalog.pg_roles WHERE rolname=current_user AND NOT rolsuper AND rolcreaterole AND rolbypassrls
@@ -64,6 +114,14 @@ BEGIN
   AND m.set_option AND NOT m.inherit_option AND NOT m.admin_option
  ) THEN RAISE EXCEPTION 'application role graph is not SET-only'; END IF;
  IF has_schema_privilege('${owner}','public','CREATE') THEN RAISE EXCEPTION 'temporary schema creation privilege remains'; END IF;
+ IF NOT has_schema_privilege('${owner}','auth','USAGE') OR NOT has_schema_privilege('${owner}','public','USAGE')
+  OR NOT has_function_privilege('${owner}','auth.uid()','EXECUTE') THEN
+  RAISE EXCEPTION 'authority owner lacks required auth access'; END IF;
+ IF (SELECT count(*) FROM pg_catalog.pg_proc p JOIN pg_catalog.pg_namespace n ON n.oid=p.pronamespace
+  JOIN pg_catalog.pg_roles r ON r.oid=p.proowner
+  WHERE n.nspname='public' AND p.oid IN (${authorityFunctions.map(name => "'public." + name + "'::pg_catalog.regprocedure").join(',')})
+  AND r.rolname='${owner}' AND p.prosecdef AND p.proconfig @> ARRAY['search_path=pg_catalog','row_security=on'])<>4 THEN
+  RAISE EXCEPTION 'authority ownership or security settings differ'; END IF;
 END $managed_role_graph$;`;
-  return Object.freeze({ mode, bootstrap, guards, verify, applicationPasswordEnabled: false });
+  return Object.freeze({ mode, bootstrap, guards, access, ownership, verify, applicationPasswordEnabled: false });
 }
