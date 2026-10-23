@@ -6,7 +6,13 @@ import type { SqlClient, SqlDatabase } from './report-card-postgres-disposable-a
 
 const config = (): StagingReportRuntimeConfig => ({ mode: 'isolated-staging-review', schema: 'public', schoolId: '00000000-0000-0000-0000-000000000001', loginRole: 'greenfield_app', commandRole: 'greenfield_report_card_runtime' });
 const link = (role: string) => ({ role, set: true, inherit: false, admin: false });
-const roles = () => [
+type MembershipFixture = ReturnType<typeof link>;
+type RoleFixture = {
+  name: string; login: boolean; inherit: boolean; superuser: boolean; bypass: boolean;
+  creator: boolean; database: boolean; replication: boolean; owner: boolean;
+  memberships: MembershipFixture[]; members: MembershipFixture[];
+};
+const roles = (): RoleFixture[] => [
   { name: 'greenfield_app', login: true, inherit: false, superuser: false, bypass: false, creator: false, database: false, replication: false, owner: false, memberships: [link('greenfield_report_card_runtime')], members: [] },
   { name: 'greenfield_report_card_runtime', login: false, inherit: false, superuser: false, bypass: false, creator: false, database: false, replication: false, owner: false, memberships: [], members: [link('greenfield_app')] },
   { name: 'greenfield_report_card_authority_owner', login: false, inherit: false, superuser: false, bypass: false, creator: false, database: false, replication: false, owner: true, memberships: [], members: [] },

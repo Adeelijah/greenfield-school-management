@@ -453,3 +453,10 @@ The next unused staging adapter selects a concrete source-review mapping: existi
 Eight new recorder/pure tests and all existing selected checks passed here (92 total). Expected full gate is 513 across 68 files; installed full TypeScript/ESLint is pending. No database connection or SQL occurred here. The existing 31 upgrade groups are unchanged and need no rerun solely for this source batch; they do not establish the new public runtime adapter's SQL/catalog behavior. See staging/REPORT_CARD_STAGING_RUNTIME_CONTRACT_REVIEW.md for exact mapping, constraints and the remaining auth/installation gate.
 
 Next after offline verification: prepare the coordinated non-fixture schema/source/authority/security and command-boundary package. An explicitly selected, separately authorized isolated Supabase target and real fictional sessions are required before actual installation/SDK request tests. The local PostgreSQL LOGIN suite is not Supabase Auth. Preserve all unrelated work and no merge, deployment, live-auth or production database changes.
+
+
+## Staging runtime fixture typing repair — 2026-10-23
+
+The user's installed verifier stopped at TypeScript TS2345 in the new staging runtime test: inference kept some empty membership arrays as never[], preventing the negative-case push. The fixture builder now returns an explicit RoleFixture[] with typed incoming/outgoing MembershipFixture[] arrays. This is a test-only annotation repair; runtime code, role checks, SQL, guards and test behavior are unchanged.
+
+All eight focused runtime tests passed here and scoped whitespace passed. Full installed TypeScript/ESLint and the 513-test verifier remain pending; the preceding 505 offline/31 PostgreSQL baseline remains verified. No database rerun is needed solely for this test typing change. Resume the documented installation/boundary package after the offline gate passes.
