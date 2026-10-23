@@ -23,6 +23,8 @@ const tests = [
   'scripts/report-card-upgrade-login-plan.test.mjs',
   'scripts/report-card-upgrade-request-loader.test.mjs',
   'scripts/report-card-coordinated-guards-review.test.mjs',
+  'scripts/report-card-staging-security-plan.test.mjs',
+  'src/lib/academics/report-card-staging-command-boundary.test.ts',
   'src/lib/academics/report-card-staging-runtime.test.ts',
   'scripts/report-card-staging-metadata.test.mjs',
   'scripts/report-card-complete-fixture-ddl.test.mjs',

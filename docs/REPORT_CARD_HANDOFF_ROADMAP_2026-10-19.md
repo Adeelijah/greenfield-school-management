@@ -471,3 +471,14 @@ REPORT_CARD_COORDINATED_GUARDS_REVIEW.sql now prepares one public-schema transac
 Eight new source/semantic-port checks passed with the existing focused suite (100 selected checks); syntax and scoped whitespace passed. Expected full gate is 521 across 69 files, pending installed full verification. No SQL, database connection or deployment occurred here. Existing PostgreSQL harnesses are unchanged and need no rerun solely for this artifact; they do not verify the new public SQL. See staging/REPORT_CARD_COORDINATED_GUARDS_REVIEW.md.
 
 Next after offline verification: target-bound fixed-school runtime policy/grants, non-fixture command adaptation and an authorized isolated rehearsal of the actual coordinated artifacts. Real Supabase request/JWT proof still requires an explicitly selected and authorized isolated target with fictional accounts. Keep endpoints disabled; preserve no merge, live-auth/production SQL/deployment changes and all unrelated work.
+
+
+## Verified 521 and fixed-school staging policy/boundary — 2026-10-23
+
+The user confirmed all 521 offline tests passed. Existing 31 upgraded SQL groups, main 64 and standalone eight remain verified. A new pure policy planner prepares exact fixed-school clamps and runtime read/lock/report-write grants over 28 selected relations, with DML/truncate defense, private helper access and SET-only role activation last. It records explicit school/source metadata and preserves unrelated module grants. It is an unexecuted review fragment for insertion after all coordinated guard revocations and before their COMMIT; it is not a connection or migration runner.
+
+A dormant public command boundary composes with the supplied staging role adapter, verifies exact login/execution role, takes source before complete authority, rejects principal drift, and keeps inner commands in the same physical transaction. Failed outcomes, caught SQL errors, nested/direct misuse and expired leases roll back. It does not authenticate a request or relax existing fixture schema guards; action/assignment/source/version policies still belong to the future public domain writer and real SDK-owned server entry.
+
+Eight policy-plan and eleven boundary recorder tests passed with existing selected checks (119 total), syntax and scoped whitespace. Expected full gate is 540 across 71 files, pending installed TypeScript/ESLint. No SQL or database connection occurred here. Existing PostgreSQL harnesses are unchanged and need no rerun solely for this source batch. See staging/REPORT_CARD_STAGING_POLICY_BOUNDARY_REVIEW.md.
+
+Next after the offline gate: public domain/source writer adaptation, complete installation assembly and an authorized isolated rehearsal of actual combined artifacts. Real Supabase auth still requires a specifically selected/authorized target and fictional sessions. Preserve unrelated work and no merge, live-auth, production SQL or deployment changes.
