@@ -4,6 +4,10 @@ Date: 2026-10-22. Source baseline: `03353b4cb95a9b07174365761bbdb69f674b3a87` on
 
 This is a review package, not an executable migration bundle. No connection, catalog query, migration, role/grant/RLS installation, route enablement or deployment has occurred. The user confirmed the full **461-test offline gate**, **64 main disposable PostgreSQL groups** and **eight standalone authority groups**. Those fixtures do not establish the installed state of any school database.
 
+## Current review status — 2026-10-23
+
+The user confirmed all **556 offline tests** passed. The dormant public domain/server adapters and fixed-input coordinated installation-review builder are prepared; no target installation or real Supabase auth has been verified. The 31-group upgraded regression rerun for the shared-domain change remains pending. Use `REPORT_CARD_STAGING_REHEARSAL_PLAN.md` for target selection, read-only reconciliation, recovery evidence and the authorized rehearsal sequence. Earlier source-baseline dates above describe the package's origin.
+
 ## Source reconciliation
 
 `drizzle/meta/_journal.json` contains one entry, `0000_broad_slayback`. Its SQL creates 12 foundation tables and four enums. Current `src/db/schema.ts` declares 18 tables, including six later structure/lifecycle/assignment tables. Presence in that TypeScript file is not a journaled migration or evidence of an applied object.
@@ -48,12 +52,12 @@ Create all tables before adding any cross-table FKs when using a generated bundl
 | --- | --- | --- | --- |
 | S0 | Named isolated staging target, owner/operator, scope of authorization and immutable source SHA | Target cannot be confused with a school production DB; no real pupils | Not selected or connected |
 | S1 | Catalog reconciliation using `REPORT_CARD_CATALOG_PREFLIGHT_REVIEW.sql`, deployment migration journal and object/grant review | Actual columns/types/keys/policies/roles compared with this matrix; unknown/missing objects recorded | Read-only query draft prepared, unexecuted |
-| S2 | Forward-only academic dependency SQL and explicit fictional school/class configuration manifest | No duplicate/recreated base tables, no inferred backfill, no collateral lifecycle changes; all FK targets valid | Academic-only SQL draft prepared; apply/upgrade rehearsal pending |
-| S3 | Explicit assessment/report schema bundle plus append-only/revision/release guards | Apply from clean baseline and upgrade rehearsal; whole failure rolls back; source-only hash constraints not mistaken for canonical validation | Proposals/fixture semantics verified; non-fixture bundle absent |
-| S4 | Coordinated authority/source locking and least-privilege security bundle | Hidden membership, both arrival orders, writer/reader misuse, owner fallback and transitive privileges denied in target layout | Fixture evidence exists; target mapping/installation absent |
-| S5 | Restricted connection bootstrap and non-fixture adapter, verified SDK RPC installation | Real cookie/JWT request resolves only its actor, fixed-school connection agrees, current authority rechecked in one transaction | Unused fixture entry/bridge only |
+| S2 | Forward-only academic dependency SQL and explicit fictional school/class configuration manifest | No duplicate/recreated base tables, no inferred backfill, no collateral lifecycle changes; all FK targets valid | Dependency draft included in the source-review builder; target catalog/configuration and installation pending |
+| S3 | Explicit assessment/report schema bundle plus append-only/revision/release guards | Apply from clean baseline and upgrade rehearsal; whole failure rolls back; source-only hash constraints not mistaken for canonical validation | Fixed-input review builder prepares dependencies, 16 proposal tables, guards and policy together; actual public installation unverified |
+| S4 | Coordinated authority/source locking and least-privilege security bundle | Hidden membership, both arrival orders, writer/reader misuse, owner fallback and transitive privileges denied in target layout | Source role mapping and coordinated public guard/policy candidate prepared; effective privileges and target installation unverified |
+| S5 | Restricted connection bootstrap and non-fixture adapter, verified SDK RPC installation | Real cookie/JWT request resolves only its actor, fixed-school connection agrees, current authority rechecked in one transaction | Dormant verified public server entry and role adapter prepared; real target SDK/JWT evidence pending |
 | S6 | Fictional admin/teacher UAT and report output | Create/submit/return/approve/publish/revoke/correct/replay, two-school denial, expired session, mobile/accessibility and printable output | Not run |
-| S7 | Signed staging operational review and separate production change request | Restore rehearsal, audit retention, monitoring, approved production migration and deployment window | Not prepared for execution |
+| S7 | Signed staging operational review and separate production change request | Restore rehearsal, audit retention, monitoring, approved production migration and deployment window | Recovery/rehearsal review prepared; target restoration, operational sign-off and production change request pending |
 
 S0/S1 need approval for a specific isolated target before connecting or running queries. S2–S4 are source preparation until that installation is separately authorized. Passing fixture tests or the standing approval for source commits does not authorize production SQL or deployment. No production apply command is included in this package.
 
@@ -68,7 +72,7 @@ Persisted report creation requires an existing positive-revision complete finali
 ## Runtime and security contract
 
 - The existing application connection guard compares URLs/usernames/operator acknowledgement; it does not verify live role attributes, ownership or effective grants. Do not bypass it or reuse migration credentials for reports.
-- Decide whether `greenfield_app` is the unprivileged login or a selected role, how the draft `greenfield_report_card_runtime` is reached, and which single school the installation serves. The decision must include both membership directions and SET/INHERIT/ADMIN options. Do not invent a new environment variable or shared pool role-switch behavior before this decision.
+- The source-review mapping now selects `greenfield_app` as the unprivileged LOGIN with SET true / INHERIT false / ADMIN false access to `greenfield_report_card_runtime`. The dormant adapter checks both membership directions and ownership. This is not proof that the target has that mapping; reconcile actual roles before installation. The school's fixed UUID and separately supplied restricted connection are still target-specific. Keep existing connection guards and credentials separation intact.
 - Runtime must be non-superuser, non-BYPASSRLS, non-owner, without role/database creation or administration membership. Verify actual role in every transaction; SET LOCAL/transaction cleanup must not leak role or school scope into the next pooled request. Configuration failure must not fall back to owner/application-default access.
 - Keep the complete membership helper private to the exact report execution role, with a narrow non-login owner. The zero-argument request RPC derives only `auth.uid()`; the transaction helper accepts only the server-verified ID. Check PUBLIC/default privileges and policies applying to the authority owner; fixed-school runtime visibility cannot prove global membership completeness.
 - Use source discovery before shared authority advisory lock, actor, membership/school and report/source child locks. Authority/source writers take the corresponding exclusive discovery gate before row discovery, including zero-row statements and truncate rejection. Port the tested order, not just function names. Review cascades, explicit owner row locks, imports/background jobs and contention.
@@ -85,25 +89,4 @@ If a transaction fails, keep endpoints disabled, preserve the error and compare 
 
 ## Next development action
 
-The academic-only dependency SQL and explicit metadata assembly are now prepared; see REPORT_CARD_SCHEMA_ASSEMBLY_REVIEW.md. Six source checks passed; four metadata checks and the expanded 471-test full gate remain pending in the installed checkout. No SQL has run. After that gate, prepare a guarded disposable baseline-to-target upgrade rehearsal with catalog comparison and rollback injection. The partial assembly must not be used as a Drizzle Kit entrypoint. Do not enable routes or request production deployment at this stage.
-
-
-## Verified upgraded baseline and runtime mapping continuation — 2026-10-23
-
-The user has now verified all 505 offline tests and 31 upgraded PostgreSQL groups. The earlier pending counts describe historical preparation. The semantic baseline upgrade, guard/RLS/LOGIN composition and actual server-entry fixture workflow are verified in the generated local layout, while a named staging installation remains unselected/unconnected.
-
-REPORT_CARD_STAGING_RUNTIME_CONTRACT_REVIEW.md selects the next source-review mapping: greenfield_app remains the LOGIN accepted by the unchanged application guard; greenfield_report_card_runtime is a SET-only transaction execution role; the private authority owner is never a membership target. An unused explicit staging adapter and eight recorder tests prepare full offline 513. No live settings or grants are changed. The combined non-fixture installation package and public command adaptation still need preparation before target-specific installation and actual SDK auth tests.
-
-
-## Coordinated guard artifact — 2026-10-23
-
-The user verified full offline 513. REPORT_CARD_COORDINATED_GUARDS_REVIEW.sql prepares the public source/history/release guard layer and complete authority functions together, using source-before-advisory ordering and forced protocol-table RLS with known API/application defaults revoked. The standalone authority draft is preserved. Eight source/port checks prepare full offline 521; all 100 selected checks passed here. The new SQL has not been PostgreSQL-parsed or executed.
-
-This advances the source/history/authority part of S3/S4 only. No complete table migration, fixed-school runtime policy/column grants, academic writer privilege path, claim retention or public command adapter is installed/prepared by this guard artifact alone. S0 target selection/authorization, effective catalog review, actual combined-artifact rehearsal and real SDK auth evidence remain required. Do not apply the guard artifact independently to active modules or treat existing fixture results as verification of public security installation.
-
-
-## Fixed-school policy fragment and public transaction boundary — 2026-10-23
-
-Full offline 521 is user-verified. REPORT_CARD_STAGING_POLICY_BOUNDARY_REVIEW.md prepares the next S4/S5 source surfaces: a pure fixed-school runtime policy/grant fragment with explicit school/source binding and role activation last, plus a dormant public command transaction boundary that composes with the staging role adapter. Neither installs security or ports the fixture-only domain writers/readers. Complete fragment assembly must insert the new policy after coordinated guard revocations and before COMMIT; no independent apply command is provided.
-
-Nineteen new offline checks prepare full offline 540; all 119 selected checks passed here. SQL, actual effective privileges, public driver behavior and real SDK auth remain unverified. Next are public domain/source adaptation and a complete combined-artifact rehearsal on a specifically authorized isolated target. Existing module privileges, trusted academic writers, claim maintenance and unknown PUBLIC/default/function grant paths require reconciliation before any installation.
+Complete the pending 31-group local upgraded regression run, identify the isolated Supabase project and operator, then obtain target-specific read-only inspection scope. Reconcile catalogs, effective privileges and recovery coverage using `REPORT_CARD_STAGING_REHEARSAL_PLAN.md` before authorizing installation or fictional auth/data changes. The schema assembly, dependency draft, domain adapters and coordinated review builder already exist; do not repeat those source milestones. Keep report/guardian routes disabled until actual public installation and real authenticated-session evidence passes. No production migration or deployment is authorized.
