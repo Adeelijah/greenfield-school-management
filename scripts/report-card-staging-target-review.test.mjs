@@ -20,11 +20,15 @@ test('staging record retains the user-selected Primary 5 and exact separate proj
   assert.doesNotMatch(JSON.stringify(target), /PASSWORD|postgresql:\/\/|service_role|secret|token/i);
 });
 
-test('target preserves the existing strict role contract while catalog evidence is pending', () => {
+test('target retains exact role names and records the observed managed operator', () => {
   assert.equal(target.loginRole, 'greenfield_app');
   assert.equal(target.commandRole, 'greenfield_report_card_runtime');
   assert.equal(target.authorityOwnerRole, 'greenfield_report_card_authority_owner');
-  assert.equal(target.roleProvisioningStatus, 'catalog-evidence-pending');
+  assert.equal(target.roleProvisioningStatus, 'absent-managed-bootstrap-review');
+  assert.equal(target.roleAdministration, 'supabase-postgres-createrole');
+  assert.equal(target.operatorEvidence.serverVersionNum, 170011);
+  assert.equal(target.operatorEvidence.superuser, false);
+  assert.equal(target.operatorEvidence.allExpectedRolesAbsent, true);
   for (const role of [target.loginRole, target.commandRole, target.authorityOwnerRole]) assert.ok(query.includes("('" + role + "')"));
   assert.match(query, /LEFT JOIN pg_catalog\.pg_roles r ON r\.rolname=e\.name/);
   assert.match(query, /'present', r\.oid IS NOT NULL/);

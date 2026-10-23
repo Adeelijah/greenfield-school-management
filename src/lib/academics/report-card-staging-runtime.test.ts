@@ -6,7 +6,10 @@ import type { SqlClient, SqlDatabase } from './report-card-postgres-disposable-a
 
 const config = (): StagingReportRuntimeConfig => ({ mode: 'isolated-staging-review', schema: 'public', schoolId: '00000000-0000-0000-0000-000000000001', loginRole: 'greenfield_app', commandRole: 'greenfield_report_card_runtime' });
 const link = (role: string) => ({ role, set: true, inherit: false, admin: false });
-type MembershipFixture = ReturnType<typeof link>;
+type MembershipFixture = ReturnType<typeof link> & {
+  grantor?: string; grantorSuperuser?: boolean; memberSuperuser?: boolean;
+  memberCreator?: boolean; memberBypass?: boolean;
+};
 type RoleFixture = {
   name: string; login: boolean; inherit: boolean; superuser: boolean; bypass: boolean;
   creator: boolean; database: boolean; replication: boolean; owner: boolean;
@@ -17,6 +20,11 @@ const roles = (): RoleFixture[] => [
   { name: 'greenfield_report_card_runtime', login: false, inherit: false, superuser: false, bypass: false, creator: false, database: false, replication: false, owner: false, memberships: [], members: [link('greenfield_app')] },
   { name: 'greenfield_report_card_authority_owner', login: false, inherit: false, superuser: false, bypass: false, creator: false, database: false, replication: false, owner: true, memberships: [], members: [] },
 ];
+const managedRoles = (): RoleFixture[] => roles().map(row => ({ ...row, members: [...row.members, {
+  role: 'postgres', set: false, inherit: false, admin: true,
+  grantor: 'bootstrap_superuser', grantorSuperuser: true,
+  memberSuperuser: false, memberCreator: true, memberBypass: true,
+}] }));
 function recorder() {
   const state = { login: 'greenfield_app', role: 'greenfield_app', evidence: roles(), events: [] as string[], writes: [] as string[], transactions: 0, rejectSet: false };
   const tx: SqlClient = { async unsafe(query, params) {
@@ -113,4 +121,50 @@ test('direct SQL and expired successful leases cannot reuse a pooled report tran
   const count = state.events.length;
   await assert.rejects(captured!.unsafe('write'), /Expired/);
   assert.equal(state.events.length, count); assert.equal(state.transactions, 1);
+});
+
+test('managed staging requires explicit opt-in and one proven administrator edge per role', () => {
+  const mode = 'supabase-postgres-createrole';
+  assert.equal(inspectStagingReportRoles(managedRoles()), false);
+  assert.equal(inspectStagingReportRoles(managedRoles(), mode), true);
+  assert.equal(inspectStagingReportRoles(roles(), mode), false);
+  for (let index = 0; index < 3; index++) {
+    for (const patch of [{ role: 'other' }, { set: true }, { inherit: true }, { admin: false },
+      { grantor: '' }, { grantorSuperuser: false }, { memberSuperuser: true }, { memberCreator: false }, { memberBypass: false }]) {
+      const changed = managedRoles(); Object.assign(changed[index]!.members.at(-1)!, patch);
+      assert.equal(inspectStagingReportRoles(changed, mode), false);
+    }
+    const duplicate = managedRoles(); duplicate[index]!.members.push({ ...duplicate[index]!.members.at(-1)! });
+    assert.equal(inspectStagingReportRoles(duplicate, mode), false);
+    const missing = managedRoles(); delete missing[index]!.members.at(-1)!.grantorSuperuser;
+    assert.equal(inspectStagingReportRoles(missing, mode), false);
+  }
+});
+
+test('managed administrator allowance never permits application elevation or extra ownership', () => {
+  for (let index = 0; index < 3; index++) {
+    const changed = managedRoles(); changed[index]!.memberships.push(link('postgres'));
+    assert.equal(inspectStagingReportRoles(changed, 'supabase-postgres-createrole'), false);
+    for (const flag of ['superuser', 'bypass', 'creator', 'database', 'replication', 'inherit']) {
+      const privileged = managedRoles(); Object.assign(privileged[index]!, { [flag]: true });
+      assert.equal(inspectStagingReportRoles(privileged, 'supabase-postgres-createrole'), false);
+    }
+  }
+  for (const index of [0, 1]) {
+    const owned = managedRoles(); owned[index]!.owner = true;
+    assert.equal(inspectStagingReportRoles(owned, 'supabase-postgres-createrole'), false);
+  }
+});
+
+test('runtime captures managed selection and rejects temporary SET access before reaching work', async () => {
+  const { state, db } = recorder(); state.evidence = managedRoles();
+  const supplied = { ...config(), roleAdministration: 'supabase-postgres-createrole' as const };
+  const runtime = createStagingReportRuntime(db, supplied);
+  Object.assign(supplied, { roleAdministration: 'isolated-strict' });
+  assert.equal(await runtime.begin(async () => 'managed'), 'managed');
+  state.evidence[2]!.members.at(-1)!.set = true;
+  let reached = false;
+  await assert.rejects(runtime.begin(async () => { reached = true; }));
+  assert.equal(reached, false);
+  assert.throws(() => createStagingReportRuntime(db, { ...config(), roleAdministration: 'arbitrary' } as unknown as StagingReportRuntimeConfig));
 });

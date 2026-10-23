@@ -1,6 +1,7 @@
 // Pure review composition. This module cannot connect, install or execute SQL.
 import { createHash } from 'node:crypto';
 import { stagingReportSecurityPlan } from './report-card-staging-security-plan.mjs';
+import { managedStagingRoleReview } from './report-card-managed-role-review.mjs';
 
 const digest = text => createHash('sha256').update(text).digest('hex');
 const normalize = text => {
@@ -15,7 +16,10 @@ const normalize = text => {
 export function assembleStagingReportReview(config, sources) {
   const policy = stagingReportSecurityPlan(config);
   if (config.baseline !== 'reconciled-semantic-0000') throw Error('Explicit reconciled baseline required');
-  const dependencies = normalize(sources?.dependencies), guards = normalize(sources?.guards);
+  const dependencies = normalize(sources?.dependencies);
+  if (config.roleAdministration !== undefined && config.roleAdministration !== 'isolated-strict' && config.roleAdministration !== 'supabase-postgres-createrole') throw Error('Unknown role administration');
+  const managed = config.roleAdministration === 'supabase-postgres-createrole' ? managedStagingRoleReview(config, sources?.guards) : null;
+  const guards = normalize(managed?.guards ?? sources?.guards);
   if (!Array.isArray(sources.proposalStatements) || sources.proposalStatements.length === 0 ||
     sources.proposalStatements.some(s => typeof s !== 'string' || !/^(CREATE TYPE public\.|CREATE TABLE public\.|CREATE (?:UNIQUE )?INDEX |ALTER TABLE public\.)/.test(s))) throw Error('Reviewed proposal statements required');
   const proposal = sources.proposalStatements.map(normalize).map(s => s.replace(/;$/, '') + ';').join('\n\n');
@@ -25,8 +29,10 @@ export function assembleStagingReportReview(config, sources) {
   const guardBody = guards.slice(begin + '\nBEGIN;\n'.length, -'\nCOMMIT;'.length).trim();
   if (/^\s*(?:BEGIN|COMMIT|ROLLBACK)\s*;/im.test(guardBody)) throw Error('Nested review transaction');
   const phases = [
+    ...(managed ? [['managed-bootstrap', managed.bootstrap]] : []),
     ['dependencies', dependencies], ['proposal', proposal], ['guards', guardBody],
     ['policy', policy.statements.map(s => s + ';').join('\n\n')],
+    ...(managed ? [['managed-verification', managed.verify]] : []),
   ];
   const sql = '-- REVIEW ONLY: unexecuted, not a deployment authorization.\n' +
     '-- Source: ' + policy.sourceCommit + '; fixed school: ' + policy.schoolId + '\n' +

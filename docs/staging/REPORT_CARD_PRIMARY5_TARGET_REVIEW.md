@@ -23,3 +23,7 @@ The desired source package already has a metadata emitter and bounded composer. 
 ## Verification
 
 Four new source-only checks validate the target choice, disabled/planned state, unchanged exact role names, explicit missing-role evidence, both membership directions/grantor, and catalog-only bounded read access. They passed with the related foundation/planner/composer/runtime checks: **30 passed locally**. No database connection, SQL execution or dependency installation occurred. Expected expanded offline count is **566 across 76 files**; the user's verified full count remains 556 until the expanded installed gate is run. No TypeScript/application source changes were made. This review adds no new PostgreSQL workload-test requirement; the next requested operation is the read-only target inventory above.
+
+## Received operator evidence and managed bootstrap draft
+
+The returned catalog reports PostgreSQL 17.11, non-superuser postgres with CREATEROLE/BYPASSRLS, all three roles absent, no relevant membership edges and one expected auth.uid signature. The target record now captures that user-supplied observation and selects the explicit managed-role review mode. See `REPORT_CARD_MANAGED_BOOTSTRAP_REVIEW.md` for its bounded administrator-edge contract, temporary ownership-transfer cleanup, offline export and remaining approval/rehearsal gates. This supersedes the catalog-pending status above; it does not report any role or academic/report installation. Strict mode remains the default.

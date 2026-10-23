@@ -12,6 +12,20 @@
   "authorityOwnerRole": "greenfield_report_card_authority_owner",
   "foundationStatus": "user-reported-installed-12-protected-tables",
   "schoolRecordStatus": "planned-not-created",
-  "roleProvisioningStatus": "catalog-evidence-pending",
-  "applicationEnabled": false
+  "roleProvisioningStatus": "absent-managed-bootstrap-review",
+  "applicationEnabled": false,
+  "roleAdministration": "supabase-postgres-createrole",
+  "operatorEvidence": {
+    "source": "user-pasted-read-only-preflight",
+    "database": "postgres",
+    "sessionRole": "postgres",
+    "inspectionRole": "postgres",
+    "serverVersionNum": 170011,
+    "superuser": false,
+    "bypassRls": true,
+    "createRole": true,
+    "allExpectedRolesAbsent": true,
+    "roleMembershipEdges": 0,
+    "authUidUuidSignatures": 1
+  }
 }
