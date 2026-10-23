@@ -263,7 +263,7 @@ if (!url || process.env.REPORT_CARD_TEST_CONFIRM !== 'DISPOSABLE_REPORT_CARD_TES
       const authorityReview = await readFile(new URL('../docs/security/REPORT_CARD_ACTOR_AUTHORITY_REVIEW.sql', import.meta.url), 'utf8');
       await probeUpgradeSecurity(client, schema, ids.school, userId, authorityReview);
       await probeUpgradeLogin(client, url, schema, ids.school, userId, memberId, authorityReview, () => { securityCommitted = true; });
-    } else console.log('SKIPPED: fourteen upgraded security/LOGIN/workflow groups require the explicit disposable role-admin confirmation.');
+    } else console.log('SKIPPED: eighteen upgraded security/LOGIN/workflow/request groups require the explicit disposable role-admin confirmation.');
     throw cleanupProbe;
   } catch (error) { if (error !== cleanupProbe) failure = error; }
   finally {

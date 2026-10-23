@@ -9,11 +9,12 @@ import { executeCompleteFixtureReport } from '../../src/lib/academics/report-car
 import { executeFixtureReportWorkflow } from '../../src/lib/academics/report-card-postgres-workflow-writer.ts';
 import { executeFixtureCanonicalReportCommand } from '../../src/lib/academics/report-card-postgres-canonical-writer.ts';
 import { executeFixtureReportRevocation } from '../../src/lib/academics/report-card-postgres-revoke-writer.ts';
+import { probeUpgradeServerEntry } from './report-card-upgrade-server-entry-probe.mjs';
 
 export async function probeUpgradeWorkflow(db, restricted, schema, schoolId, adminUserId, adminMembershipId) {
   const q = upgradeFixtureSchema(schema), table = name => q + '."' + name + '"';
   const ids = Object.fromEntries(['teacherUser', 'teacherAuth', 'teacher', 'session', 'term', 'level', 'section', 'class', 'assignment', 'subject', 'config', 'scope', 'roster'].map(key => [key, randomUUID()]));
-  const pupils = [0, 1].map(index => ({ student: randomUUID(), enrollment: randomUUID(), score: randomUUID(), mark: index === 0 ? '86.0000' : '69.9950' }));
+  const pupils = [0, 1, 2].map(index => ({ student: randomUUID(), enrollment: randomUUID(), score: randomUUID(), mark: ['86.0000', '69.9950', '55.0000'][index] }));
   const insert = (tx, name, row) => {
     const keys = Object.keys(row), values = keys.map(key => row[key] !== null && typeof row[key] === 'object' ? JSON.stringify(row[key]) : row[key]);
     const parameters = keys.map((key, i) => '$' + (i + 1) + (row[key] !== null && typeof row[key] === 'object' ? '::text::jsonb' : ''));
@@ -47,7 +48,7 @@ export async function probeUpgradeWorkflow(db, restricted, schema, schoolId, adm
     await tx.unsafe('SELECT id FROM ' + table('fixture_source_write_gate') + ' WHERE id=1 FOR UPDATE');
     const loaded = await loadFixtureCompleteAssessment(tx, schema, selector, async () => ({ authUserId: adminAuth }));
     assert.equal(loaded.ok, true, JSON.stringify(loaded));
-    assert.equal(loaded.input.students.length, 2);
+    assert.equal(loaded.input.students.length, 3);
     const sourceId = randomUUID();
     await insert(tx, 'assessment_source_versions', { id: sourceId, school_id: schoolId, scope_id: ids.scope, revision: loaded.input.scope.revision, source_manifest: JSON.parse(loaded.materialized.manifest.canonicalJson), content_hash: loaded.materialized.manifest.sha256 });
     for (const subject of loaded.materialized.subjects) {
@@ -65,9 +66,9 @@ export async function probeUpgradeWorkflow(db, restricted, schema, schoolId, adm
   });
   const verified = await asWriter(tx => readFixtureVerifiedCanonicalAssessment(tx, schema, selector, async () => ({ authUserId: adminAuth })));
   assert.equal(verified.ok, true, JSON.stringify(verified));
-  assert.equal(verified.input.enrollments.length, 2);
-  assert.deepEqual(JSON.parse(verified.materialized.subjects[0].results.canonicalJson).students.map(p => p.result.total).sort(), ['70.00', '86.00']);
-  console.log('PASS: upgraded restricted LOGIN verifies a complete two-pupil canonical source from real relational rows and JSONB finalizations');
+  assert.equal(verified.input.enrollments.length, 3);
+  assert.deepEqual(JSON.parse(verified.materialized.subjects[0].results.canonicalJson).students.map(p => p.result.total).sort(), ['55.00', '70.00', '86.00']);
+  console.log('PASS: upgraded restricted LOGIN verifies a complete three-pupil canonical source from real relational rows and JSONB finalizations');
 
   const history = async () => {
     const rows = {};
@@ -137,6 +138,7 @@ export async function probeUpgradeWorkflow(db, restricted, schema, schoolId, adm
   assert.equal(snapshot.canonical_payload.binding.studentId, pupils[0].student);
   assert.equal(snapshot.canonical_payload.binding.enrollmentId, pupils[0].enrollment);
   assert.equal(JSON.stringify(snapshot.canonical_payload).includes(pupils[1].enrollment), false);
+  assert.equal(JSON.stringify(snapshot.canonical_payload).includes(pupils[2].enrollment), false);
   assert.equal((await db.unsafe('SELECT id FROM ' + table('report_card_releases') + ' WHERE report_id=$1::uuid', [created.reportId])).length, 1);
   console.log('PASS: upgraded restricted approval/publication pairs apply once and share one immutable pupil-specific approved snapshot and release');
 
@@ -171,6 +173,8 @@ export async function probeUpgradeWorkflow(db, restricted, schema, schoolId, adm
   assert.deepEqual(JSON.parse(JSON.stringify(await db.unsafe('SELECT * FROM ' + table('report_card_snapshots') + ' WHERE id=$1::uuid', [firstPin.snapshotId]))), firstPinRows);
   assert.equal((await db.unsafe('SELECT id FROM ' + table('report_card_snapshots') + ' WHERE report_id=$1::uuid', [second.reportId])).length, 2);
   console.log('PASS: all seven upgraded command actions roll back injected post-write failures; same-key retry/replay and outer rejection preserve exact history');
+
+  await probeUpgradeServerEntry({ db, asWriter, schema, schoolId, admin, teacher, selector, pupil: pupils[2], assignmentId: ids.assignment, history });
 
   const frozen = JSON.parse(JSON.stringify(await db.unsafe('SELECT * FROM ' + table('report_card_snapshots') + ' ORDER BY id')));
   await db.unsafe('UPDATE ' + table('assessment_scores') + ' SET version=version+1 WHERE id=$1::uuid', [pupils[1].score]);
