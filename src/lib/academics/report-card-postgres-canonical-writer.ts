@@ -1,13 +1,16 @@
-// Fixture-only approval/publication adapter. No app route, driver or environment.
+import type { ReportSqlScope } from './report-card-sql-scope';
+// @ts-expect-error Explicit source extension for the offline Node runner.
+import { fixtureReportSqlScope, isReportSqlScope } from './report-card-sql-scope.ts';
+// Shared approval/publication adapter. No app route, driver or environment.
 import { createHash, randomUUID } from 'node:crypto';
 import type { SqlDatabase } from './report-card-postgres-disposable-adapter';
 import type { ApprovedReportBinding } from './report-card-approved-snapshot';
 // @ts-expect-error Node type stripping requires explicit source extension.
 import { fixtureAssessmentDecoders as d } from './assessment-postgres-fixture-source-reader.ts';
 // @ts-expect-error Node type stripping requires explicit source extension.
-import { lockFixtureReportActor } from './report-card-postgres-command-context.ts';
+import { lockReportActorInScope } from './report-card-postgres-command-context.ts';
 // @ts-expect-error Node type stripping requires explicit source extension.
-import { readFixtureVerifiedCanonicalAssessment } from './assessment-postgres-canonical-reader.ts';
+import { readVerifiedCanonicalAssessmentInScope } from './assessment-postgres-canonical-reader.ts';
 // @ts-expect-error Node type stripping requires explicit source extension.
 import { buildApprovedReportSnapshot, matchesApprovedReportSnapshot } from './report-card-approved-snapshot.ts';
 // @ts-expect-error Node type stripping requires explicit source extension.
@@ -21,15 +24,15 @@ const abort = (code: string): never => { throw new FixtureReportAbort(code); };
  * their shared discovery lock. Only approve/publish of EXISTING reports is in
  * scope; creation, submit/return/reopen and production authentication are absent.
  */
-export async function executeFixtureCanonicalReportCommand(db: SqlDatabase, schema: string, raw: CanonicalReportCommand,
+export async function executeCanonicalReportCommandInScope(db: SqlDatabase, sqlScope: ReportSqlScope, raw: CanonicalReportCommand,
  verifiedIdentity: () => Promise<{ authUserId: string } | null>,
 ): Promise<CanonicalReportOutcome> {
- if (!/^rc_it_[a-f0-9]{16}$/.test(schema) || !raw || !['approve','publish'].includes(raw.action) || typeof raw.reportId !== 'string' || !raw.reportId.trim() || typeof raw.operationKey !== 'string' || !raw.operationKey.trim() || raw.operationKey.length > 128 || !Number.isSafeInteger(raw.expectedVersion) || raw.expectedVersion < 1) return { ok: false, code: 'invalid' };
+ if (!isReportSqlScope(sqlScope) || !raw || !['approve','publish'].includes(raw.action) || typeof raw.reportId !== 'string' || !raw.reportId.trim() || typeof raw.operationKey !== 'string' || !raw.operationKey.trim() || raw.operationKey.length > 128 || !Number.isSafeInteger(raw.expectedVersion) || raw.expectedVersion < 1) return { ok: false, code: 'invalid' };
  const command = { reportId: raw.reportId, action: raw.action, expectedVersion: raw.expectedVersion, operationKey: raw.operationKey };
- const table = (name: string) => '"' + schema + '"."' + name + '"';
+ const table = (name: string) => '"' + sqlScope.schema + '"."' + name + '"';
  try {
   return await db.begin(async tx => {
-   const lockedActor = await lockFixtureReportActor(tx,schema,verifiedIdentity);
+   const lockedActor = await lockReportActorInScope(tx,sqlScope,verifiedIdentity);
    if (!lockedActor.ok) return abort(lockedActor.code);
    if (lockedActor.identity.membership.role !== 'admin') return abort('forbidden');
    const schoolId = lockedActor.identity.school.id, actorId = lockedActor.identity.membership.id;
@@ -55,7 +58,7 @@ export async function executeFixtureCanonicalReportCommand(db: SqlDatabase, sche
    if (!report.submittedBy || report.submittedBy === actorId) return abort('forbidden');
    const submitters = await tx.unsafe('SELECT m.id FROM ' + table('memberships') + ' m JOIN ' + table('teacher_class_assignments') + " a ON a.school_id=m.school_id AND a.teacher_membership_id=m.id WHERE m.school_id=$1::uuid AND m.id=$2::uuid AND m.role='teacher' AND m.status='active' AND a.class_id=$3::uuid AND a.session_id=$4::uuid AND a.ended_at IS NULL FOR SHARE OF m,a", [schoolId, report.submittedBy, report.classId, report.sessionId]);
    if (submitters.length !== 1) return abort('forbidden');
-   const loaded = await readFixtureVerifiedCanonicalAssessment(tx, schema, { classId: report.classId, sessionId: report.sessionId, termId: report.termId }, async () => ({ authUserId: lockedActor.authUserId }));
+   const loaded = await readVerifiedCanonicalAssessmentInScope(tx, sqlScope, { classId: report.classId, sessionId: report.sessionId, termId: report.termId }, async () => ({ authUserId: lockedActor.authUserId }));
    if (!loaded.ok) return abort(loaded.code);
    if (loaded.identity.membership.id !== actorId || loaded.input.scope.id !== report.assessmentScopeId || loaded.input.scope.revision !== report.assessmentRevision || loaded.sourceVersionId !== report.assessmentSourceVersionId) return abort('stale_source');
    const now = new Date().toISOString();
@@ -99,3 +102,7 @@ export async function executeFixtureCanonicalReportCommand(db: SqlDatabase, sche
 function snapshotBinding(b: ApprovedReportBinding): ApprovedReportBinding {
  return { id:b.id,schoolId:b.schoolId,enrollmentId:b.enrollmentId,studentId:b.studentId,classId:b.classId,sessionId:b.sessionId,termId:b.termId,assessmentScopeId:b.assessmentScopeId,assessmentSourceVersionId:b.assessmentSourceVersionId,assessmentRevision:b.assessmentRevision,approvedVersion:b.approvedVersion,submittedBy:b.submittedBy,approvedBy:b.approvedBy,approvedAt:b.approvedAt };
 }
+
+
+/** Disposable compatibility entry: public remains invalid. */
+export async function executeFixtureCanonicalReportCommand(db: SqlDatabase, schema: string, raw: CanonicalReportCommand, verifiedIdentity: () => Promise<{authUserId:string}|null>): Promise<CanonicalReportOutcome> { const scope = fixtureReportSqlScope(schema); return scope ? executeCanonicalReportCommandInScope(db, scope, raw, verifiedIdentity) : {ok:false,code:'invalid'}; }

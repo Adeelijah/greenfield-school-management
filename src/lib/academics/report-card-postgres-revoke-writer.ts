@@ -1,11 +1,14 @@
-// Fixture-only withdrawal adapter. No driver, connection, app route or environment.
+import type { ReportSqlScope } from './report-card-sql-scope';
+// @ts-expect-error Explicit source extension for the offline Node runner.
+import { fixtureReportSqlScope, isReportSqlScope } from './report-card-sql-scope.ts';
+// Shared withdrawal adapter. No driver, connection, app route or environment.
 import { createHash, randomUUID } from 'node:crypto';
 import type { SqlDatabase } from './report-card-postgres-disposable-adapter';
 import type { CorrectionReport, CorrectionRelease, CorrectionSnapshot } from './report-card-release-correction';
 // @ts-expect-error Explicit TS extension for Node offline runner.
 import { normalizeReleaseCorrectionCommand, planReleaseCorrection } from './report-card-release-correction.ts';
 // @ts-expect-error Explicit TS extension for Node offline runner.
-import { lockFixtureReportActor } from './report-card-postgres-command-context.ts';
+import { lockReportActorInScope } from './report-card-postgres-command-context.ts';
 // @ts-expect-error Explicit TS extension for Node offline runner.
 import { fixtureAssessmentDecoders as d } from './assessment-postgres-fixture-source-reader.ts';
 // @ts-expect-error Explicit TS extension for Node offline runner.
@@ -24,12 +27,12 @@ const timestamp=(value:unknown):string|null=>{
  * Deliberately does not require fresh academic data to withdraw a bad release.
  * Post-write errors must escape begin so all writes roll back before mapping.
  */
-export async function executeFixtureReportRevocation(db:SqlDatabase,schema:string,raw:unknown,verifiedIdentity:()=>Promise<{authUserId:string}|null>):Promise<RevokeReportOutcome>{
+export async function executeReportRevocationInScope(db:SqlDatabase,sqlScope:ReportSqlScope,raw:unknown,verifiedIdentity:()=>Promise<{authUserId:string}|null>):Promise<RevokeReportOutcome>{
  const command=normalizeReleaseCorrectionCommand(raw);
- if(!/^rc_it_[a-f0-9]{16}$/.test(schema)||!command)return{ok:false,code:'invalid'};
- const table=(name:string)=>'"'+schema+'"."'+name+'"';
+ if(!isReportSqlScope(sqlScope)||!command)return{ok:false,code:'invalid'};
+ const table=(name:string)=>'"'+sqlScope.schema+'"."'+name+'"';
  try{return await db.begin(async tx=>{
-  const actor=await lockFixtureReportActor(tx,schema,verifiedIdentity);if(!actor.ok)return abort(actor.code);
+  const actor=await lockReportActorInScope(tx,sqlScope,verifiedIdentity);if(!actor.ok)return abort(actor.code);
   if(actor.identity.membership.role!=='admin')return abort('forbidden');
   const schoolId=actor.identity.school.id,actorId=actor.identity.membership.id;
   const rows=await tx.unsafe('SELECT id,school_id AS "schoolId",student_id AS "studentId",enrollment_id AS "enrollmentId",stage,version,assessment_scope_id AS "assessmentScopeId",assessment_source_version_id AS "assessmentSourceVersionId",assessment_revision AS "assessmentRevision",submitted_by AS "submittedBy",approved_by AS "approvedBy",published_at AS "publishedAt",return_reason AS "returnReason" FROM '+table('report_cards')+' WHERE school_id=$1::uuid AND id=$2::uuid FOR UPDATE',[schoolId,command.reportId]);
@@ -69,3 +72,7 @@ export async function executeFixtureReportRevocation(db:SqlDatabase,schema:strin
   return outcome;
  });}catch(error){return{ok:false,code:error instanceof RevokeAbort?error.code:'transaction_failed'};}
 }
+
+
+/** Disposable compatibility entry: public remains invalid. */
+export async function executeFixtureReportRevocation(db: SqlDatabase, schema: string, raw: unknown, verifiedIdentity: () => Promise<{authUserId:string}|null>): Promise<RevokeReportOutcome> { const scope = fixtureReportSqlScope(schema); return scope ? executeReportRevocationInScope(db, scope, raw, verifiedIdentity) : {ok:false,code:'invalid'}; }

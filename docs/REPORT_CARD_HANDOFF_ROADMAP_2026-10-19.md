@@ -482,3 +482,17 @@ A dormant public command boundary composes with the supplied staging role adapte
 Eight policy-plan and eleven boundary recorder tests passed with existing selected checks (119 total), syntax and scoped whitespace. Expected full gate is 540 across 71 files, pending installed TypeScript/ESLint. No SQL or database connection occurred here. Existing PostgreSQL harnesses are unchanged and need no rerun solely for this source batch. See staging/REPORT_CARD_STAGING_POLICY_BOUNDARY_REVIEW.md.
 
 Next after the offline gate: public domain/source writer adaptation, complete installation assembly and an authorized isolated rehearsal of actual combined artifacts. Real Supabase auth still requires a specifically selected/authorized target and fictional sessions. Preserve unrelated work and no merge, live-auth, production SQL or deployment changes.
+
+
+
+## Verified 540 and coordinated staging domain/installation candidate — 2026-10-23
+
+The user supplied all 540 offline tests passed. Existing 31 upgraded PostgreSQL groups, main 64 and standalone eight remain verified for their preceding source revisions.
+
+One coordinated source milestone now prepares issued namespace scopes, shared actual relational/canonical readers and all seven report action cores, a dormant SDK-owned staging server entry, and fixed-input installation-review assembly. Existing fixture entry points still refuse public. Public cores require the exact login/runtime role, source-before-complete-authority locks and matching mapped principal; response normalization remains inside the outer transaction. No route, driver, environment connection or live auth behavior is enabled.
+
+An independent staging metadata emitter selects sixteen proposal tables/four enums. The review builder composes dependency SQL, proposals, coordinated guards and fixed-school grants in one transaction, with phase/content hashes and explicit reconciled-semantic-baseline/source/school metadata. It invokes no fixture DDL generator and is neither a general baseline reconciler nor an apply runner. Actual catalog, effective privileges, academic writer mapping, claim retention, recovery and real SDK auth remain target-specific gates.
+
+Six domain, four server-entry, four pure composition and two installed-metadata checks prepare expected full offline 556 across 74 files. Selected recorder/pure checks and syntax/whitespace ran locally; full installed TypeScript/ESLint and metadata tests remain pending. No database connection or SQL occurred here. Because shared fixture domain cores and the request loader changed, rerun the existing 31-group upgraded SQL rehearsal after offline verification; it does not prove the new public installation or real Supabase auth. See staging/REPORT_CARD_STAGING_DOMAIN_INSTALLATION_REVIEW.md.
+
+Next: catalog/preflight/recovery review and a specifically selected, authorized isolated Supabase rehearsal of actual coordinated artifacts and fictional authenticated requests. Continue batching related source work rather than requesting a terminal run per component. Preserve unrelated work and no merge, deployment, production SQL or live-auth changes.

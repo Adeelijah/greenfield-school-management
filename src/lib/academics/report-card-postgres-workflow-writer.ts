@@ -1,12 +1,15 @@
-// Fixture-only persisted creation/submit/return/approved-reopen workflow.
+import type { ReportSqlScope } from './report-card-sql-scope';
+// @ts-expect-error Explicit source extension for the offline Node runner.
+import { fixtureReportSqlScope, isReportSqlScope } from './report-card-sql-scope.ts';
+// Shared persisted workflow; explicit issued scope, no connection or route.
 import { createHash, randomUUID } from 'node:crypto';
 import type { SqlDatabase } from './report-card-postgres-disposable-adapter';
 // @ts-expect-error Node type stripping requires explicit source extension.
-import { lockFixtureReportActor } from './report-card-postgres-command-context.ts';
+import { lockReportActorInScope } from './report-card-postgres-command-context.ts';
 // @ts-expect-error Node type stripping requires explicit source extension.
 import { fixtureAssessmentDecoders as d } from './assessment-postgres-fixture-source-reader.ts';
 // @ts-expect-error Node type stripping requires explicit source extension.
-import { readFixtureVerifiedCanonicalAssessment } from './assessment-postgres-canonical-reader.ts';
+import { readVerifiedCanonicalAssessmentInScope } from './assessment-postgres-canonical-reader.ts';
 // @ts-expect-error Node type stripping requires explicit source extension.
 import { canonicalizeSnapshotValue } from './report-card-canonical-snapshot.ts';
 type Create = {action:'create';operationKey:string;studentId:string;enrollmentId:string;classId:string;sessionId:string;termId:string};
@@ -21,8 +24,8 @@ const text = (v:unknown):v is string => typeof v==='string' && !!v.trim();
  * submission refreshes its pin. Return/reopen can recover a stale report without
  * weakening source requirements for the subsequent submission/approval.
  */
-export async function executeFixtureReportWorkflow(db:SqlDatabase,schema:string,raw:PersistedReportWorkflowCommand,verifiedIdentity:()=>Promise<{authUserId:string}|null>):Promise<PersistedReportWorkflowOutcome>{
- if(!/^rc_it_[a-f0-9]{16}$/.test(schema)||!raw||!['create','submit','return','reopen'].includes(raw.action)||!text(raw.operationKey)||raw.operationKey.length>128)return{ok:false,code:'invalid'};
+export async function executeReportWorkflowInScope(db:SqlDatabase,sqlScope:ReportSqlScope,raw:PersistedReportWorkflowCommand,verifiedIdentity:()=>Promise<{authUserId:string}|null>):Promise<PersistedReportWorkflowOutcome>{
+ if(!isReportSqlScope(sqlScope)||!raw||!['create','submit','return','reopen'].includes(raw.action)||!text(raw.operationKey)||raw.operationKey.length>128)return{ok:false,code:'invalid'};
  let command:PersistedReportWorkflowCommand;
  if(raw.action==='create'){
   if(![raw.studentId,raw.enrollmentId,raw.classId,raw.sessionId,raw.termId].every(text))return{ok:false,code:'invalid'};
@@ -31,9 +34,9 @@ export async function executeFixtureReportWorkflow(db:SqlDatabase,schema:string,
   if(!text(raw.reportId)||!Number.isSafeInteger(raw.expectedVersion)||raw.expectedVersion<1||raw.action==='return'&&(!text(raw.reason)||raw.reason.length>2000))return{ok:false,code:'invalid'};
   command={action:raw.action,operationKey:raw.operationKey,reportId:raw.reportId,expectedVersion:raw.expectedVersion,...raw.action==='return'?{reason:raw.reason!.trim()}: {}};
  }
- const table=(name:string)=>'"'+schema+'"."'+name+'"';
+ const table=(name:string)=>'"'+sqlScope.schema+'"."'+name+'"';
  try{return await db.begin(async tx=>{
-  const actor=await lockFixtureReportActor(tx,schema,verifiedIdentity);if(!actor.ok)return abort(actor.code);
+  const actor=await lockReportActorInScope(tx,sqlScope,verifiedIdentity);if(!actor.ok)return abort(actor.code);
   const {identity}=actor,schoolId=identity.school.id,actorId=identity.membership.id,role=identity.membership.role;
   if(command.action==='submit'?role!=='teacher':command.action==='return'||command.action==='reopen'?role!=='admin':!['teacher','admin'].includes(role))return abort('forbidden');
   const {operationKey,...intent}=command;
@@ -78,7 +81,7 @@ export async function executeFixtureReportWorkflow(db:SqlDatabase,schema:string,
   }
   let sourceId=report?.assessmentSourceVersionId??'',scopeId=report?.assessmentScopeId??'',revision=report?.assessmentRevision??0;
   if(command.action==='create'||command.action==='submit'){
-   const loaded=await readFixtureVerifiedCanonicalAssessment(tx,schema,{classId:selector.classId,sessionId:selector.sessionId,termId:selector.termId},async()=>({authUserId:actor.authUserId}));
+   const loaded=await readVerifiedCanonicalAssessmentInScope(tx,sqlScope,{classId:selector.classId,sessionId:selector.sessionId,termId:selector.termId},async()=>({authUserId:actor.authUserId}));
    if(!loaded.ok)return abort(loaded.code);
    if(loaded.identity.membership.id!==actorId||loaded.input.scope.schoolId!==schoolId||loaded.input.enrollments.filter(e=>e.id===selector.enrollmentId&&e.studentId===selector.studentId).length!==1||report&&loaded.input.scope.id!==report.assessmentScopeId)return abort('invalid_reference');
    sourceId=loaded.sourceVersionId;scopeId=loaded.input.scope.id;revision=loaded.input.scope.revision;
@@ -104,3 +107,7 @@ export async function executeFixtureReportWorkflow(db:SqlDatabase,schema:string,
   return outcome;
  });}catch(error){return{ok:false,code:error instanceof WorkflowAbort?error.code:'transaction_failed'};}
 }
+
+
+/** Disposable compatibility entry: public remains invalid. */
+export async function executeFixtureReportWorkflow(db: SqlDatabase, schema: string, raw: PersistedReportWorkflowCommand, verifiedIdentity: () => Promise<{authUserId:string}|null>): Promise<PersistedReportWorkflowOutcome> { const scope = fixtureReportSqlScope(schema); return scope ? executeReportWorkflowInScope(db, scope, raw, verifiedIdentity) : {ok:false,code:'invalid'}; }

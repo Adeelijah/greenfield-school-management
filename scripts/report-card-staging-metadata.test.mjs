@@ -8,6 +8,8 @@ import * as base from '../src/db/schema.ts';
 import * as proposal from '../src/db/report-cards-schema.proposal.ts';
 import { assessmentFixtureDDL } from './lib/assessment-disposable-schema.mjs';
 import { reportUpgradeProposalPlan, upgradeProposalTables } from './lib/report-card-upgrade-plan.mjs';
+import { stagingReportProposalStatements } from './lib/report-card-staging-proposal-review.mjs';
+import { buildStagingReportInstallationReview } from './lib/report-card-staging-installation-review.mjs';
 
 const tables = Object.values(assembly).filter(value => value && typeof value === 'object');
 const configs = tables.map(getTableConfig);
@@ -15,6 +17,28 @@ const byName = new Map(configs.map(config => [config.name, config]));
 const draft = readFileSync(new URL('../docs/staging/REPORT_CARD_ACADEMIC_DEPENDENCIES_REVIEW.sql', import.meta.url), 'utf8');
 const prerequisites = new Map([...draft.matchAll(/CREATE UNIQUE INDEX (\w+) ON public\.(\w+)\s*\(([^)]+)\)/g)].map(m => [m[1], { table: m[2], columns: m[3].split(',').map(s => s.trim()) }]));
 const extraNames = ['terms_school_session_id_unique', 'teacher_class_assignments_school_id_id_unique', 'enrollments_report_binding_unique'];
+
+test('independent public proposal emitter preserves every selected metadata statement', () => {
+  const schema = 'rc_it_0123456789abcdef';
+  const expected = reportUpgradeProposalPlan(schema, assessmentFixtureDDL(schema, { includeReports: true }).statements)
+    .map(s => s.replaceAll('"' + schema + '".', 'public.')).sort();
+  const actual = stagingReportProposalStatements();
+  assert.deepEqual([...actual].sort(), expected);
+  assert.ok(Object.isFrozen(actual));
+  assert.equal(actual.filter(s => s.startsWith('CREATE TABLE ')).length, 16);
+  assert.equal(actual.filter(s => s.startsWith('CREATE TYPE ')).length, 4);
+});
+
+test('actual review composition creates only the selected additive relations before guards and policy', () => {
+  const result = buildStagingReportInstallationReview({ mode: 'isolated-staging-review', schema: 'public', schoolId: '00000000-0000-0000-0000-000000000090', sourceCommit: 'a'.repeat(40), baseline: 'reconciled-semantic-0000' });
+  const created = [...result.sql.matchAll(/CREATE TABLE (?:public|"public")\."?(\w+)"?/g)].map(m => m[1]);
+  assert.equal(created.length, 21); assert.equal(new Set(created).size, 21);
+  assert.ok(created.includes('assessment_source_write_gate')); assert.ok(created.includes('assessment_source_write_claims'));
+  for (const name of ['schools', 'school_users', 'memberships', 'students', 'enrollments', 'admissions', 'guardians']) assert.equal(created.includes(name), false);
+  const lastProposalFk = result.sql.lastIndexOf('ALTER TABLE public."report_card_');
+  assert.ok(lastProposalFk < result.sql.indexOf('-- Phase: guards'));
+  assert.ok(result.sql.indexOf('-- Phase: guards') < result.sql.indexOf('-- Phase: policy'));
+});
 
 test('actual assembly exposes 27 distinct real tables and eight used enum definitions', () => {
   assert.equal(tables.length, 27); assert.equal(byName.size, 27);

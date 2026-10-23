@@ -1,4 +1,7 @@
-// Schema-faithful fixture source reader. Not a production adapter or report projection.
+import type { ReportSqlScope } from './report-card-sql-scope';
+// @ts-expect-error Explicit source extension for the offline Node runner.
+import { fixtureReportSqlScope, isReportSqlScope, lockReportSqlScopeAuthority, matchesReportSqlAuthority } from './report-card-sql-scope.ts';
+// Schema-faithful shared source reader; explicit issued scope, no connection.
 import type { SqlClient } from './report-card-postgres-disposable-adapter';
 import type { PersistedIdentityRows, PersistedPlacementRows, MappedReportIdentity } from './report-card-persisted-model-map';
 import type { AssessmentConfig } from './calendar-assessments';
@@ -65,26 +68,28 @@ function decodePlacementRows(rows: Record<keyof PersistedPlacementRows, Record<s
  * a source write; a future writing adapter must take an exclusive gate first.
  * Caller supplies only selectors, not school/actor/config/score authority.
  */
-export async function readFixtureRelationalAssessment(
- connection: SqlClient, schema: string, selector: FixtureAssessmentSelector,
+export async function readRelationalAssessmentInScope(
+ connection: SqlClient, sqlScope: ReportSqlScope, selector: FixtureAssessmentSelector,
  verifiedIdentity: () => Promise<{ authUserId: string } | null>,
 ): Promise<RelationalSourceOutcome> {
- if (!/^rc_it_[a-f0-9]{16}$/.test(schema)) return { ok: false, code: 'invalid_reference' };
+ if (!isReportSqlScope(sqlScope)) return { ok: false, code: 'invalid_reference' };
  if (!selector) return { ok: false, code: 'invalid_reference' };
  selector = { studentId: selector.studentId, enrollmentId: selector.enrollmentId, classId: selector.classId, sessionId: selector.sessionId, termId: selector.termId };
- const table = (name: string) => '"' + schema + '"."' + name + '"';
+ const table = (name: string) => '"' + sqlScope.schema + '"."' + name + '"';
  try {
   const auth = await verifiedIdentity();
   if (!auth?.authUserId?.trim()) return { ok: false, code: 'unauthenticated' };
+  const authority = await lockReportSqlScopeAuthority(connection, sqlScope, auth.authUserId);
+  if (authority === false) return { ok: false, code: 'forbidden' };
   if (!selector || Object.values(selector).some(v => typeof v !== 'string' || !v.trim())) return { ok: false, code: 'invalid_reference' };
-  const gate = await connection.unsafe('SELECT id FROM ' + table('fixture_source_write_gate') + ' WHERE id=1 FOR SHARE');
+  const gate = await connection.unsafe('SELECT id FROM ' + table(sqlScope.sourceGate) + ' WHERE id=1 FOR SHARE');
   if (gate.length !== 1) return { ok: false, code: 'read_failed' };
   const users = await connection.unsafe('SELECT id,auth_user_id AS "authUserId" FROM ' + table('school_users') + ' WHERE auth_user_id=$1::uuid FOR SHARE', [auth.authUserId]);
   if (users.length !== 1) return { ok: false, code: 'forbidden' };
   const memberships = await connection.unsafe('SELECT id,school_id AS "schoolId",user_id AS "userId",role,status FROM ' + table('memberships') + ' WHERE user_id=$1::uuid ORDER BY school_id,id FOR SHARE', [users[0].id]);
   const schools = await connection.unsafe('SELECT s.id,s.final_primary_year AS "finalPrimaryYear" FROM ' + table('schools') + ' s WHERE s.id IN (SELECT school_id FROM ' + table('memberships') + ' WHERE user_id=$1::uuid) ORDER BY s.id FOR SHARE', [users[0].id]);
   const mapped = mapPersistedReportIdentity(auth.authUserId, decodeIdentityRows({ users, memberships, schools }));
-  if (!mapped.ok) return { ok: false, code: 'forbidden' };
+  if (!mapped.ok || !matchesReportSqlAuthority(authority, mapped.identity, users[0]!.id)) return { ok: false, code: 'forbidden' };
   const { identity } = mapped; const schoolId = identity.membership.schoolId;
   const params = [schoolId, selector.classId, selector.sessionId, selector.termId];
   const scopes = await connection.unsafe('SELECT id,revision FROM ' + table('assessment_scopes') + ' WHERE school_id=$1::uuid AND class_id=$2::uuid AND session_id=$3::uuid AND term_id=$4::uuid FOR SHARE', params);
@@ -133,3 +138,7 @@ export async function readFixtureRelationalAssessment(
 // Shared selected-column decoders for the complete-scope fixture reader. JSON
 // config documents still require semantic validation by the persistence policy.
 export const fixtureAssessmentDecoders = { textField, nullableText, integerField, booleanField, enumField, decoded, decodeIdentityRows, decodePlacementRows };
+
+
+/** Disposable compatibility entry: public remains invalid. */
+export async function readFixtureRelationalAssessment(tx: SqlClient, schema: string, selector: FixtureAssessmentSelector, verifiedIdentity: () => Promise<{authUserId:string}|null>): Promise<RelationalSourceOutcome> { const scope = fixtureReportSqlScope(schema); return scope ? readRelationalAssessmentInScope(tx, scope, selector, verifiedIdentity) : {ok:false,code:'invalid_reference'}; }

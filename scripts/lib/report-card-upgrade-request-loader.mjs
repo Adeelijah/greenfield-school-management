@@ -5,7 +5,7 @@ import { randomUUID } from 'node:crypto';
 import { registerHooks, stripTypeScriptTypes } from 'node:module';
 import { readFileSync } from 'node:fs';
 
-const academic = ['report-card-actor-authority', 'report-card-request-command', 'report-card-complete-fixture-boundary',
+const academic = ['report-card-sql-scope', 'report-card-command-response', 'report-card-staging-runtime', 'report-card-staging-command-boundary', 'report-card-actor-authority', 'report-card-request-command', 'report-card-complete-fixture-boundary',
   'report-card-postgres-workflow-writer', 'report-card-postgres-canonical-writer', 'report-card-postgres-revoke-writer',
   'report-card-postgres-command-context', 'assessment-postgres-canonical-reader', 'assessment-postgres-fixture-source-reader',
   'report-card-persisted-model-map', 'assessment-persistence-policy', 'calendar-assessments', 'report-card-approved-snapshot',
@@ -14,7 +14,7 @@ const academic = ['report-card-actor-authority', 'report-card-request-command', 
 
 export async function openUpgradeRequestFixture() {
   const root = new URL('../../', import.meta.url), token = randomUUID();
-  const paths = academic.map(name => 'src/lib/academics/' + name + '.ts').concat(['src/server/auth/report-card-identity.ts', 'src/server/academics/report-card-fixture-commands.ts']);
+  const paths = academic.map(name => 'src/lib/academics/' + name + '.ts').concat(['src/server/auth/report-card-identity.ts', 'src/server/academics/report-card-fixture-commands.ts', 'src/server/academics/report-card-staging-commands.ts']);
   const urls = new Map(paths.map(path => { const url = new URL(path, root); url.searchParams.set('upgradeRequest', token); return [path, url.href]; }));
   const sources = new Set(urls.values());
   const key = 'greenfield.upgrade-request.' + token;
@@ -59,7 +59,9 @@ export async function openUpgradeRequestFixture() {
   };
   try {
     const { createVerifiedFixtureReportCommands } = await import(urls.get('src/server/academics/report-card-fixture-commands.ts'));
+    const { createVerifiedStagingReportCommands } = await import(urls.get('src/server/academics/report-card-staging-commands.ts'));
     return {
+      createStaging: createVerifiedStagingReportCommands,
       create: createVerifiedFixtureReportCommands,
       async withRequest(transport, work) {
         if (closed || !transport || typeof transport.getUser !== 'function' || typeof transport.rpc !== 'function' || typeof work !== 'function') throw Error('Invalid controlled request');

@@ -1,10 +1,13 @@
-// Fixture-only complete-scope reads. Caller supplies one already-open transaction.
+import type { ReportSqlScope } from './report-card-sql-scope';
+// @ts-expect-error Explicit source extension for the offline Node runner.
+import { fixtureReportSqlScope, isReportSqlScope, lockReportSqlScopeAuthority, matchesReportSqlAuthority } from './report-card-sql-scope.ts';
+// Shared complete-scope reads. Caller supplies one already-open transaction.
 import type { SqlClient } from './report-card-postgres-disposable-adapter';
 import type { AssessmentConfig } from './calendar-assessments';
 import type { MappedReportIdentity } from './report-card-persisted-model-map';
 import type { CompleteAssessmentSource, MaterializedAssessment, StoredAssessmentSource, StoredAssessmentFinalization, StoredAssessmentReview } from './assessment-canonical-source';
 // @ts-expect-error Node type stripping requires explicit source extension.
-import { fixtureAssessmentDecoders as d, readFixtureRelationalAssessment } from './assessment-postgres-fixture-source-reader.ts';
+import { fixtureAssessmentDecoders as d, readRelationalAssessmentInScope } from './assessment-postgres-fixture-source-reader.ts';
 // @ts-expect-error Node type stripping requires explicit source extension.
 import { mapPersistedReportIdentity } from './report-card-persisted-model-map.ts';
 // @ts-expect-error Node type stripping requires explicit source extension.
@@ -20,21 +23,23 @@ const scoped = (r: Record<string, unknown>) => ({ id: d.textField(r.id), schoolI
  * finalization. No source writes or lock upgrades are performed. A future writer
  * must take the exclusive discovery gate BEFORE invoking any shared read path.
  */
-export async function loadFixtureCompleteAssessment(tx: SqlClient, schema: string, selected: Selector, verifiedIdentity: VerifiedIdentity): Promise<Candidate | Failure> {
- if (!/^rc_it_[a-f0-9]{16}$/.test(schema) || !selected) return { ok: false, code: 'invalid_reference' };
+export async function loadCompleteAssessmentInScope(tx: SqlClient, sqlScope: ReportSqlScope, selected: Selector, verifiedIdentity: VerifiedIdentity): Promise<Candidate | Failure> {
+ if (!isReportSqlScope(sqlScope) || !selected) return { ok: false, code: 'invalid_reference' };
  const selector = { classId: selected.classId, sessionId: selected.sessionId, termId: selected.termId };
  if (Object.values(selector).some(v => typeof v !== 'string' || !v.trim())) return { ok: false, code: 'invalid_reference' };
- const table = (name: string) => '"' + schema + '"."' + name + '"';
+ const table = (name: string) => '"' + sqlScope.schema + '"."' + name + '"';
  try {
   const auth = await verifiedIdentity();
   if (!auth?.authUserId?.trim()) return { ok: false, code: 'unauthenticated' };
-  if ((await tx.unsafe('SELECT id FROM ' + table('fixture_source_write_gate') + ' WHERE id=1 FOR SHARE')).length !== 1) return { ok: false, code: 'read_failed' };
+  const authority = await lockReportSqlScopeAuthority(tx, sqlScope, auth.authUserId);
+  if (authority === false) return { ok: false, code: 'forbidden' };
+  if ((await tx.unsafe('SELECT id FROM ' + table(sqlScope.sourceGate) + ' WHERE id=1 FOR SHARE')).length !== 1) return { ok: false, code: 'read_failed' };
   const users = await tx.unsafe('SELECT id,auth_user_id AS "authUserId" FROM ' + table('school_users') + ' WHERE auth_user_id=$1::uuid FOR SHARE', [auth.authUserId]);
   if (users.length !== 1) return { ok: false, code: 'forbidden' };
   const memberships = await tx.unsafe('SELECT id,school_id AS "schoolId",user_id AS "userId",role,status FROM ' + table('memberships') + ' WHERE user_id=$1::uuid ORDER BY id FOR SHARE', [users[0]!.id]);
   const schools = await tx.unsafe('SELECT id,final_primary_year AS "finalPrimaryYear" FROM ' + table('schools') + ' WHERE id IN (SELECT school_id FROM ' + table('memberships') + ' WHERE user_id=$1::uuid) ORDER BY id FOR SHARE', [users[0]!.id]);
   const mapped = mapPersistedReportIdentity(auth.authUserId, d.decodeIdentityRows({ users, memberships, schools }));
-  if (!mapped.ok) return { ok: false, code: 'forbidden' };
+  if (!mapped.ok || !matchesReportSqlAuthority(authority, mapped.identity, users[0]!.id)) return { ok: false, code: 'forbidden' };
   const { identity } = mapped; const schoolId = identity.school.id;
   const scopeRows = await tx.unsafe('SELECT id,school_id AS "schoolId",class_id AS "classId",session_id AS "sessionId",term_id AS "termId",revision FROM ' + table('assessment_scopes') + ' WHERE school_id=$1::uuid AND class_id=$2::uuid AND session_id=$3::uuid AND term_id=$4::uuid FOR SHARE', [schoolId, selector.classId, selector.sessionId, selector.termId]);
   if (scopeRows.length !== 1) return { ok: false, code: 'invalid_reference' };
@@ -90,15 +95,15 @@ export async function loadFixtureCompleteAssessment(tx: SqlClient, schema: strin
 /** Complete source content AND the existing active reviewer/admin policy, under
  * the same caller-owned transaction and discovery lock. No workflow writes.
  */
-export async function readFixtureVerifiedCanonicalAssessment(tx: SqlClient, schema: string, selector: Selector, verifiedIdentity: VerifiedIdentity): Promise<(Candidate & { sourceVersionId: string; documents: { input: CompleteAssessmentSource; source: StoredAssessmentSource; finals: readonly StoredAssessmentFinalization[]; reviews: readonly StoredAssessmentReview[] } }) | Failure> {
- const loaded = await loadFixtureCompleteAssessment(tx, schema, selector, verifiedIdentity);
+export async function readVerifiedCanonicalAssessmentInScope(tx: SqlClient, sqlScope: ReportSqlScope, selector: Selector, verifiedIdentity: VerifiedIdentity): Promise<(Candidate & { sourceVersionId: string; documents: { input: CompleteAssessmentSource; source: StoredAssessmentSource; finals: readonly StoredAssessmentFinalization[]; reviews: readonly StoredAssessmentReview[] } }) | Failure> {
+ const loaded = await loadCompleteAssessmentInScope(tx, sqlScope, selector, verifiedIdentity);
  if (!loaded.ok) return loaded;
  try {
   const enrollment = loaded.input.enrollments[0]!;
-  const authority = await readFixtureRelationalAssessment(tx, schema, { classId: loaded.input.scope.classId, sessionId: loaded.input.scope.sessionId, termId: loaded.input.scope.termId, studentId: enrollment.studentId, enrollmentId: enrollment.id }, async () => ({ authUserId: loaded.identity.membership.authUserId }));
+  const authority = await readRelationalAssessmentInScope(tx, sqlScope, { classId: loaded.input.scope.classId, sessionId: loaded.input.scope.sessionId, termId: loaded.input.scope.termId, studentId: enrollment.studentId, enrollmentId: enrollment.id }, async () => ({ authUserId: loaded.identity.membership.authUserId }));
   if (!authority.ok) return authority;
   if (authority.source.identity.membership.id !== loaded.identity.membership.id || authority.source.scopeId !== loaded.input.scope.id || authority.source.revision !== loaded.input.scope.revision) return { ok: false, code: 'source_mismatch' };
-  const table = (name: string) => '"' + schema + '"."' + name + '"';
+  const table = (name: string) => '"' + sqlScope.schema + '"."' + name + '"';
   const { schoolId, id: scopeId, revision } = loaded.input.scope;
   const sourceRow = one(await tx.unsafe('SELECT id,school_id AS "schoolId",scope_id AS "scopeId",revision,source_manifest AS "sourceManifest",content_hash AS "contentHash" FROM ' + table('assessment_source_versions') + ' WHERE school_id=$1::uuid AND scope_id=$2::uuid AND revision=$3 FOR SHARE', [schoolId, scopeId, revision]));
   const source: StoredAssessmentSource = { ...scoped(sourceRow), scopeId: d.textField(sourceRow.scopeId), revision: d.integerField(sourceRow.revision), sourceManifest: sourceRow.sourceManifest, contentHash: d.textField(sourceRow.contentHash) };
@@ -112,3 +117,10 @@ export async function readFixtureVerifiedCanonicalAssessment(tx: SqlClient, sche
   return { ...loaded, sourceVersionId: source.id, documents: { input: loaded.input, source, finals, reviews } };
  } catch { return { ok: false, code: 'read_failed' }; }
 }
+
+
+/** Disposable compatibility entry: public remains invalid. */
+export async function loadFixtureCompleteAssessment(tx: SqlClient, schema: string, selected: Selector, verifiedIdentity: VerifiedIdentity): Promise<Candidate | Failure> { const scope = fixtureReportSqlScope(schema); return scope ? loadCompleteAssessmentInScope(tx, scope, selected, verifiedIdentity) : {ok:false,code:'invalid_reference'}; }
+
+/** Disposable compatibility entry: public remains invalid. */
+export async function readFixtureVerifiedCanonicalAssessment(tx: SqlClient, schema: string, selected: Selector, verifiedIdentity: VerifiedIdentity) { const scope = fixtureReportSqlScope(schema); return scope ? readVerifiedCanonicalAssessmentInScope(tx, scope, selected, verifiedIdentity) : {ok:false,code:'invalid_reference'} as const; }

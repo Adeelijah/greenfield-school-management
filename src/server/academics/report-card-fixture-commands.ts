@@ -6,33 +6,13 @@ import { executeFixtureReportWorkflow } from '@/lib/academics/report-card-postgr
 import { executeFixtureCanonicalReportCommand } from '@/lib/academics/report-card-postgres-canonical-writer';
 import { executeFixtureReportRevocation } from '@/lib/academics/report-card-postgres-revoke-writer';
 import type { SqlDatabase } from '@/lib/academics/report-card-postgres-disposable-adapter';
-import type { ReportCardRequestCommand } from '@/lib/academics/report-card-request-command';
 
-type Failure = { ok: false; code: 'invalid' | 'forbidden' | 'conflict' | 'unavailable' };
-export type ReportCardCommandResponse = Failure | {
-  ok: true; kind: 'applied' | 'replay'; action: ReportCardRequestCommand['action'];
-  reportId: string; version: number; stage: 'draft' | 'submitted' | 'returned' | 'approved' | 'published';
-};
+import { reportCardCommandResponse as response } from '@/lib/academics/report-card-command-response';
+import type { ReportCardCommandResponse } from '@/lib/academics/report-card-command-response';
+export type { ReportCardCommandResponse } from '@/lib/academics/report-card-command-response';
 export type ReportCardFixtureRuntime = {
   mode: 'disposable-fixture'; schema: string; schoolId: string; writerRole: string;
 };
-
-function response(command: ReportCardRequestCommand, outcome: unknown): ReportCardCommandResponse {
-  if (!outcome || typeof outcome !== 'object') return { ok: false, code: 'unavailable' };
-  const row = outcome as Record<string, unknown>;
-  if (row.ok === false) {
-    const code = row.code === 'invalid' ? 'invalid'
-      : ['forbidden', 'not_found'].includes(row.code as string) ? 'forbidden'
-      : ['conflict', 'stale_version', 'idempotency_conflict', 'duplicate_report'].includes(row.code as string) ? 'conflict' : 'unavailable';
-    return { ok: false, code };
-  }
-  const stages = { create: 'draft', submit: 'submitted', return: 'returned', reopen: 'draft', approve: 'approved', publish: 'published', revoke: 'draft' } as const;
-  const reportId = command.action === 'create' ? row.reportId : command.reportId;
-  if (row.ok !== true || !['applied', 'replay'].includes(row.kind as string) || !isReportCardUuid(reportId) ||
-    !Number.isSafeInteger(row.version) || (row.version as number) < 1 || row.stage !== stages[command.action] ||
-    (row.reportId !== undefined && row.reportId !== reportId) || (row.action !== undefined && row.action !== command.action)) return { ok: false, code: 'unavailable' };
-  return { ok: true, kind: row.kind as 'applied' | 'replay', action: command.action, reportId, version: row.version as number, stage: stages[command.action] };
-}
 
 /** Server bootstrap only: explicit disposable connection and fixed school config.
  * No default application/owner connection, environment discovery, route or caller

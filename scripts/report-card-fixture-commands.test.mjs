@@ -7,6 +7,7 @@ import { readFileSync } from 'node:fs';
 
 const root = new URL('../', import.meta.url);
 const urls = new Map([
+  ['@/lib/academics/report-card-command-response', new URL('src/lib/academics/report-card-command-response.ts', root).href],
   ['@/server/auth/report-card-identity', new URL('src/server/auth/report-card-identity.ts', root).href],
   ['@/lib/academics/report-card-request-command', new URL('src/lib/academics/report-card-request-command.ts', root).href],
   ['@/lib/academics/report-card-complete-fixture-boundary', new URL('src/lib/academics/report-card-complete-fixture-boundary.ts', root).href],
@@ -71,6 +72,7 @@ const hooks = registerHooks({
     if (sources.has(context.parentURL)) {
       if (mocks.has(specifier)) return { url: 'greenfield-command-offline:' + encodeURIComponent(specifier), shortCircuit: true };
       if (urls.has(specifier)) return { url: urls.get(specifier), shortCircuit: true };
+      if (specifier === './report-card-request-command.ts') return { url: urls.get('@/lib/academics/report-card-request-command'), shortCircuit: true };
       if (specifier === './report-card-actor-authority.ts') return { url: urls.get('@/lib/academics/report-card-actor-authority'), shortCircuit: true };
       throw Error('Unexpected command dependency: ' + specifier);
     }
