@@ -86,3 +86,10 @@ If a transaction fails, keep endpoints disabled, preserve the error and compare 
 ## Next development action
 
 The academic-only dependency SQL and explicit metadata assembly are now prepared; see REPORT_CARD_SCHEMA_ASSEMBLY_REVIEW.md. Six source checks passed; four metadata checks and the expanded 471-test full gate remain pending in the installed checkout. No SQL has run. After that gate, prepare a guarded disposable baseline-to-target upgrade rehearsal with catalog comparison and rollback injection. The partial assembly must not be used as a Drizzle Kit entrypoint. Do not enable routes or request production deployment at this stage.
+
+
+## Verified upgraded baseline and runtime mapping continuation — 2026-10-23
+
+The user has now verified all 505 offline tests and 31 upgraded PostgreSQL groups. The earlier pending counts describe historical preparation. The semantic baseline upgrade, guard/RLS/LOGIN composition and actual server-entry fixture workflow are verified in the generated local layout, while a named staging installation remains unselected/unconnected.
+
+REPORT_CARD_STAGING_RUNTIME_CONTRACT_REVIEW.md selects the next source-review mapping: greenfield_app remains the LOGIN accepted by the unchanged application guard; greenfield_report_card_runtime is a SET-only transaction execution role; the private authority owner is never a membership target. An unused explicit staging adapter and eight recorder tests prepare full offline 513. No live settings or grants are changed. The combined non-fixture installation package and public command adaptation still need preparation before target-specific installation and actual SDK auth tests.
