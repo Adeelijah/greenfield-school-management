@@ -496,3 +496,12 @@ An independent staging metadata emitter selects sixteen proposal tables/four enu
 Six domain, four server-entry, four pure composition and two installed-metadata checks prepare expected full offline 556 across 74 files. Selected recorder/pure checks and syntax/whitespace ran locally; full installed TypeScript/ESLint and metadata tests remain pending. No database connection or SQL occurred here. Because shared fixture domain cores and the request loader changed, rerun the existing 31-group upgraded SQL rehearsal after offline verification; it does not prove the new public installation or real Supabase auth. See staging/REPORT_CARD_STAGING_DOMAIN_INSTALLATION_REVIEW.md.
 
 Next: catalog/preflight/recovery review and a specifically selected, authorized isolated Supabase rehearsal of actual coordinated artifacts and fictional authenticated requests. Continue batching related source work rather than requesting a terminal run per component. Preserve unrelated work and no merge, deployment, production SQL or live-auth changes.
+
+
+## Staging metadata phase-check repair — 2026-10-23
+
+The user's installed verifier reached 556 tests: 555 passed and one new metadata composition assertion failed. Its broad lastIndexOf('ALTER TABLE public."report_card_') search also matched legitimate later policy ALTER TABLE statements. The failure does not demonstrate an incorrectly ordered foreign key or require SQL changes.
+
+The assertion now recognizes complete ALTER TABLE ... ADD CONSTRAINT ... FOREIGN KEY statement prefixes, checks the exact count against selected proposal metadata, and requires every match to lie strictly between the proposal and guard markers. The pure composer regression includes a representative FK, demonstrates the old broad-search collision with real policy output, exercises LF and CRLF, and detects a deliberately misplaced FK. Test count remains 556 across 74 files.
+
+All four pure composition checks and metadata-test syntax passed here. The installed Drizzle metadata suite/full verifier rerun remains pending. Only tests and this handoff note changed; runtime/domain code, emitter, policy/guard SQL and database state are unchanged. No database connection or SQL occurred. The previously requested 31-group upgraded rehearsal remains relevant to the preceding shared-domain milestone; this test-only repair adds no SQL rerun requirement. Preserve all unrelated work and no merge, deployment, live-auth or production changes.

@@ -35,9 +35,15 @@ test('actual review composition creates only the selected additive relations bef
   assert.equal(created.length, 21); assert.equal(new Set(created).size, 21);
   assert.ok(created.includes('assessment_source_write_gate')); assert.ok(created.includes('assessment_source_write_claims'));
   for (const name of ['schools', 'school_users', 'memberships', 'students', 'enrollments', 'admissions', 'guardians']) assert.equal(created.includes(name), false);
-  const lastProposalFk = result.sql.lastIndexOf('ALTER TABLE public."report_card_');
-  assert.ok(lastProposalFk < result.sql.indexOf('-- Phase: guards'));
-  assert.ok(result.sql.indexOf('-- Phase: guards') < result.sql.indexOf('-- Phase: policy'));
+  const proposalStart = result.sql.indexOf('-- Phase: proposal');
+  const guardsStart = result.sql.indexOf('-- Phase: guards');
+  const policyStart = result.sql.indexOf('-- Phase: policy');
+  assert.ok(proposalStart >= 0 && proposalStart < guardsStart && guardsStart < policyStart);
+  const proposalFks = [...result.sql.matchAll(/^ALTER TABLE public\."[^"]+" ADD CONSTRAINT "[^"]+" FOREIGN KEY /gm)];
+  const expectedFkCount = configs.filter(c => upgradeProposalTables.includes(c.name)).reduce((count, c) => count + c.foreignKeys.length, 0);
+  assert.ok(expectedFkCount > 0);
+  assert.equal(proposalFks.length, expectedFkCount);
+  for (const fk of proposalFks) assert.ok(fk.index > proposalStart && fk.index < guardsStart, fk[0]);
 });
 
 test('actual assembly exposes 27 distinct real tables and eight used enum definitions', () => {

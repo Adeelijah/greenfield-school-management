@@ -7,8 +7,11 @@ import { assembleStagingReportReview } from './lib/report-card-staging-package-r
 const root = new URL('../', import.meta.url);
 const read = path => readFileSync(new URL(path, root), 'utf8');
 const config = { mode: 'isolated-staging-review', schema: 'public', schoolId: '00000000-0000-0000-0000-000000000090', sourceCommit: 'a'.repeat(40), baseline: 'reconciled-semantic-0000' };
-// Representative metadata statement for composer tests, not a complete migration.
-const sources = () => ({ dependencies: read('docs/staging/REPORT_CARD_ACADEMIC_DEPENDENCIES_REVIEW.sql'), guards: read('docs/staging/REPORT_CARD_COORDINATED_GUARDS_REVIEW.sql'), proposalStatements: ['CREATE TABLE public."report_cards" (id uuid PRIMARY KEY)'] });
+// Representative metadata statements for composer tests, not a complete migration.
+const sources = () => ({ dependencies: read('docs/staging/REPORT_CARD_ACADEMIC_DEPENDENCIES_REVIEW.sql'), guards: read('docs/staging/REPORT_CARD_COORDINATED_GUARDS_REVIEW.sql'), proposalStatements: [
+  'CREATE TABLE public."report_cards" (id uuid PRIMARY KEY)',
+  'ALTER TABLE public."report_cards" ADD CONSTRAINT "example_student_fk" FOREIGN KEY ("id") REFERENCES public."students" ("id")',
+] });
 
 test('review composer orders dependencies, metadata, guards and final policy in one transaction', () => {
   const result = assembleStagingReportReview(config, sources());
@@ -18,6 +21,18 @@ test('review composer orders dependencies, metadata, guards and final policy in 
   const revoke = result.sql.lastIndexOf('REVOKE ALL ON FUNCTION public.lock_report_card_actor(uuid)');
   assert.ok(result.sql.lastIndexOf('GRANT EXECUTE ON FUNCTION public.lock_report_card_actor(uuid)') > revoke);
   assert.ok(result.sql.lastIndexOf('WITH ADMIN FALSE') < result.sql.lastIndexOf('COMMIT;'));
+  // Policy ALTER TABLE statements occur after guards. They are not proposal FKs.
+  assert.ok(result.sql.lastIndexOf('ALTER TABLE public."report_card_') > result.sql.indexOf('-- Phase: policy'));
+  for (const sql of [result.sql, result.sql.replaceAll('\n', '\r\n')]) {
+    const fks = [...sql.matchAll(/^ALTER TABLE public\."[^"]+" ADD CONSTRAINT "[^"]+" FOREIGN KEY /gm)];
+    assert.equal(fks.length, 1);
+    assert.ok(fks[0].index > sql.indexOf('-- Phase: proposal'));
+    assert.ok(fks[0].index < sql.indexOf('-- Phase: guards'));
+    const misplaced = sql.replace('ALTER TABLE public."report_cards" ADD CONSTRAINT "example_student_fk" FOREIGN KEY ("id") REFERENCES public."students" ("id");', '');
+    const late = misplaced + '\nALTER TABLE public."report_cards" ADD CONSTRAINT "example_student_fk" FOREIGN KEY ("id") REFERENCES public."students" ("id");';
+    const lateFk = [...late.matchAll(/^ALTER TABLE public\."[^"]+" ADD CONSTRAINT "[^"]+" FOREIGN KEY /gm)][0];
+    assert.ok(lateFk.index > late.indexOf('-- Phase: guards'));
+  }
   assert.equal(result.status, 'review-only'); assert.equal(result.requiresAuthorizedIsolatedRehearsal, true);
 });
 
