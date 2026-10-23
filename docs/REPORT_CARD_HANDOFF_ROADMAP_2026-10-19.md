@@ -460,3 +460,14 @@ Next after offline verification: prepare the coordinated non-fixture schema/sour
 The user's installed verifier stopped at TypeScript TS2345 in the new staging runtime test: inference kept some empty membership arrays as never[], preventing the negative-case push. The fixture builder now returns an explicit RoleFixture[] with typed incoming/outgoing MembershipFixture[] arrays. This is a test-only annotation repair; runtime code, role checks, SQL, guards and test behavior are unchanged.
 
 All eight focused runtime tests passed here and scoped whitespace passed. Full installed TypeScript/ESLint and the 513-test verifier remain pending; the preceding 505 offline/31 PostgreSQL baseline remains verified. No database rerun is needed solely for this test typing change. Resume the documented installation/boundary package after the offline gate passes.
+
+
+## Verified 513 and coordinated public guard review — 2026-10-23
+
+The user confirmed all 513 offline tests passed after the staging fixture annotation repair. Earlier 31 upgraded SQL groups, main 64 and standalone eight remain verified. The dormant staging runtime role contract is now offline-verified; its new public catalog query and actual role reset still require isolated PostgreSQL evidence.
+
+REPORT_CARD_COORDINATED_GUARDS_REVIEW.sql now prepares one public-schema transaction containing the source/history/release guard port and existing authority functions, with the source gate before advisory/actor discovery in both arrival orders. Protocol tables have forced RLS, exact setup-operator and narrow authority-owner access, and known API/application default grants revoked. The original standalone draft, journal, application code and fixture-only restrictions remain unchanged. This is not a complete migration: fixed-school runtime grants/RLS, academic writer privilege mapping, claim maintenance, proposal table installation and non-fixture command adaptation are still outstanding.
+
+Eight new source/semantic-port checks passed with the existing focused suite (100 selected checks); syntax and scoped whitespace passed. Expected full gate is 521 across 69 files, pending installed full verification. No SQL, database connection or deployment occurred here. Existing PostgreSQL harnesses are unchanged and need no rerun solely for this artifact; they do not verify the new public SQL. See staging/REPORT_CARD_COORDINATED_GUARDS_REVIEW.md.
+
+Next after offline verification: target-bound fixed-school runtime policy/grants, non-fixture command adaptation and an authorized isolated rehearsal of the actual coordinated artifacts. Real Supabase request/JWT proof still requires an explicitly selected and authorized isolated target with fictional accounts. Keep endpoints disabled; preserve no merge, live-auth/production SQL/deployment changes and all unrelated work.

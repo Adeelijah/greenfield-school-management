@@ -93,3 +93,10 @@ The academic-only dependency SQL and explicit metadata assembly are now prepared
 The user has now verified all 505 offline tests and 31 upgraded PostgreSQL groups. The earlier pending counts describe historical preparation. The semantic baseline upgrade, guard/RLS/LOGIN composition and actual server-entry fixture workflow are verified in the generated local layout, while a named staging installation remains unselected/unconnected.
 
 REPORT_CARD_STAGING_RUNTIME_CONTRACT_REVIEW.md selects the next source-review mapping: greenfield_app remains the LOGIN accepted by the unchanged application guard; greenfield_report_card_runtime is a SET-only transaction execution role; the private authority owner is never a membership target. An unused explicit staging adapter and eight recorder tests prepare full offline 513. No live settings or grants are changed. The combined non-fixture installation package and public command adaptation still need preparation before target-specific installation and actual SDK auth tests.
+
+
+## Coordinated guard artifact — 2026-10-23
+
+The user verified full offline 513. REPORT_CARD_COORDINATED_GUARDS_REVIEW.sql prepares the public source/history/release guard layer and complete authority functions together, using source-before-advisory ordering and forced protocol-table RLS with known API/application defaults revoked. The standalone authority draft is preserved. Eight source/port checks prepare full offline 521; all 100 selected checks passed here. The new SQL has not been PostgreSQL-parsed or executed.
+
+This advances the source/history/authority part of S3/S4 only. No complete table migration, fixed-school runtime policy/column grants, academic writer privilege path, claim retention or public command adapter is installed/prepared by this guard artifact alone. S0 target selection/authorization, effective catalog review, actual combined-artifact rehearsal and real SDK auth evidence remain required. Do not apply the guard artifact independently to active modules or treat existing fixture results as verification of public security installation.
