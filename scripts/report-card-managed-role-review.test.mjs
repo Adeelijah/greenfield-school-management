@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
-import { managedStagingRoleReview } from './lib/report-card-managed-role-review.mjs';
+import { managedStagingRoleReview, managedStagingAuthBindingProbe } from './lib/report-card-managed-role-review.mjs';
 import { assembleStagingReportReview } from './lib/report-card-staging-package-review.mjs';
 
 const read = path => readFileSync(new URL('../' + path, import.meta.url), 'utf8').replaceAll('\r\n', '\n');
@@ -28,7 +28,7 @@ test('temporary owner transfer grants are bounded and only the operator-owned gr
   const grants = [...plan.guards.matchAll(/^GRANT greenfield_report_card_authority_owner TO postgres WITH (ADMIN FALSE|INHERIT FALSE|SET TRUE) GRANTED BY postgres;$/gm)];
   assert.equal(grants.length, 3);
   const transfers = [...plan.ownership.matchAll(/OWNER TO greenfield_report_card_authority_owner;/g)];
-  assert.equal(transfers.length, 4);
+  assert.equal(transfers.length, 5);
   assert.doesNotMatch(plan.guards, /OWNER TO greenfield_report_card_authority_owner;/);
   assert.ok(transfers.at(-1).index < plan.ownership.indexOf('REVOKE CREATE ON SCHEMA public'));
   assert.match(plan.ownership, /REVOKE greenfield_report_card_authority_owner FROM postgres GRANTED BY postgres;/);
@@ -43,6 +43,20 @@ test('postcondition permits exactly bootstrap-owned administrator edges and one 
   assert.match(verify, /m\.admin_option AND NOT m\.set_option AND NOT m\.inherit_option AND g\.rolsuper/);
   assert.match(verify, /application role graph is not SET-only/);
   assert.match(verify, /has_schema_privilege\('greenfield_report_card_authority_owner','public','CREATE'\)/);
+  const plan = managedStagingRoleReview(config, guards);
+  assert.match(plan.guards, /BEGIN ATOMIC\n SELECT auth\.uid\(\);\nEND;/);
+  assert.match(plan.guards, /verified_auth_id uuid := public\.report_card_request_auth_uid\(\);/);
+  assert.doesNotMatch(plan.guards, /GRANT USAGE ON SCHEMA public, auth|GRANT EXECUTE ON FUNCTION auth\.uid/);
+  assert.match(verify, /p\.prosqlbody IS NOT NULL/);
+  assert.match(verify, /d\.refobjid='auth.uid\(\)'::pg_catalog\.regprocedure/);
+  assert.match(verify, /authority owner unexpectedly has provider schema access/);
+  const probe = managedStagingAuthBindingProbe();
+  assert.match(probe, /^SET LOCAL ROLE greenfield_report_card_authority_owner;/);
+  assert.match(probe, /EXCEPTION WHEN insufficient_privilege THEN denied := true/);
+  assert.match(probe, /fictional JSON request/);
+  assert.match(probe, /missing identity did not fail closed/);
+  assert.match(probe, /SET LOCAL ROLE postgres;$/);
+  assert.doesNotMatch(probe, /\b(?:GRANT|CREATE|ALTER|INSERT|UPDATE|DELETE|COMMIT)\b/);
 });
 
 test('managed composition hashes bootstrap and final verification inside the same transaction', () => {
@@ -62,7 +76,8 @@ test('managed composition hashes bootstrap and final verification inside the sam
   assert.throws(() => assembleStagingReportReview({ ...config, roleAdministration: 'unknown' }, sources));
   const access = managedStagingRoleReview(config, guards).access;
   assert.equal([...access.matchAll(/^REVOKE ALL ON TABLE /gm)].length, 21);
-  assert.equal([...access.matchAll(/^REVOKE ALL ON FUNCTION /gm)].length, 12);
+  assert.equal([...access.matchAll(/^REVOKE ALL ON FUNCTION /gm)].length, 13);
+  assert.match(access, /REVOKE ALL ON FUNCTION public\.report_card_request_auth_uid\(\) FROM PUBLIC,anon,authenticated,service_role,greenfield_app,greenfield_report_card_runtime;/);
   assert.doesNotMatch(access, /REVOKE ALL ON TABLE public\.(?:schools|memberships|admissions|guardians)\b|ALTER DEFAULT PRIVILEGES/);
   assert.match(access, /FROM PUBLIC,anon,authenticated,service_role/);
   assert.match(access, /has_any_column_privilege/);

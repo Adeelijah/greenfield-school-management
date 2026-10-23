@@ -26,6 +26,10 @@
     "createRole": true,
     "allExpectedRolesAbsent": true,
     "roleMembershipEdges": 0,
-    "authUidUuidSignatures": 1
+    "authUidUuidSignatures": 1,
+    "authSchemaUsageGrantable": false,
+    "providerUidExecuteGrantable": false,
+    "providerUidPublicExecute": true,
+    "greenfieldRolesAbsentAfterFailedRehearsal": true
   }
 }
