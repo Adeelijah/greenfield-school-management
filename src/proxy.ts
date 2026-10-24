@@ -1,7 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
+import { isStagingPath, stagingUiEnabled } from '@/lib/academics/report-card-staging-ui';
+import { stagingProxy } from '@/lib/supabase/staging-proxy';
 
 export async function proxy(request: NextRequest) {
+  if (isStagingPath(request.nextUrl.pathname)) return stagingProxy(request);
+  if (stagingUiEnabled(process.env)) {
+    const destination = request.nextUrl.clone();
+    destination.pathname = '/staging/report-cards'; destination.search = '';
+    return NextResponse.redirect(destination);
+  }
   if (
     process.env.NODE_ENV === 'development' &&
     request.nextUrl.pathname === '/dev-preview/students'

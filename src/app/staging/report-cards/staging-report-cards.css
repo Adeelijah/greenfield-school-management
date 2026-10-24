@@ -1,0 +1,18 @@
+.staging-reports{margin:0 auto;max-width:1160px;min-height:100vh}
+.staging-reports button{border:1px solid var(--border);border-radius:9px;background:var(--surface);color:var(--ink);padding:10px 14px;min-height:42px;font:inherit;cursor:pointer}
+.staging-reports button.primary{background:var(--forest);border-color:var(--forest);color:white}
+.staging-reports button:disabled{opacity:.55;cursor:wait}
+.staging-reports button:focus-visible,.staging-reports a:focus-visible,.staging-reports textarea:focus-visible{outline:2px solid var(--forest);outline-offset:3px}
+.staging-class-links{display:flex;flex-wrap:wrap;gap:10px;margin:20px 0}
+.staging-class-links a{padding:10px 14px;border:1px solid var(--border);border-radius:9px;text-decoration:none;color:var(--ink);background:var(--surface)}
+.staging-class-links a[aria-current=page]{color:var(--forest);border-color:var(--forest)}
+.staging-summary{margin-bottom:18px}.staging-summary p,.staging-pupils p{line-height:1.6}
+.staging-pupils{display:grid;gap:16px}.staging-pupil-heading{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap}
+.staging-pupil-heading span{font-size:13px;color:var(--muted)}
+.staging-command-list{display:flex;align-items:flex-start;flex-wrap:wrap;gap:16px;margin-top:16px}
+.staging-command{display:flex;flex-direction:column;align-items:flex-start;gap:10px;max-width:100%;flex:1 1 240px}
+.staging-command label{display:flex;flex-direction:column;gap:8px;width:100%;font-size:13px}
+.staging-command textarea{width:100%;max-width:100%;box-sizing:border-box;resize:vertical;border:1px solid var(--border);border-radius:8px;padding:10px;font:inherit;color:var(--ink);background:var(--surface)}
+.staging-command label.staging-confirm{flex-direction:row;align-items:flex-start;line-height:1.5}
+.staging-confirm input{margin-top:3px;flex-shrink:0}.staging-note{line-height:1.7;margin-top:22px}
+@media(max-width:580px){.staging-reports .page-heading{align-items:flex-start;gap:12px}.staging-command{flex-basis:100%}.staging-command button{width:100%}}
