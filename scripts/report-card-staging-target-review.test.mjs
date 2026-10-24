@@ -15,7 +15,13 @@ test('staging record retains the user-selected Primary 5 and exact separate proj
   assert.equal(target.projectUrl, 'https://' + target.projectRef + '.supabase.co');
   assert.match(target.schoolId, /^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/);
   assert.equal(target.schoolName, 'Greenfield Staging');
-  assert.equal(target.schoolRecordStatus, 'planned-not-created');
+  assert.equal(target.schoolRecordStatus, 'user-reported-created-and-verified');
+  assert.equal(target.schoolSetupEvidence.schoolSetup, 'PASS');
+  assert.equal(target.identityProofEvidence.adminMatches, true);
+  assert.equal(target.identityProofEvidence.teacherMatches, true);
+  assert.equal(target.identityProofEvidence.bursarDenied, true);
+  assert.equal(target.identityProofEvidence.anonymousDenied, true);
+  assert.equal(target.academicFixtureStatus, 'prepared-not-applied');
   assert.equal(target.applicationEnabled, false);
   assert.doesNotMatch(JSON.stringify(target), /PASSWORD|postgresql:\/\/|service_role|secret|token/i);
 });

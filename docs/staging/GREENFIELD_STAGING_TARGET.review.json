@@ -11,7 +11,7 @@
   "commandRole": "greenfield_report_card_runtime",
   "authorityOwnerRole": "greenfield_report_card_authority_owner",
   "foundationStatus": "user-reported-installed-12-protected-tables",
-  "schoolRecordStatus": "planned-not-created",
+  "schoolRecordStatus": "user-reported-created-and-verified",
   "roleProvisioningStatus": "user-reported-installed-and-read-only-verified",
   "applicationEnabled": false,
   "roleAdministration": "supabase-postgres-createrole",
@@ -41,5 +41,22 @@
     "privateAuthBindingChecks": "PASS",
     "roleAndApiPrivilegeChecks": "PASS",
     "primary5SchoolConfigured": false
-  }
+  },
+  "schoolSetupEvidence": {
+    "source": "user-pasted-school-setup-result",
+    "schoolSetup": "PASS",
+    "finalPrimaryYear": 5,
+    "structureVersion": 0
+  },
+  "identityProofEvidence": {
+    "source": "operator-run-live-supabase-sdk-signin-getUser-and-actor-rpc",
+    "activeMemberships": 3,
+    "anonymousDenied": true,
+    "adminMatches": true,
+    "teacherMatches": true,
+    "bursarDenied": true,
+    "testSessionsClosed": true,
+    "nextSsrBrowserProof": false
+  },
+  "academicFixtureStatus": "prepared-not-applied"
 }
