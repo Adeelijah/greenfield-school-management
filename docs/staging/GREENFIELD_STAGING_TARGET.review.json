@@ -12,7 +12,7 @@
   "authorityOwnerRole": "greenfield_report_card_authority_owner",
   "foundationStatus": "user-reported-installed-12-protected-tables",
   "schoolRecordStatus": "planned-not-created",
-  "roleProvisioningStatus": "absent-managed-bootstrap-review",
+  "roleProvisioningStatus": "user-reported-installed-and-read-only-verified",
   "applicationEnabled": false,
   "roleAdministration": "supabase-postgres-createrole",
   "operatorEvidence": {
@@ -31,5 +31,15 @@
     "providerUidExecuteGrantable": false,
     "providerUidPublicExecute": true,
     "greenfieldRolesAbsentAfterFailedRehearsal": true
+  },
+  "installationEvidence": {
+    "source": "user-pasted-committed-installation-verification",
+    "sourceCommit": "9f6635a6d0a9bfdcbfa33e862c354b92539893f6",
+    "installationSqlSha256": "73b7176a6d9688ab6e5d1defff95beedee5dad01ca0a20c221571c623d7bcd80",
+    "installationChecks": "PASS",
+    "expectedProtectedTables": 33,
+    "privateAuthBindingChecks": "PASS",
+    "roleAndApiPrivilegeChecks": "PASS",
+    "primary5SchoolConfigured": false
   }
 }

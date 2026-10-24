@@ -24,7 +24,17 @@ test('target retains exact role names and records the observed managed operator'
   assert.equal(target.loginRole, 'greenfield_app');
   assert.equal(target.commandRole, 'greenfield_report_card_runtime');
   assert.equal(target.authorityOwnerRole, 'greenfield_report_card_authority_owner');
-  assert.equal(target.roleProvisioningStatus, 'absent-managed-bootstrap-review');
+  assert.equal(target.roleProvisioningStatus, 'user-reported-installed-and-read-only-verified');
+  assert.equal(target.installationEvidence.expectedProtectedTables, 33);
+  assert.equal(target.installationEvidence.primary5SchoolConfigured, false);
+  const seed = read('docs/staging/REPORT_CARD_PRIMARY5_SCHOOL_SETUP_REVIEW.sql');
+  assert.ok(seed.includes(target.schoolId));
+  assert.match(seed, /WHERE id=1 FOR UPDATE/);
+  assert.match(seed, /pg_advisory_xact_lock/);
+  assert.match(seed, /IF FOUND THEN[\s\S]+ELSE\s+INSERT INTO public\.schools/);
+  assert.equal([...seed.matchAll(/INSERT INTO public\.schools/g)].length, 1);
+  assert.doesNotMatch(seed, /^\s*(?:UPDATE|DELETE|DROP|ALTER|CREATE|GRANT|REVOKE|TRUNCATE)\b/gm);
+  assert.doesNotMatch(seed, /auth\.users|INSERT INTO public\.(?:school_users|memberships)/);
   assert.equal(target.roleAdministration, 'supabase-postgres-createrole');
   assert.equal(target.operatorEvidence.serverVersionNum, 170011);
   assert.equal(target.operatorEvidence.superuser, false);
