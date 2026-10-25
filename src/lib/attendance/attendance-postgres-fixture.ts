@@ -20,18 +20,18 @@ function decode(value:unknown):AttendanceOutcome|null{
  * SQL function owns its exclusive gate and complete actor check. Any failure
  * poisons the outer transaction, including a malformed successful SQL response.
  */
-export async function executeAttendanceFixture(
- db:AttendanceDatabase,schema:string,verifiedIdentity:()=>Promise<{authUserId:string}|null>,raw:unknown,
+async function executeAttendanceInFixture(
+ db:AttendanceDatabase,schema:string,role:string,verifiedIdentity:()=>Promise<{authUserId:string}|null>,raw:unknown,
 ):Promise<AttendanceOutcome>{
  const command=parseAttendanceCommand(raw);
- if(!/^at_it_[a-f0-9]{16}$/.test(schema)||!command)return{ok:false,code:'invalid'};
+ if(!command)return{ok:false,code:'invalid'};
  try{
   const identity=await verifiedIdentity();
   if(!identity||!uuid(identity.authUserId))return{ok:false,code:'forbidden'};
   const authUserId=identity.authUserId;
   return await db.begin(async tx=>{
-   const role=await tx.unsafe('SELECT current_user AS role');
-   if(role.length!==1||role[0]!.role!==schema+'_worker')throw new AttendanceAbort({ok:false,code:'forbidden'});
+   const rowsRole=await tx.unsafe('SELECT current_user AS role');
+   if(rowsRole.length!==1||rowsRole[0]!.role!==role)throw new AttendanceAbort({ok:false,code:'forbidden'});
    const rows=await tx.unsafe('SELECT "'+schema+'"."save_attendance"($1::uuid,$2::text::jsonb) AS outcome',[authUserId,JSON.stringify(command)]);
    const outcome=rows.length===1?decode(rows[0]!.outcome):null;
    if(!outcome)throw new AttendanceAbort({ok:false,code:'unavailable'});
@@ -39,4 +39,15 @@ export async function executeAttendanceFixture(
    return outcome;
   });
  }catch(error){return error instanceof AttendanceAbort?error.outcome:{ok:false,code:'unavailable'};}
+}
+
+export async function executeAttendanceFixture(db:AttendanceDatabase,schema:string,identity:()=>Promise<{authUserId:string}|null>,raw:unknown):Promise<AttendanceOutcome>{
+ if(!/^at_it_[a-f0-9]{16}$/.test(schema))return{ok:false,code:'invalid'};
+ return executeAttendanceInFixture(db,schema,schema+'_worker',identity,raw);
+}
+/** Only generated, schema-faithful upgrade fixtures. Never permits public or a
+ * request-selected role, and never substitutes the existing report role. */
+export async function executeAttendanceUpgradeFixture(db:AttendanceDatabase,schema:string,identity:()=>Promise<{authUserId:string}|null>,raw:unknown):Promise<AttendanceOutcome>{
+ if(!/^rc_it_[a-f0-9]{16}$/.test(schema))return{ok:false,code:'invalid'};
+ return executeAttendanceInFixture(db,schema,schema+'_attendance_worker',identity,raw);
 }
