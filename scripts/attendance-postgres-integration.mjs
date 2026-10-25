@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {randomBytes,randomUUID} from 'node:crypto';
 import {setTimeout as delay} from 'node:timers/promises';
 import {attendanceFixturePlan} from './lib/attendance-disposable-plan.mjs';
+import {verifyAttendanceWorkerPrivileges,attendanceHistoryDenialQueries} from './lib/attendance-disposable-probes.mjs';
 import {executeAttendanceFixture} from '../src/lib/attendance/attendance-postgres-fixture.ts';
 const url=process.env.REPORT_CARD_TEST_DATABASE_URL;
 if(!url||process.env.REPORT_CARD_TEST_CONFIRM!=='DISPOSABLE_REPORT_CARD_TEST_ONLY'||process.env.REPORT_CARD_TEST_ROLE_ADMIN_CONFIRM!=='DISPOSABLE_ROLE_ADMIN_TEST_ONLY'){
@@ -135,13 +136,15 @@ if(!url||process.env.REPORT_CARD_TEST_CONFIRM!=='DISPOSABLE_REPORT_CARD_TEST_ONL
   assert.equal((await save(two,{...paired,operationKey:'changed-roster-01',expectedVersion:1,reason:'Roster changed',marks:{[ids.pupil1]:'present'}})).ok,false);
   await admin.unsafe('UPDATE '+t('enrollments')+' SET status=\'active\' WHERE id=$1',[ids.enrollment2]);
   console.log('PASS: assignment writer blocks requests before discovery; ended assignment denies replay and departed rosters cannot overwrite historical marks');
-  phase='restricted-privileges-and-history';
-  for(const query of ['SELECT * FROM '+t('attendance_marks'),'UPDATE '+t('attendance_audit')+' SET reason=\'forged\'','SELECT '+t('lock_attendance_parents')+'()']){
-   await assert.rejects(one.begin(async tx=>{await tx.unsafe('SET LOCAL ROLE "'+plan.names.worker+'"');await tx.unsafe(query);}),error=>error.code==='42501');
+  phase='worker-effective-privileges';
+  await one.begin(async tx=>{await tx.unsafe('SET LOCAL ROLE "'+plan.names.worker+'"');await verifyAttendanceWorkerPrivileges(tx,schema);});
+  for(const [name,query] of [['select-marks','SELECT * FROM '+t('attendance_marks')],['update-audit','UPDATE '+t('attendance_audit')+' SET reason=\'forged\'']]){
+   phase='worker-denied-'+name;
+   await assert.rejects(one.begin(async tx=>{await tx.unsafe('SET LOCAL ROLE "'+plan.names.worker+'"');await tx.unsafe(query);}),error=>{lastSqlCode=safeSqlCode(error);return error.code==='42501';});
   }
-  for(const table of ['attendance_audit','attendance_receipts'])for(const verb of ['UPDATE','DELETE','TRUNCATE']){
-   const query=verb==='UPDATE'?'UPDATE '+t(table)+' SET version=version WHERE false':verb==='DELETE'?'DELETE FROM '+t(table)+' WHERE false':'TRUNCATE '+t(table);
-   await assert.rejects(admin.unsafe(query),error=>error.code==='42501');
+  for(const probe of attendanceHistoryDenialQueries(schema)){
+   phase='history-denied-'+probe.name;
+   await assert.rejects(admin.unsafe(probe.sql),error=>{lastSqlCode=safeSqlCode(error);return error.code==='42501';});
   }
   console.log('PASS: worker has no direct table or helper access; zero-row audit/receipt mutations and truncate remain denied');
  }catch(error){console.error('FAIL: attendance disposable rehearsal; phase='+phase+'; code='+(typeof error?.code==='string'?error.code:'assertion_or_setup')+'; sql_code='+lastSqlCode+'; actual_outcome='+(error?.actual?.ok===false&&['invalid','forbidden','conflict','unavailable'].includes(error.actual.code)?error.actual.code:'unavailable'));process.exitCode=1;
