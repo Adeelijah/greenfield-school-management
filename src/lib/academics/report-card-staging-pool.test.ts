@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+// @ts-expect-error Explicit source extension for the offline Node runner.
 import { createStagingPoolManager } from './report-card-staging-pool.ts';
 function fixture() { let closes=0; return { get closes(){return closes;}, async end(){closes++;} }; }
 function gate(){let release!:()=>void;const promise=new Promise<void>(r=>{release=r;});return{promise,release};}
