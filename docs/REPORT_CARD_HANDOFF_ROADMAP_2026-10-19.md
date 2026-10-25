@@ -614,3 +614,12 @@ Separated workflow navigation from full academic readiness: the index now perfor
 - Batched five approved-evidence reads into one statement with base-row locking CTEs, strict decoded array/cardinality handling and unchanged canonical verification; four round trips removed without caching authorization or results.
 - 76 focused offline tests pass; server TS parsing and scoped whitespace pass. Installed TypeScript/ESLint, rendered UI and live SQL/timing remain operator verification. See `docs/staging/REPORT_CARD_LOADING_AND_EVIDENCE_REVIEW.md`.
 - Next: offline verifier, read-only local restart, inspect loading feedback and existing result. No database setup/reset, grant changes or deployment.
+
+
+### Compact account UI — first interactive preview, 2026-10-25
+
+- Operator selected option A and approved teacher/bursar variants. Implemented one shared responsive visual system and three role-specific sample dashboards at `/staging/account-design`.
+- Existing development gate and verified staff sign-in protect entry; sample account selection does not grant authority. Preview records and metrics are explicitly fictional; planned modules/actions do not mutate or imply live capability.
+- Search/class/status filters, mobile menu, planned-section navigation, notices, actual sign-out and a separate working report-workflow link are available. Existing post-login destination and live auth/security remain unchanged.
+- 28 existing staging entry/policy tests pass and scoped whitespace passes. Installed TypeScript/ESLint and rendered desktop/mobile browser review remain pending. See `docs/staging/ACCOUNT_DASHBOARD_DESIGN_REVIEW.md`.
+- Next: visual QA of all three actual screens, then verified account routing and module-by-module data integration. This milestone does not claim live admin/teacher/bursar dashboards are complete.

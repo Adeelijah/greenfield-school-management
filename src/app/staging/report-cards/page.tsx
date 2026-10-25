@@ -25,6 +25,7 @@ export default async function StagingReportCardsPage({ searchParams }: { searchP
   const result = await readLocalStagingWorkspace(choice);
   return <main className="content staging-reports">
     <header className="page-heading"><div><p className="muted">GREENFIELD STAGING · TEST DATA</p><h1>Report cards</h1><p>TEST Term 1 · 2026/27 · Primary 5 school</p></div><form action={signOutOfStaging}><StagingPendingButton label="Sign out" pendingLabel="Signing out…" /></form></header>
+    <p><Link href="/staging/account-design" prefetch={false}>Preview the new account dashboards<StagingLinkProgress /></Link></p>
     <nav className="staging-class-links" aria-label="Class selection">{stagingClassChoices.map(c => <Link key={c.key} href={'/staging/report-cards?class=' + c.key} prefetch={false} aria-current={choice === c.key ? 'page' : undefined}>{c.label}<StagingLinkProgress /></Link>)}</nav>
     {!result.ok ? <section className="card"><h2>{result.code === 'forbidden' ? 'Academic access unavailable' : 'Unable to load report cards'}</h2><p>{result.code === 'forbidden' ? 'Your current account does not have access to this class. Sign in with an assigned teacher or administrator account.' : 'Check the local staging connection and finalized source, then refresh. No report action was performed.'}</p></section>
       : <StagingReportWorkspace workspace={result.workspace} selector={selector} intentId={randomUUID()} commandsEnabled={stagingCommandsEnabled(process.env)} />}

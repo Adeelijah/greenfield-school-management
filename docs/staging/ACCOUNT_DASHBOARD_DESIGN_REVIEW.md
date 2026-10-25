@@ -1,0 +1,13 @@
+# Approved compact account dashboards — first UI milestone
+
+The operator selected visual option A and approved its teacher and bursar siblings. The selected direction is a white sidebar, forest-green active item, light canvas, compact metric cards and tables, and a right column for tasks/activity. This source implements that direction at `/staging/account-design`, behind the existing exact development staging gate and verified staff sign-in. It does not replace the working report workflow or change the post-login destination.
+
+The preview includes admin, teacher and bursar navigation and dashboard samples, search, class/status filters, empty state, functional menu selection, clear planned-module panels, dismissible notices, actual staging sign-out and a separate link to the existing report workflow. The sidebar becomes a native keyboard-accessible disclosure on mobile. Tables scroll within a labeled region; controls retain keyboard focus outlines. No new dependencies or external fonts are added.
+
+All metrics, people, transactions and activity on this page are explicitly fictional sample content. The design selector changes sample presentation only, not membership or authority. No academic/financial mutations, API queries for sample records, database connections, role switching or live financial reads were added. Unconnected actions clearly report that no record changed. All three designs can be inspected by the signed-in operator; that is not evidence that production role routing is implemented.
+
+Validation: scoped whitespace checks pass. Existing staging behavior tests remain passing. Project dependencies and a React renderer are unavailable in the authoring runtime, so installed TypeScript/ESLint, rendered desktop/mobile QA and browser interaction are pending operator verification. This is an interactive design milestone, not completed live dashboards.
+
+Next milestone after visual review: connect the shared shell to verified per-account routing and individually reviewed module data adapters. Keep the bursar separate from academic authority; do not reuse the academic-only identity resolver as a bursar authorization mechanism. Before adding live data, inventory existing module implementations and least-privilege grants. Do not expose the sample account selector as a production role switch.
+
+Operator: pull, run the offline verifier, restart the existing read-only local launcher, sign in and open `/staging/account-design` (also linked from report cards). Inspect all three previews at desktop and narrow widths. No additional SQL, password provisioning or test report reset is required.
