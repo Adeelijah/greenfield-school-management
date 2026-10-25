@@ -631,3 +631,11 @@ Separated workflow navigation from full academic readiness: the index now perfor
 - Compact mobile header/menu, pupil/payment cards, full-width panel action and paired selectors now replace the stacked header/wide table on narrow screens. Desktop table remains.
 - Account/class/status selectors reuse GreenfieldDropdown with matching portal menu styling and existing keyboard/viewport behavior. Sample properties stay stable when filtered; preview choice remains presentation only.
 - Three existing dropdown behavior/layout tests and scoped whitespace/CSS structure checks pass. Installed TypeScript/ESLint and browser QA remain operator-side. Review mobile widths and expanded menus before further UI/data work.
+
+
+### Staff dashboard routing prepared — 2026-10-25
+
+- Sign-in now targets `/staging/dashboard`; verified staff RPC evidence selects admin/teacher/bursar presentation, with no preview selector on the landing page. Metrics remain explicitly sample content. Design switcher remains only on the separate preview.
+- Separate additive `resolve_staging_staff_account` candidate supports all three staff roles without altering the academic-only resolver or module authorization. Complete membership counting, fixed school and signed-in identity are required; no RPC means account unavailable, never fallback.
+- Candidate `docs/staging/STAGING_STAFF_ACCOUNT_INSTALL.review.sql` uses the prior managed temporary ownership-transfer protocol and atomic cleanup. Not executed here. Review/install it on the exact staging project before browser landing checks. See routing review for order and limitations.
+- 32 focused offline tests, changed non-JSX TS parsing and scoped whitespace pass. Full installed verifier, live SQL/RPC and browser checks remain pending. No database reset, password provisioning, production execution or deployment.

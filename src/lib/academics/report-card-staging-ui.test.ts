@@ -28,7 +28,7 @@ test('connection requires the exact restricted pooler LOGIN, fixed database and 
 test('staging proxy paths and fixed redirects cannot redirect the ordinary login or accept return URLs', () => {
   assert.equal(isStagingPath('/staging/report-cards'), true); assert.equal(isStagingPath('/staging-elsewhere'), false);
   assert.equal(stagingProxyDestination('/staging/report-cards', false), '/staging/login');
-  assert.equal(stagingProxyDestination('/staging/login', true), '/staging/report-cards');
+  assert.equal(stagingProxyDestination('/staging/login', true), '/staging/dashboard');
   assert.equal(stagingProxyDestination('/staging/login', false), null);
 });
 test('class selection is restricted to the two fictional scopes with a fixed session and term', () => {

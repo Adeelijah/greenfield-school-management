@@ -28,7 +28,7 @@ export function isStagingPath(path: string): boolean {
 }
 export function stagingProxyDestination(path: string, authenticated: boolean): string | null {
   return !authenticated && path !== '/staging/login' ? '/staging/login'
-    : authenticated && path === '/staging/login' ? '/staging/report-cards' : null;
+    : authenticated && path === '/staging/login' ? '/staging/dashboard' : null;
 }
 export function validStagingDatabaseUrl(value: unknown): value is string {
   if (typeof value !== 'string') return false;

@@ -29,8 +29,8 @@ function Glyph({ kind = 0 }: { kind?: number }) {
 }
 function Badge({ children, warning = false }: { children: string; warning?: boolean }) { return <span className={'account-badge' + (warning ? ' warning' : '')}>{children}</span>; }
 
-export function AccountDesignWorkspace() {
-  const [role, setRole] = useState<Role>('admin');
+export function AccountDesignWorkspace({ initialRole = 'admin', preview: isPreview = true }: { initialRole?: Role; preview?: boolean }) {
+  const [role, setRole] = useState<Role>(initialRole);
   const [page, setPage] = useState('Overview');
   const [search, setSearch] = useState('');
   const [klass, setKlass] = useState('All classes');
@@ -57,12 +57,12 @@ export function AccountDesignWorkspace() {
   const tasks = finance ? ['Sample pupil 007 · ₦120,000 overdue', 'Sample pupil 008 · ₦85,000 due soon', 'Sample pupil 009 · ₦60,000 overdue', 'Sample pupil 010 · ₦75,000 due soon'] : isTeacher ? ["Mark today's attendance", 'Complete English scores', 'Correct 2 returned reports', 'Submit reports for review'] : ['Admission application', 'Transfer request', 'Report card review', 'Fee waiver request'];
   const activity = finance ? ['Payment recorded', 'Receipt issued', 'Invoice created', 'Partial payment recorded'] : isTeacher ? ['Attendance saved', 'Assessment scores updated', 'Report returned for correction', 'Report submitted'] : ['New admission submitted', 'Fee payment recorded', 'Report submitted for review', 'Teacher added'];
   return <div className="account-design">
-    <div className="account-preview-bar"><span><strong>Design preview</strong> · Sample data</span><div className="account-desktop-preview-tools">{accountSelector}<Link href="/staging/report-cards" prefetch={false}>Open working staging reports<StagingLinkProgress /></Link></div></div>
+    <div className="account-preview-bar"><span><strong>{isPreview ? 'Design preview' : 'Staging dashboard'}</strong> · Sample data</span><div className="account-desktop-preview-tools">{isPreview && accountSelector}<Link href="/staging/report-cards" prefetch={false}>Open working staging reports<StagingLinkProgress /></Link></div></div>
     <aside className="account-sidebar"><div className="account-brand"><svg viewBox="0 0 32 32" aria-hidden="true"><path fill="currentColor" d="M16 28V16C3 16 2 6 3 3c10 0 15 5 13 13C14 7 21 2 29 2c1 12-3 19-11 19v7z" /></svg><div><strong>Greenfield</strong><span>Primary School</span></div></div><p className="account-workspace-label">{names[role]} workspace</p>{nav}<p className="account-sidebar-note">First term · 2026/27<br />Primary 5 school</p></aside>
     <div className="account-body"><header className="account-topbar">
       <details className="account-mobile-nav" ref={mobileMenu} onKeyDown={event => { if (event.key === 'Escape' && !(event.target as HTMLElement).closest('[role="listbox"]') && mobileMenu.current) { mobileMenu.current.open = false; mobileMenu.current.querySelector('summary')?.focus(); } }}>
         <summary aria-label="Open account menu"><span aria-hidden="true">☰</span><span className="account-sr-only">Account menu</span></summary>
-        <div className="account-mobile-menu"><strong>{names[role]} design navigation</strong>{nav}<div className="account-mobile-preview-tools">{accountSelector}<Link href="/staging/report-cards" prefetch={false}>Working staging reports<StagingLinkProgress /></Link><form action={signOutOfStaging}><StagingPendingButton label="Sign out" pendingLabel="Signing out…" /></form></div></div>
+        <div className="account-mobile-menu"><strong>{names[role]} design navigation</strong>{nav}<div className="account-mobile-preview-tools">{isPreview && accountSelector}<Link href="/staging/report-cards" prefetch={false}>Working staging reports<StagingLinkProgress /></Link><form action={signOutOfStaging}><StagingPendingButton label="Sign out" pendingLabel="Signing out…" /></form></div></div>
       </details>
       <div className="account-mobile-brand"><svg viewBox="0 0 32 32" aria-hidden="true"><path fill="currentColor" d="M16 28V16C3 16 2 6 3 3c10 0 15 5 13 13C14 7 21 2 29 2c1 12-3 19-11 19v7z" /></svg>Greenfield</div>
       <label className="account-search"><span className="account-sr-only">Search sample pupils</span><Glyph kind={1} /><input type="search" placeholder={finance ? 'Search sample pupil or payment…' : 'Search sample pupils…'} value={search} onChange={e => setSearch(e.target.value)} /></label><span className="account-profile"><span className="account-avatar" aria-label={names[role]}>{role[0].toUpperCase()}</span><span className="account-profile-name">{names[role]}</span></span><form className="account-desktop-signout" action={signOutOfStaging}><StagingPendingButton label="Sign out" pendingLabel="Signing out…" /></form></header>
@@ -80,7 +80,7 @@ export function AccountDesignWorkspace() {
         {rows.length === 0 && <p className="account-empty" role="status">No sample records match your search or filters.</p>}
         <footer className="account-table-footer">Showing {rows.length} of 6 sample records <span>Page 1 of 1</span></footer></section>
         <aside className="account-side-panels"><section className="account-panel"><div className="account-panel-heading"><h2>{finance ? 'Outstanding balances' : isTeacher ? 'Tasks to complete' : 'Pending approvals'}</h2></div>{tasks.map((task, i) => <button className="account-task" key={task} onClick={() => preview(task)}><span className={'account-task-icon tone-' + i}><Glyph kind={i+2} /></span><span>{task}<small>{finance ? 'Sample fee invoice' : 'Sample task · First term'}</small></span><span aria-hidden="true">›</span></button>)}</section><section className="account-panel"><div className="account-panel-heading"><h2>Recent activity</h2></div>{activity.map((a, i) => <div className="account-activity" key={a}><span className="account-activity-dot" /><span>{a}<small>Sample event · {i+1} hours ago</small></span></div>)}</section></aside></div></>}
-        <p className="account-footnote">Design preview only. Switching the preview account changes sample content, not your signed-in role or permissions.</p>
+        <p className="account-footnote">{isPreview ? 'Design preview only. Switching the preview account changes sample content, not your signed-in role or permissions.' : 'Your workspace matches your verified staff membership. Dashboard figures are sample data; module data integration is pending.'}</p>
       </main>
     </div>
   </div>;

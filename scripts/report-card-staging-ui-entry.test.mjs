@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import { registerHooks, stripTypeScriptTypes } from 'node:module';
 import { readFileSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
+import { decodeStagingStaffAccount } from '../src/lib/academics/staging-staff-account.ts';
 import * as policy from '../src/lib/academics/report-card-staging-ui.ts';
 import * as approvedPolicy from '../src/lib/academics/report-card-approved-view.ts';
 import { fixtureAssessmentDecoders } from '../src/lib/academics/assessment-postgres-fixture-source-reader.ts';
@@ -15,11 +16,12 @@ const env={NODE_ENV:'development',GREENFIELD_STAGING_UI:'LOCAL_STAGING_REPORTS_O
 async function withEnv(work,changes={}){const previous=Object.fromEntries(Object.keys(env).map(k=>[k,process.env[k]]));Object.assign(process.env,env,changes);try{return await work();}finally{for(const[k,v]of Object.entries(previous))if(v===undefined)delete process.env[k];else process.env[k]=v;}}
 function form(extra={}){const f=new FormData();for(const[k,v]of Object.entries({action:'submit',operationKey:'intent',reportId:id,expectedVersion:'1',...extra}))f.append(k,v);return f;}
 async function load(path,state){
- state.decoders=fixtureAssessmentDecoders;state.approvedPolicy=approvedPolicy;
+ state.staffDecoder=decodeStagingStaffAccount;state.decoders=fixtureAssessmentDecoders;state.approvedPolicy=approvedPolicy;
  const token=randomUUID(),key='greenfield-staging-ui-'+token;globalThis[Symbol.for(key)]=state;
  const context=`globalThis[Symbol.for(${JSON.stringify(key)})]`,url=new URL('../'+path,import.meta.url);url.searchParams.set('test',token);
  const mocks=new Map([
   ['server-only','export {};'],
+  ['@/lib/academics/staging-staff-account',`export const decodeStagingStaffAccount=${context}.staffDecoder;`],
   ['next/cache',`export function revalidatePath(p){${context}.events.push(['revalidate',p]);}`],
   ['next/navigation',`export function redirect(p){throw Object.assign(new Error('redirect'),{destination:p});} export function notFound(){throw Object.assign(new Error('not-found'),{notFound:true});}`],
   ['next/server',`export const NextResponse=${context}.Response;`],
@@ -61,7 +63,7 @@ test('actual staging login denies disabled routes before SDK and never accepts a
  const state={events:[],client:{auth:{async signInWithPassword(){return{error:null};},async getUser(){return{data:{user:{id}},error:null};}}}},f=await load('src/app/staging/login/actions.ts',state);
  try{
   await withEnv(async()=>{await assert.rejects(f.module.signInToStaging(form()),e=>e.notFound===true);assert.deepEqual(state.events,[]);},{GREENFIELD_STAGING_UI:''});
-  await withEnv(async()=>{const login=new FormData();login.set('email','test@example.invalid');login.set('password','local-only');login.set('next','https://foreign.invalid');await assert.rejects(f.module.signInToStaging(login),e=>e.destination==='/staging/report-cards');});
+  await withEnv(async()=>{const login=new FormData();login.set('email','test@example.invalid');login.set('password','local-only');login.set('next','https://foreign.invalid');await assert.rejects(f.module.signInToStaging(login),e=>e.destination==='/staging/dashboard');});
  }finally{f.close();}
 });
 class Response{
@@ -78,7 +80,7 @@ test('actual staging proxy returns disabled 404 without SDK and preserves refres
 });
 test('actual staging proxy verifies the user and redirects signed-in login requests to the staging workspace',async()=>{
  let verified=0;const state={Response,createClient(){return{auth:{async getUser(){verified++;return{data:{user:{id}},error:null};}}};}},f=await load('src/lib/supabase/staging-proxy.ts',state);
- try{await withEnv(async()=>{assert.equal((await f.module.stagingProxy(request('/staging/login'))).destination,'/staging/report-cards');assert.equal(verified,1);});}finally{f.close();}
+ try{await withEnv(async()=>{assert.equal((await f.module.stagingProxy(request('/staging/login'))).destination,'/staging/dashboard');assert.equal(verified,1);});}finally{f.close();}
 });
 function workspaceState(){
  const selector=policy.stagingSelector('primary5');
@@ -255,5 +257,19 @@ test('actual approved reader rejects malformed batched JSON and missing or dupli
   if(change==='encoded')e.finals=JSON.stringify(e.finals);if(change==='missing-audit')e.audits=[];if(change==='duplicate-audit')e.audits.push(state.audit);if(change==='missing-pupil')e.pupils=[];if(change==='tampered-final')e.finals[0].contentHash='f'.repeat(64);
   const f=await load('src/server/academics/report-card-staging-result.ts',state);
   try{await withEnv(async()=>assert.deepEqual(await f.module.readLocalStagingResult(id),{ok:false,code:'unavailable'}));}finally{f.close();}
+ }
+});
+
+test('actual staff dashboard lookup verifies provider identity then calls only the zero-argument staff RPC',async()=>{
+ for(const role of ['admin','teacher','bursar']){
+  const state={events:[],client:{auth:{async getUser(){state.events.push(['user']);return{data:{user:{id:'auth'}},error:null};}},async rpc(...args){state.events.push(['rpc',args]);return{data:[{auth_user_id:'auth',school_id:schoolId,school_user_id:'user',membership_id:'member',role,status:'active',school_user_count:1,active_membership_count:1}],error:null};}}};
+  const f=await load('src/server/accounts/staging-staff-account.ts',state);
+  try{await withEnv(async()=>{assert.equal(await f.module.readStagingStaffAccount(),role);assert.deepEqual(state.events.find(e=>e[0]==='rpc')[1],['resolve_staging_staff_account']);});}finally{f.close();}
+ }
+});
+test('actual staff lookup denies provider and RPC errors without querying legacy memberships or using report authority fallback',async()=>{
+ for(const mode of ['disabled','auth','rpc']){
+  const state={events:[],client:{auth:{async getUser(){return{data:{user:{id:'auth'}},error:mode==='auth'?{}:null};}},async rpc(){state.events.push(['rpc']);return{data:null,error:{}};}}};const f=await load('src/server/accounts/staging-staff-account.ts',state);
+  try{await withEnv(async()=>{assert.equal(await f.module.readStagingStaffAccount(),null);assert.equal(state.events.some(e=>e[0]==='rpc'),mode==='rpc');},mode==='disabled'?{GREENFIELD_STAGING_UI:''}:{});}finally{f.close();}
  }
 });

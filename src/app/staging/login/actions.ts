@@ -15,7 +15,7 @@ export async function signInToStaging(form: FormData) {
     accepted = !!verified && !verified.error && !!verified.data.user;
   } catch { accepted = false; }
   if (!accepted) redirect('/staging/login?error=invalid');
-  redirect('/staging/report-cards');
+  redirect('/staging/dashboard');
 }
 
 export async function signOutOfStaging() {
