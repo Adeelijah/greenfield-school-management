@@ -11,3 +11,14 @@ Validation: scoped whitespace checks pass. Existing staging behavior tests remai
 Next milestone after visual review: connect the shared shell to verified per-account routing and individually reviewed module data adapters. Keep the bursar separate from academic authority; do not reuse the academic-only identity resolver as a bursar authorization mechanism. Before adding live data, inventory existing module implementations and least-privilege grants. Do not expose the sample account selector as a production role switch.
 
 Operator: pull, run the offline verifier, restart the existing read-only local launcher, sign in and open `/staging/account-design` (also linked from report cards). Inspect all three previews at desktop and narrow widths. No additional SQL, password provisioning or test report reset is required.
+
+
+## Approved mobile revision
+
+The operator approved the compact mobile prototype before implementation. Mobile now uses a slim preview strip and a single header with the Greenfield brand, avatar and keyboard-accessible menu. Navigation, sample account selection and sign-out are inside that menu; selecting a destination closes it and Escape returns focus to the trigger. Dropdown Escape is handled by the shared control without also closing its surrounding menu. Search is consolidated into the records panel on mobile.
+
+The wide table remains on desktop; mobile renders the same filtered records as cards. Teacher cards show attendance/report status, bursar cards show payment amount/method, and admin cards show status/balance. Record properties are stable through filtering. A two-column metric grid, full-width panel action and paired filters match the approved prototype.
+
+Every preview selector now reuses GreenfieldDropdown rather than native select. Its existing portal placement and keyboard behavior are unchanged. A route-local stylesheet reproduces the shared dropdown visual baseline from the student controls, including the body-level portal menu; no shared component or existing module stylesheet was modified. Dropdown labels remain visible and controls have a minimum 44px mobile height.
+
+Validation: the three existing pure dropdown layout/keyboard tests pass; scoped whitespace and CSS brace checks pass. No new behavioral implementation tests were added for this reversible UI adjustment. Installed TypeScript/ESLint and rendered browser QA remain operator-side; no claim of pixel-perfect implementation or live authorization changes. Review at 320/375/390px and desktop, including all three role previews, expanded dropdown near viewport edges, menu Escape/focus, filtering and sign-out pending state.

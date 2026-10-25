@@ -623,3 +623,11 @@ Separated workflow navigation from full academic readiness: the index now perfor
 - Search/class/status filters, mobile menu, planned-section navigation, notices, actual sign-out and a separate working report-workflow link are available. Existing post-login destination and live auth/security remain unchanged.
 - 28 existing staging entry/policy tests pass and scoped whitespace passes. Installed TypeScript/ESLint and rendered desktop/mobile browser review remain pending. See `docs/staging/ACCOUNT_DASHBOARD_DESIGN_REVIEW.md`.
 - Next: visual QA of all three actual screens, then verified account routing and module-by-module data integration. This milestone does not claim live admin/teacher/bursar dashboards are complete.
+
+
+### Approved mobile account preview revision — 2026-10-25
+
+- Operator approved a mobile prototype after finding excessive header space and native dropdowns in the first preview.
+- Compact mobile header/menu, pupil/payment cards, full-width panel action and paired selectors now replace the stacked header/wide table on narrow screens. Desktop table remains.
+- Account/class/status selectors reuse GreenfieldDropdown with matching portal menu styling and existing keyboard/viewport behavior. Sample properties stay stable when filtered; preview choice remains presentation only.
+- Three existing dropdown behavior/layout tests and scoped whitespace/CSS structure checks pass. Installed TypeScript/ESLint and browser QA remain operator-side. Review mobile widths and expanded menus before further UI/data work.
