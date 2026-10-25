@@ -1,9 +1,11 @@
 import type { DashboardRecord, StagingDashboardData } from './staging-dashboard';
-export type AcademicPage = 'students' | 'classes' | 'reports';
+export type AcademicPage = 'students' | 'classes' | 'reports' | 'attendance' | 'assessments';
 export function canOpenAcademicPage(role: string, page: AcademicPage): boolean {
-  return page === 'students' ? role === 'admin' : page === 'classes' ? role === 'teacher' : page === 'reports' && (role === 'admin' || role === 'teacher');
+  return page === 'students' ? role === 'admin' : page === 'classes' ? role === 'teacher' : ['reports','attendance','assessments'].includes(page) && (role === 'admin' || role === 'teacher');
 }
 export function academicPageHref(label: string, role: string): string | null {
+  if (label === 'Attendance' && (role === 'admin' || role === 'teacher')) return '/staging/attendance';
+  if ((label === 'Assessments' || label === 'Academics') && (role === 'admin' || role === 'teacher')) return '/staging/assessments';
   if (label === 'Overview') return '/staging/dashboard';
   if (label === 'Students' && role === 'admin') return '/staging/students';
   if (label === 'My classes' && role === 'teacher') return '/staging/classes';

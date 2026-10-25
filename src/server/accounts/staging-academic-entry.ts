@@ -1,4 +1,5 @@
 import 'server-only';
+import { readStagingAssessmentEditor } from '@/server/accounts/staging-assessment-editor';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { stagingUiEnabled } from '@/lib/academics/report-card-staging-ui';
 import { readStagingStaffAccount } from '@/server/accounts/staging-staff-account';
@@ -19,5 +20,7 @@ export async function readStagingStaffPage(view?: AcademicPage, selectedClass: u
   if (view && !canOpenAcademicPage(role, view)) return { kind: 'not-found' } as const;
   const data = await readStagingDashboard(role);
   if (data && selectedClass !== 'all' && !data.classes.some(c=>c.key===selectedClass)) return { kind: 'not-found' } as const;
-  return { kind: 'ready', role, data, selectedClass } as const;
+  const selectedOperationClass = selectedClass === 'all' ? data?.classes[0]?.key ?? 'all' : selectedClass;
+  const editor = view === 'assessments' && data ? await readStagingAssessmentEditor(role, selectedOperationClass, data) : null;
+  return { kind: 'ready', role, data, selectedClass: view === 'attendance' || view === 'assessments' ? selectedOperationClass : selectedClass, editor } as const;
 }

@@ -5,3 +5,5 @@
 @media(prefers-reduced-motion:reduce){.account-dashboard-loading .account-loading-shape{animation:none}}
 .account-page-loading-directory .account-metrics,.account-page-loading-classes .account-metrics,.account-page-loading-directory .account-side-panels,.account-page-loading-classes .account-columns{display:none}.account-page-loading-directory .account-columns{display:block}.account-page-loading-directory .account-loading-action{height:24px;width:110px}.academic-loading-class-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}.academic-loading-class-card{padding:24px}.academic-loading-class-metrics{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:24px 0}
 @media(max-width:760px){.academic-loading-class-grid{grid-template-columns:1fr}.academic-loading-class-card{padding:20px 16px}}
+.account-page-loading-operations .account-metrics,.account-page-loading-operations .account-columns{display:none}.operations-loading-panel{padding:24px}.operations-loading-panel .account-record-card{margin:16px 0}.operations-loading-panel .account-loading-action{margin-top:20px}
+@media(max-width:760px){.operations-loading-panel{padding:20px 16px}}

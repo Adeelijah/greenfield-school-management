@@ -10,5 +10,5 @@ export async function renderStagingStaffPage(view?: AcademicPage, selectedClass:
   if (result.kind === 'not-found') notFound();
   if (result.kind === 'sign-in') redirect('/staging/login');
   if (result.kind === 'unavailable') return <main className="content"><section className="card"><h1>Account workspace unavailable</h1><p>A unique active staging staff membership could not be verified. Your access may have changed. No account role was assumed.</p><form action={signOutOfStaging}><StagingPendingButton label="Sign out" pendingLabel="Signing out…" /></form></section></main>;
-  return <AccountDesignWorkspace key={result.role + ':' + (view ?? 'overview') + ':' + result.selectedClass} initialRole={result.role} preview={false} liveData={result.data} academicView={view} initialClass={result.selectedClass} />;
+  return <AccountDesignWorkspace key={result.role + ':' + (view ?? 'overview') + ':' + result.selectedClass} initialRole={result.role} preview={false} liveData={result.data} academicView={view} initialClass={result.selectedClass} assessmentEditor={result.editor} />;
 }

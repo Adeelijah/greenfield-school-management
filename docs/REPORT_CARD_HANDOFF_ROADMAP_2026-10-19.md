@@ -657,3 +657,12 @@ Separated workflow navigation from full academic readiness: the index now perfor
 - Direct-route role checks, missing/ambiguous identity and unknown/unavailable class selection are tested. Sample design remains separate. Directory/class skeleton variants use the approved responsive shell. Workflow/result return navigation connects the new pages.
 - 89 focused offline tests pass; six changed non-JSX TS files parse; scoped whitespace/CSS checks pass. Installed type/lint/full verifier, live staging reads and rendered browser QA remain operator-side.
 - See `docs/staging/STAGING_ACADEMIC_PAGES_BATCH_REVIEW.md` for one consolidated operator check. No SQL/grants/password reset/report reset is needed. Next operations batch still requires reviewed source-writer/finance boundaries; no production launch claim.
+
+
+### Operations read/draft + attendance transaction contract — 2026-10-25
+
+- Inventory confirms no attendance persistence table/adapter and no installed academic source writer for the restricted app role. Existing rules/previews are not durable functionality. Batch 2 is NOT complete and no writer permission was broadened.
+- Added role-protected Attendance and Assessments routes in the approved shell: verified roster/current complete source, date/status drafts, numeric/observational draft validation and pinned configuration display. Matching operation skeletons/class navigation included. Save/review/finalize remain explicitly disabled; browser-only drafts are lost on navigation.
+- Added closed attendance command/transaction port and cloned-transaction tests for exact replay, conflict, authority loss, rollback, same-key retry and correction reasons. This is not a SQL adapter or a live memory store.
+- 98 focused tests pass, including existing authority/report checks; seven non-JSX TS files parse and scoped whitespace/CSS checks pass. Full installed verifier, browser and live reads remain operator-side. No DB/SQL/grants were executed.
+- Next prerequisite: implement/rehearse the separate durable attendance schema/role and assessment source writer described in `docs/staging/STAGING_OPERATIONS_PERSISTENCE_CONTRACT.md`. The read/draft source update itself needs no SQL. Preserve the published fixture and do not grant broad DML as a shortcut.
