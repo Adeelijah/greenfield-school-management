@@ -33,3 +33,7 @@ The operator has now passed all 665 offline checks and the full original attenda
 ## Upgraded attendance LOGIN proof passed; managed target review next
 
 The operator passed all 675 offline checks and the upgraded attendance PostgreSQL rehearsal, including real independent unprivileged LOGINs, saved correction history, source/parent coordination and cleanup. `ATTENDANCE_MANAGED_INSTALLATION_PLAN.md` selects a separate attendance LOGIN/runtime/private owner so the existing report LOGIN memberships remain unchanged. `ATTENDANCE_STAGING_TARGET_READ_ONLY.sql` collects the focused current staging catalog/role/report baseline needed before preparing an additive managed installer. It changes nothing and does not enable Save; real identity/managed installation and persisted UI remain outstanding.
+
+## Managed target accepted; rollback rehearsal ready
+
+The operator's focused staging inspection returned no issues. The rollback-only managed candidate now prepares four attendance tables and the separate LOGIN/runtime/owner, uses managed temporary ownership access with exact cleanup, resets new object/API ACLs before transfer, and checks captured report/source/role/helper/guard/policy state unchanged. `ATTENDANCE_MANAGED_ROLLBACK_REHEARSAL.sql` ends in ROLLBACK, verifies new objects are absent and does not enable Save or configure a password. Its actual staging rollback result remains outstanding; no live installation has occurred.
