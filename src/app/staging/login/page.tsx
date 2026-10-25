@@ -1,5 +1,6 @@
 import { notFound } from 'next/navigation';
 import { stagingUiEnabled } from '@/lib/academics/report-card-staging-ui';
+import { StagingPendingButton } from '@/components/academics/staging-pending';
 import { signInToStaging } from './actions';
 
 export const dynamic = 'force-dynamic';
@@ -16,7 +17,7 @@ export default async function StagingLoginPage({ searchParams }: { searchParams:
     <form action={signInToStaging} className="auth-form">
       <label htmlFor="staging-email">Email</label><div className="auth-input-wrap"><input id="staging-email" name="email" type="email" autoComplete="username" required maxLength={254} /></div>
       <label htmlFor="staging-password">Password</label><div className="auth-input-wrap"><input id="staging-password" name="password" type="password" autoComplete="current-password" required maxLength={4096} /></div>
-      <button className="auth-submit" type="submit">Sign in to staging</button>
+      <StagingPendingButton className="auth-submit" label="Sign in to staging" pendingLabel="Signing in…" />
     </form>
     <p className="auth-footnote">Test environment only. This does not enable the school application.</p>
   </section></main>;

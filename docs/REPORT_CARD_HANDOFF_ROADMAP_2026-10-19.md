@@ -605,3 +605,12 @@ Separated workflow navigation from full academic readiness: the index now perfor
 - Added bounded process-local TLS client reuse with configuration rotation, idle/lifetime caps, transaction failure retirement and expiring SQL leases. Every request still checks login, role catalog and complete authority in a fresh transaction.
 - Ten new lifecycle/controlled-driver tests; 74 focused tests pass. TypeScript source parsing and scoped whitespace checks pass; installed TypeScript/ESLint/full verifier and live timing confirmation remain operator-side.
 - See `docs/staging/REPORT_CARD_CONNECTION_REUSE_REVIEW.md`. Next: pull, offline verifier, restart read-only local staging and compare consecutive list/result timings (`pool`, `setup_ms`). No reset of published data, SQL installation or deployment is authorized by this source change.
+
+
+### Staging pending UI and approved evidence batching — 2026-10-25
+
+- Operator evidence confirms warm pool setup around 302–555ms and result transactions 5.6–6.9s; one client-reuse request still had 6.5s setup. No blanket latency or contention completion claim.
+- Added form-specific pending labels/spinners for sign-in/out and commands, shared report-action live status, link pending indicators and gated list/result skeleton fallbacks. Existing keys, server outcomes and access boundaries remain.
+- Batched five approved-evidence reads into one statement with base-row locking CTEs, strict decoded array/cardinality handling and unchanged canonical verification; four round trips removed without caching authorization or results.
+- 76 focused offline tests pass; server TS parsing and scoped whitespace pass. Installed TypeScript/ESLint, rendered UI and live SQL/timing remain operator verification. See `docs/staging/REPORT_CARD_LOADING_AND_EVIDENCE_REVIEW.md`.
+- Next: offline verifier, read-only local restart, inspect loading feedback and existing result. No database setup/reset, grant changes or deployment.

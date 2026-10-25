@@ -1,6 +1,7 @@
 'use client';
 import { useActionState } from 'react';
 import Link from 'next/link';
+import { StagingPendingButton, StagingLinkProgress, StagingActionProgress } from './staging-pending';
 import { runStagingReportCommand } from '@/app/staging/report-cards/actions';
 import type { StagingWorkspace, StagingReportRow } from '@/lib/academics/report-card-staging-ui';
 import type { ReportCardRequestCommand } from '@/lib/academics/report-card-request-command';
@@ -22,7 +23,7 @@ export function StagingReportWorkspace({ workspace, selector, intentId, commands
       {Object.entries(fields).map(([name, value]) => <input key={name} type="hidden" name={name} value={String(value)} />)}
       {(action === 'return' || action === 'revoke') && <label>Reason for {action === 'return' ? 'correction' : 'withdrawal'}<textarea name="reason" rows={2} required maxLength={2000} disabled={pending || !commandsEnabled} /></label>}
       {(action === 'publish' || action === 'revoke') && <label className="staging-confirm"><input type="checkbox" required disabled={pending || !commandsEnabled} />I confirm this change to the test report.</label>}
-      <button className={action === 'submit' || action === 'create' || action === 'approve' ? 'primary' : ''} type="submit" disabled={pending || !commandsEnabled}>{actionLabels[action]}</button>
+      <StagingPendingButton className={action === 'submit' || action === 'create' || action === 'approve' ? 'primary' : ''} disabled={pending || !commandsEnabled} label={actionLabels[action]} pendingLabel="Saving…" />
     </form>;
   }
   function reportActions(report: StagingReportRow) {
@@ -35,17 +36,17 @@ export function StagingReportWorkspace({ workspace, selector, intentId, commands
     return <p className="muted">Waiting for the assigned teacher to submit.</p>;
   }
   return <>
+    {pending && <StagingActionProgress />}
     <section className="card staging-summary"><h2>Current class workspace</h2><p>Signed in as {workspace.role === 'admin' ? 'administrator' : 'assigned teacher'}. {workspace.pupils.length} pupils · {workspace.subjectCount} subjects in roster · source revision {workspace.assessmentRevision}.</p>
       <p className="muted">This list shows report status. Complete results are verified when you submit, approve, publish or open an approved result.</p>
       {!commandsEnabled && <p role="status">Read-only mode. Report actions are disabled.</p>}
-      {pending && <p role="status">Saving the test report. This connection can take a few minutes; leave this page open.</p>}
-      {result && <p role="status">{result.ok ? `Report ${result.kind === 'replay' ? 'already saved' : 'saved'}: ${labels[result.stage]}.` : result.code === 'forbidden' ? 'Your access has changed or this action is not permitted. Refresh before continuing.' : result.code === 'conflict' ? 'The report changed. Refresh to use the current version.' : result.code === 'invalid' ? 'Check the form details and try again.' : 'Unable to save. Retry this same form safely, or refresh to check the report.'}</p>}
+      {!pending && result && <p role="status">{result.ok ? `Report ${result.kind === 'replay' ? 'already saved' : 'saved'}: ${labels[result.stage]}.` : result.code === 'forbidden' ? 'Your access has changed or this action is not permitted. Refresh before continuing.' : result.code === 'conflict' ? 'The report changed. Refresh to use the current version.' : result.code === 'invalid' ? 'Check the form details and try again.' : 'Unable to save. Retry this same form safely, or refresh to check the report.'}</p>}
     </section>
-    <section className="staging-pupils" aria-label="Student report workflow">{workspace.pupils.length === 0 ? <div className="card"><h2>No eligible pupils</h2><p>No active enrollments are available for this class.</p></div> : workspace.pupils.map(pupil => {
+    <section className="staging-pupils" aria-label="Student report workflow" aria-busy={pending}>{workspace.pupils.length === 0 ? <div className="card"><h2>No eligible pupils</h2><p>No active enrollments are available for this class.</p></div> : workspace.pupils.map(pupil => {
       const report = workspace.reports.find(r => r.enrollmentId === pupil.enrollmentId);
       return <article className="card" key={pupil.enrollmentId}><div className="staging-pupil-heading"><h2>{pupil.label}</h2><span>{report ? labels[report.stage] : 'No report yet'}</span></div>
         {report && <p className="muted">Report version {report.version}</p>}
-        {report && ['approved', 'published'].includes(report.stage) && <p><Link href={'/staging/report-cards/' + report.reportId} prefetch={false}>View approved result / print test copy</Link></p>}
+        {report && ['approved', 'published'].includes(report.stage) && <p><Link href={'/staging/report-cards/' + report.reportId} prefetch={false}>View approved result / print test copy<StagingLinkProgress /></Link></p>}
         {report?.returnReason && <p>Correction requested: {report.returnReason}</p>}
         <div className="staging-command-list">{report ? reportActions(report) : workspace.role === 'teacher' ? actionForm('create', { ...selector, studentId: pupil.studentId, enrollmentId: pupil.enrollmentId }, pupil.enrollmentId) : <p className="muted">The assigned teacher can create this test report.</p>}</div>
       </article>;

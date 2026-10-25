@@ -1,0 +1,10 @@
+.staging-spinner{display:inline-block;flex-shrink:0;width:1em;height:1em;box-sizing:border-box;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:staging-spin .8s linear infinite;vertical-align:middle;margin-right:8px}
+.staging-link-progress{display:inline-flex;align-items:center;min-width:1.25em;margin-left:5px}.staging-link-progress .staging-spinner{margin:0}
+.staging-action-progress{position:sticky;top:12px;z-index:10;display:flex;align-items:center;gap:8px;padding:16px;margin:0 0 18px;background:var(--surface);border:1px solid var(--forest);border-radius:var(--radius);box-shadow:var(--shadow);color:var(--forest)}
+.staging-action-progress p{margin:5px 0 0;color:var(--ink);font-size:13px;line-height:1.5}
+.staging-sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap;border:0}
+.staging-loading{max-width:1160px;margin:0 auto;min-height:80vh}.staging-loading-status{display:flex;align-items:center;color:var(--muted);margin:0 0 24px}
+.staging-skeleton{background:var(--border);border-radius:6px;animation:staging-pulse 1.5s ease-in-out infinite;max-width:100%}.staging-skeleton-title{width:230px;height:30px;margin-bottom:18px}.staging-skeleton-line{width:70%;height:14px;margin:14px 0}.staging-skeleton-short{width:40%}.staging-skeleton-tabs{display:flex;gap:12px;margin:24px 0}.staging-skeleton-tab{width:140px;height:42px}.staging-skeleton-card{margin:0 0 16px;padding:24px}.staging-skeleton-button{width:160px;height:42px;margin-top:20px}.staging-skeleton-paper{max-width:800px;margin:0 auto;padding:32px}.staging-skeleton-row{height:44px;margin:12px 0}.staging-skeleton-heading{width:55%;height:26px;margin:0 auto 24px}
+@keyframes staging-spin{to{transform:rotate(360deg)}}@keyframes staging-pulse{50%{opacity:.4}}
+@media(prefers-reduced-motion:reduce){.staging-spinner,.staging-skeleton{animation:none}.staging-spinner{border-style:dotted}}
+@media print{.staging-action-progress,.staging-link-progress,.staging-loading{display:none!important}}
