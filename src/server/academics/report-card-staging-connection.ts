@@ -23,13 +23,17 @@ export function getLocalStagingDatabase(): SqlDatabase {
   return {
     unsafe(): never { throw Error('Staging SQL requires a transaction'); },
     async begin<T>(work: (tx: SqlClient) => Promise<T>): Promise<T> {
+      const started = Date.now();
+      let queryCount = 0, queryMs = 0, setupMs = 0, completed = false;
       const client = postgres(url, { max: 1, prepare: false, ssl: { ca, rejectUnauthorized: true }, connect_timeout: 20, onnotice: () => {} });
       try {
         // The adapter shape deliberately exposes only the reviewed SQL port.
         return await client.begin(async tx => {
           await tx.unsafe("SET LOCAL statement_timeout='60s'");
           await tx.unsafe("SET LOCAL lock_timeout='5s'");
-          return work({ unsafe: async (query, params) => {
+          setupMs = Date.now() - started;
+          const result = await work({ unsafe: async (query, params) => {
+            const queryStarted = Date.now(); queryCount++;
             try {
               const rows = await tx.unsafe(query, params as Parameters<typeof tx.unsafe>[1]);
               return Array.from(rows);
@@ -39,10 +43,19 @@ export function getLocalStagingDatabase(): SqlDatabase {
               const operation = relation?.[1] ?? relation?.[2] ?? (query.includes('pg_catalog.pg_roles') ? 'role_catalog' : 'transaction');
               console.warn(`Greenfield staging SQL: operation=${operation}; code=${code}`);
               throw error;
-            }
+            } finally { queryMs += Date.now() - queryStarted; }
           } });
+          completed = true;
+          return result;
         }) as T;
-      } finally { await client.end({ timeout: 5 }); }
+      } catch (error) {
+        const code = error && typeof error === 'object' && 'code' in error && typeof error.code === 'string' && /^[A-Za-z0-9_]{1,64}$/.test(error.code) ? error.code : 'unavailable';
+        console.warn(`Greenfield staging transaction: code=${code}`);
+        throw error;
+      } finally {
+        await client.end({ timeout: 5 });
+        console.info(`Greenfield staging timing: outcome=${completed ? 'callback_completed' : 'failed'}; total_ms=${Date.now() - started}; setup_ms=${setupMs}; queries=${queryCount}; query_ms=${queryMs}`);
+      }
     },
   };
 }

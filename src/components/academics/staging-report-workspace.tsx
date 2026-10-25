@@ -1,6 +1,6 @@
 'use client';
-import { useActionState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useActionState } from 'react';
+import Link from 'next/link';
 import { runStagingReportCommand } from '@/app/staging/report-cards/actions';
 import type { StagingWorkspace, StagingReportRow } from '@/lib/academics/report-card-staging-ui';
 import type { ReportCardRequestCommand } from '@/lib/academics/report-card-request-command';
@@ -13,8 +13,8 @@ export function StagingReportWorkspace({ workspace, selector, intentId, commands
   workspace: StagingWorkspace; selector: Selector; intentId: string; commandsEnabled: boolean;
 }) {
   const [result, dispatch, pending] = useActionState(runStagingReportCommand, null);
-  const router = useRouter();
-  useEffect(() => { if (result?.ok) router.refresh(); }, [result, router]);
+  // The action's revalidatePath already refreshes this workspace in its response.
+  // A second router.refresh repeats the expensive, locking source read.
   function actionForm(action: ReportCardRequestCommand['action'], fields: Record<string, string | number>, key: string) {
     return <form action={dispatch} className="staging-command" key={action + ':' + key}>
       <input type="hidden" name="action" value={action} />
@@ -44,6 +44,7 @@ export function StagingReportWorkspace({ workspace, selector, intentId, commands
       const report = workspace.reports.find(r => r.enrollmentId === pupil.enrollmentId);
       return <article className="card" key={pupil.enrollmentId}><div className="staging-pupil-heading"><h2>{pupil.label}</h2><span>{report ? labels[report.stage] : 'No report yet'}</span></div>
         {report && <p className="muted">Report version {report.version}</p>}
+        {report && ['approved', 'published'].includes(report.stage) && <p><Link href={'/staging/report-cards/' + report.reportId} prefetch={false}>View approved result / print test copy</Link></p>}
         {report?.returnReason && <p>Correction requested: {report.returnReason}</p>}
         <div className="staging-command-list">{report ? reportActions(report) : workspace.role === 'teacher' ? actionForm('create', { ...selector, studentId: pupil.studentId, enrollmentId: pupil.enrollmentId }, pupil.enrollmentId) : <p className="muted">The assigned teacher can create this test report.</p>}</div>
       </article>;

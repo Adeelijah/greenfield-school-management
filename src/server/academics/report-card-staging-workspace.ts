@@ -33,13 +33,17 @@ export async function readLocalStagingWorkspace(choice: string): Promise<Success
       const source = await readVerifiedCanonicalAssessmentInScope(tx, sqlScope, selector, verified);
       if (!source.ok) { diagnostic('canonical_source', source.code); return { ok: false, code: 'unavailable' } as const; }
       const enrollments = source.input.enrollments.filter(e => e.classId === selector.classId && e.status === 'active');
+      const labels = await tx.unsafe('SELECT id,first_name AS "firstName",last_name AS "lastName" FROM public.students WHERE school_id=$1::uuid AND id=ANY($2::uuid[]) ORDER BY id FOR SHARE', [stagingSchoolId, enrollments.map(e => e.studentId)]);
+      if (labels.length !== enrollments.length || new Set(labels.map(r => r.id)).size !== labels.length) { diagnostic('pupil_labels', 'invalid_row'); return { ok: false, code: 'unavailable' } as const; }
       const pupils = [];
       for (const enrollment of enrollments) {
-        const rows = await tx.unsafe('SELECT first_name AS "firstName",last_name AS "lastName" FROM public.students WHERE school_id=$1::uuid AND id=$2::uuid FOR SHARE', [stagingSchoolId, enrollment.studentId]);
+        const rows = labels.filter(r => r.id === enrollment.studentId);
         if (rows.length !== 1 || typeof rows[0]!.firstName !== 'string' || typeof rows[0]!.lastName !== 'string') { diagnostic('pupil_labels', 'invalid_row'); return { ok: false, code: 'unavailable' } as const; }
         pupils.push({ studentId: enrollment.studentId, enrollmentId: enrollment.id, label: rows[0]!.firstName + ' ' + rows[0]!.lastName });
       }
       const rows = await tx.unsafe('SELECT id AS "reportId",student_id AS "studentId",enrollment_id AS "enrollmentId",version,stage,return_reason AS "returnReason" FROM public.report_cards WHERE school_id=$1::uuid AND class_id=$2::uuid AND session_id=$3::uuid AND term_id=$4::uuid ORDER BY id FOR SHARE', [stagingSchoolId, selector.classId, selector.sessionId, selector.termId]);
+      const activeReleases = rows.length ? await tx.unsafe('SELECT id,report_id AS "reportId" FROM public.report_card_releases WHERE school_id=$1::uuid AND report_id=ANY($2::uuid[]) AND revoked_at IS NULL ORDER BY id FOR SHARE', [stagingSchoolId, rows.map(r => r.reportId)]) : [];
+      if (activeReleases.some(r => !rows.some(report => report.reportId === r.reportId))) { diagnostic('release_rows', 'invalid_binding'); return { ok: false, code: 'unavailable' } as const; }
       const reports: StagingReportRow[] = [];
       for (const row of rows) {
         if (![row.reportId, row.studentId, row.enrollmentId].every(isReportCardUuid) ||
@@ -47,7 +51,7 @@ export async function readLocalStagingWorkspace(choice: string): Promise<Success
           !['draft', 'submitted', 'returned', 'approved', 'published'].includes(String(row.stage)) ||
           !(row.returnReason === null || typeof row.returnReason === 'string') ||
           !pupils.some(p => p.studentId === row.studentId && p.enrollmentId === row.enrollmentId)) { diagnostic('report_rows', 'invalid_binding'); return { ok: false, code: 'unavailable' } as const; }
-        const releases = await tx.unsafe('SELECT id FROM public.report_card_releases WHERE school_id=$1::uuid AND report_id=$2::uuid AND revoked_at IS NULL FOR SHARE', [stagingSchoolId, row.reportId]);
+        const releases = activeReleases.filter(r => r.reportId === row.reportId);
         if (releases.length > 1 || (row.stage === 'published' ? releases.length !== 1 : releases.length !== 0) ||
           releases.some(r => !isReportCardUuid(r.id))) { diagnostic('release_rows', 'invalid_binding'); return { ok: false, code: 'unavailable' } as const; }
         reports.push({ reportId: row.reportId as string, studentId: row.studentId as string, enrollmentId: row.enrollmentId as string,

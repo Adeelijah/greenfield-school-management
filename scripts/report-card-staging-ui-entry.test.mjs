@@ -5,11 +5,17 @@ import { registerHooks, stripTypeScriptTypes } from 'node:module';
 import { readFileSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import * as policy from '../src/lib/academics/report-card-staging-ui.ts';
+import * as approvedPolicy from '../src/lib/academics/report-card-approved-view.ts';
+import { fixtureAssessmentDecoders } from '../src/lib/academics/assessment-postgres-fixture-source-reader.ts';
+import { createApprovedSnapshotFixture } from '../src/lib/academics/report-card-canonical-test-fixtures.ts';
+import { buildApprovedReportSnapshot } from '../src/lib/academics/report-card-approved-snapshot.ts';
+import { materializeAssessmentSource } from '../src/lib/academics/assessment-canonical-source.ts';
 const schoolId=policy.stagingSchoolId, id='00000000-0000-4000-8000-000000000001';
 const env={NODE_ENV:'development',GREENFIELD_STAGING_UI:'LOCAL_STAGING_REPORTS_ONLY',NEXT_PUBLIC_SUPABASE_URL:policy.stagingProjectUrl,NEXT_PUBLIC_SUPABASE_ANON_KEY:'sb_publishable_test',GREENFIELD_STAGING_COMMANDS:'FICTIONAL_STAGING_WRITES_ONLY'};
 async function withEnv(work,changes={}){const previous=Object.fromEntries(Object.keys(env).map(k=>[k,process.env[k]]));Object.assign(process.env,env,changes);try{return await work();}finally{for(const[k,v]of Object.entries(previous))if(v===undefined)delete process.env[k];else process.env[k]=v;}}
 function form(extra={}){const f=new FormData();for(const[k,v]of Object.entries({action:'submit',operationKey:'intent',reportId:id,expectedVersion:'1',...extra}))f.append(k,v);return f;}
 async function load(path,state){
+ state.decoders=fixtureAssessmentDecoders;state.approvedPolicy=approvedPolicy;
  const token=randomUUID(),key='greenfield-staging-ui-'+token;globalThis[Symbol.for(key)]=state;
  const context=`globalThis[Symbol.for(${JSON.stringify(key)})]`,url=new URL('../'+path,import.meta.url);url.searchParams.set('test',token);
  const mocks=new Map([
@@ -26,7 +32,9 @@ async function load(path,state){
   ['@/lib/academics/report-card-sql-scope',`export function stagingReportSqlScope(){return {};}`],
   ['@/lib/academics/report-card-request-command',`export const isReportCardUuid=v=>typeof v==='string'&&/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(v);`],
   ['@/lib/academics/assessment-postgres-canonical-reader',`export async function readVerifiedCanonicalAssessmentInScope(){${context}.events.push(['verified-source']);return ${context}.source;}`],
-  ['@/lib/academics/report-card-staging-command-boundary',`export async function executeStagingReportBoundary(_runtime,_identity,work){${context}.events.push(['locked-boundary']);if(${context}.denied)return{ok:false,code:'forbidden'};return work({begin:callback=>callback({unsafe:${context}.query})},async()=>({authUserId:'verified'}),{role:${context}.lockedRole});}`],
+  ['@/lib/academics/assessment-postgres-fixture-source-reader',`export const fixtureAssessmentDecoders=${context}.decoders;`],
+  ['@/lib/academics/report-card-approved-view',`export const verifyApprovedResultView=${context}.approvedPolicy.verifyApprovedResultView;`],
+  ['@/lib/academics/report-card-staging-command-boundary',`export async function executeStagingReportBoundary(_runtime,_identity,work){${context}.events.push(['locked-boundary']);if(${context}.denied)return{ok:false,code:'forbidden'};return work({begin:callback=>callback({unsafe:${context}.query})},async()=>({authUserId:'verified'}),{role:${context}.lockedRole,membershipId:'teacher'});}`],
  ]);
  const prefix='greenfield-ui-test-'+token+':';
  const hooks=registerHooks({resolve(s,c,next){if(c.parentURL!==url.href)return next(s,c);if(s==='@/lib/academics/report-card-staging-ui')return{url:new URL('../src/lib/academics/report-card-staging-ui.ts',import.meta.url).href,shortCircuit:true};if(mocks.has(s))return{url:prefix+encodeURIComponent(s),shortCircuit:true};throw Error('Unexpected UI entry dependency: '+s);},load(u,c,next){if(u===url.href){const file=new URL(u);file.search='';return{format:'module',source:stripTypeScriptTypes(readFileSync(file,'utf8')),shortCircuit:true};}if(u.startsWith(prefix))return{format:'module',source:mocks.get(decodeURIComponent(u.slice(prefix.length))),shortCircuit:true};return next(u,c);}});
@@ -78,7 +86,7 @@ function workspaceState(){
   source:{ok:true,input:{scope:{revision:2},roster:[{}],enrollments:[{id,studentId:id,classId:selector.classId,status:'active'}]}},
   reports:[],releases:[]};
  state.query=async sql=>{state.events.push(['sql',sql]);assert.doesNotMatch(sql,/^(INSERT|UPDATE|DELETE|TRUNCATE)/);
-  if(sql.includes('public.students'))return[{firstName:'Fixture',lastName:'Pupil'}];
+  if(sql.includes('public.students'))return state.labels??[{id,firstName:'Fixture',lastName:'Pupil'}];
   if(sql.includes('public.report_cards'))return state.reports;
   if(sql.includes('public.report_card_releases'))return state.releases;
   throw Error('Unexpected workspace read');};
@@ -114,7 +122,78 @@ test('actual workspace fails closed on an unverified source and conflicting live
  try{await withEnv(async()=>{
   const source=state.source;state.source={ok:false,code:'stale_source'};
   assert.deepEqual(await f.module.readLocalStagingWorkspace('primary5'),{ok:false,code:'unavailable'});assert.equal(state.events.some(e=>e[0]==='sql'),false);
-  state.source=source;state.reports=[{reportId:id,studentId:id,enrollmentId:id,version:4,stage:'published',returnReason:null}];state.releases=[{id},{id}];
+  state.source=source;state.reports=[{reportId:id,studentId:id,enrollmentId:id,version:4,stage:'published',returnReason:null}];state.releases=[{id,reportId:id},{id,reportId:id}];
   assert.deepEqual(await f.module.readLocalStagingWorkspace('primary5'),{ok:false,code:'unavailable'});
  });}finally{f.close();}
+});
+test('workspace batches complete pupil labels and active releases into a fixed three detail queries',async()=>{
+ const state=workspaceState(),selector=policy.stagingSelector('primary5');
+ const ids=[id,'00000000-0000-4000-8000-000000000002','00000000-0000-4000-8000-000000000003'];
+ state.source.input.enrollments=ids.map(id=>({id,studentId:id,classId:selector.classId,status:'active'}));
+ state.labels=ids.map((id,i)=>({id,firstName:'Fixture',lastName:'Pupil '+i}));
+ state.reports=ids.map(id=>({reportId:id,studentId:id,enrollmentId:id,version:1,stage:'draft',returnReason:null}));
+ const f=await load('src/server/academics/report-card-staging-workspace.ts',state);
+ try{await withEnv(async()=>{const r=await f.module.readLocalStagingWorkspace('primary5');assert.equal(r.ok,true);assert.equal(r.workspace.pupils.length,3);assert.equal(r.workspace.reports.length,3);assert.equal(state.events.filter(e=>e[0]==='sql').length,3);});}finally{f.close();}
+});
+test('batched reads reject duplicate/missing pupil labels and foreign live releases',async()=>{
+ for(const mutation of ['labels','release']){
+  const state=workspaceState();
+  if(mutation==='labels')state.labels=[];
+  else{state.reports=[{reportId:id,studentId:id,enrollmentId:id,version:1,stage:'draft',returnReason:null}];state.releases=[{id,reportId:'foreign'}];}
+  const f=await load('src/server/academics/report-card-staging-workspace.ts',state);
+  try{await withEnv(async()=>assert.deepEqual(await f.module.readLocalStagingWorkspace('primary5'),{ok:false,code:'unavailable'}));}finally{f.close();}
+ }
+});
+function resultState(){
+ const selector=policy.stagingSelector('primary5'),original=createApprovedSnapshotFixture();
+ const replacements={school:schoolId,class:selector.classId,session:selector.sessionId,term:selector.termId,report:id,roster:'00000000-0000-4000-8000-000000000003'};
+ const f=JSON.parse(JSON.stringify(original),(_k,v)=>typeof v==='string'?(replacements[v]??v):v);
+ const built=materializeAssessmentSource(f.docs.input);assert.ok(built.ok);
+ f.docs.source.sourceManifest=JSON.parse(built.materialized.manifest.canonicalJson);f.docs.source.contentHash=built.materialized.manifest.sha256;
+ for(const final of f.docs.finals){const selected=built.materialized.subjects.find(s=>s.rosterId===final.rosterId);final.results=JSON.parse(selected.results.canonicalJson);final.contentHash=selected.results.sha256;}
+ const approved=buildApprovedReportSnapshot(f.binding,f.docs);assert.ok(approved.ok);
+ const state={events:[],identity:{schoolId},lockedRole:'admin',denied:false,assignment:true,report:{...f.binding,version:4,stage:'published'},
+  snapshot:{id:'snapshot',schoolId,reportId:id,reportVersion:3,enrollmentId:f.binding.enrollmentId,assessmentScopeId:f.binding.assessmentScopeId,assessmentSourceVersionId:f.binding.assessmentSourceVersionId,assessmentRevision:f.binding.assessmentRevision,canonicalPayload:JSON.parse(approved.snapshot.canonicalJson),contentHash:approved.snapshot.sha256,sourceVersions:approved.snapshot.sourceVersions},
+  source:f.docs.source,finals:f.docs.finals,reviews:f.docs.reviews,
+  audit:{actorMembershipId:f.binding.approvedBy,snapshotId:'snapshot',snapshotReportVersion:3,afterVersion:3,occurredAt:f.binding.approvedAt},
+  releases:[{id:'release',schoolId,reportId:id,reportVersion:4,snapshotId:'snapshot',snapshotReportVersion:3,revokedAt:null}]};
+ state.query=async sql=>{state.events.push(['sql',sql]);assert.doesNotMatch(sql,/^(INSERT|UPDATE|DELETE|TRUNCATE)/);
+  if(sql.includes('FROM public.report_cards'))return[state.report];
+  if(sql.includes('FROM public.teacher_class_assignments'))return state.assignment?[{id:'assignment'}]:[];
+  if(sql.includes('FROM public.assessment_teacher_subjects'))return state.snapshot.sourceVersions.map(v=>({rosterId:v.rosterId}));
+  if(sql.includes('FROM public.report_card_snapshots'))return[state.snapshot];
+  if(sql.includes('FROM public.assessment_source_versions'))return[state.source];
+  if(sql.includes('FROM public.assessment_finalizations'))return state.finals;
+  if(sql.includes('FROM public.assessment_teacher_reviews'))return state.reviews;
+  if(sql.includes('FROM public.report_card_audit'))return[state.audit];
+  if(sql.includes('FROM public.report_card_releases'))return state.releases;
+  if(sql.includes('FROM public.students'))return[{firstName:'Current',lastName:'Directory label'}];
+  throw Error('Unexpected approved result query');};return state;
+}
+test('actual approved reader reconstructs only the pinned old source and returns selected result plus current directory label',async()=>{
+ for(const role of ['admin','teacher']){
+  const state=resultState();state.lockedRole=role;const f=await load('src/server/academics/report-card-staging-result.ts',state);
+  try{await withEnv(async()=>{const r=await f.module.readLocalStagingResult(id);assert.equal(r.ok,true);assert.equal(r.directoryName,'Current Directory label');assert.equal(r.view.subjects.length,1);assert.equal(r.view.approvedVersion,3);assert.equal(state.events.some(e=>e[0]==='sql'&&e[1].includes('assessment_scores')),false);});}finally{f.close();}
+ }
+});
+test('actual approved reader denies missing identity, changed complete authority and ended teacher assignment before snapshot reads',async()=>{
+ for(const change of ['identity','boundary','assignment']){
+  const state=resultState();if(change==='identity')state.identity=null;if(change==='boundary')state.denied=true;if(change==='assignment'){state.lockedRole='teacher';state.assignment=false;}
+  const f=await load('src/server/academics/report-card-staging-result.ts',state);
+  try{await withEnv(async()=>{assert.deepEqual(await f.module.readLocalStagingResult(id),{ok:false,code:'forbidden'});assert.equal(state.events.some(e=>e[0]==='sql'&&e[1].includes('report_card_snapshots')),false);});}finally{f.close();}
+ }
+});
+test('actual approved reader rejects withdrawn reports, substituted snapshots and revoked releases',async()=>{
+ for(const change of ['withdrawn','snapshot','release']){
+  const state=resultState();if(change==='withdrawn')state.report.stage='draft';if(change==='snapshot')state.snapshot.enrollmentId='substituted';if(change==='release')state.releases[0].revokedAt='2026-10-20T00:00:00Z';
+  const f=await load('src/server/academics/report-card-staging-result.ts',state);
+  try{await withEnv(async()=>{const r=await f.module.readLocalStagingResult(id);assert.equal(r.ok,false);});}finally{f.close();}
+ }
+});
+test('actual approved reader denies a teacher without all pinned subject links before source document reads',async()=>{
+ const state=resultState();state.lockedRole='teacher';
+ state.snapshot.sourceVersions=[{rosterId:'00000000-0000-4000-8000-000000000003'}];
+ const prior=state.query;state.query=sql=>sql.includes('FROM public.assessment_teacher_subjects')?Promise.resolve([]):prior(sql);
+ const f=await load('src/server/academics/report-card-staging-result.ts',state);
+ try{await withEnv(async()=>{assert.deepEqual(await f.module.readLocalStagingResult(id),{ok:false,code:'forbidden'});assert.equal(state.events.some(e=>e[0]==='sql'&&e[1].includes('assessment_source_versions')),false);});}finally{f.close();}
 });
