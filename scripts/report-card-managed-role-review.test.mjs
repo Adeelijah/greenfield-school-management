@@ -94,3 +94,16 @@ test('fixed offline exporter writes exclusive review files without a database or
   assert.match(source, /databaseExecutionPerformed: false/);
   assert.doesNotMatch(source, /process\.env|postgres\(|\.unsafe\(|getDatabase|DATABASE_URL/);
 });
+
+test('staff lookup candidate clears managed API/application defaults before granting only authenticated execution', () => {
+  const sql = read('docs/staging/STAGING_STAFF_ACCOUNT_INSTALL.review.sql');
+  const revoke = 'REVOKE ALL ON FUNCTION public.resolve_staging_staff_account() FROM PUBLIC, anon, authenticated, service_role, greenfield_app, greenfield_report_card_runtime;';
+  const grant = 'GRANT EXECUTE ON FUNCTION public.resolve_staging_staff_account() TO authenticated;';
+  assert.ok(sql.includes(revoke)); assert.ok(sql.indexOf(revoke) < sql.indexOf(grant));
+  assert.match(sql, /ARRAY\['anon','service_role','greenfield_app','greenfield_report_card_runtime'\]/);
+  assert.match(sql, /has_function_privilege\(checked_role,'public.resolve_staging_staff_account\(\)','EXECUTE'\)/);
+  assert.match(sql, /IF NOT pg_catalog.has_function_privilege\('authenticated'/);
+  assert.doesNotMatch(sql, /(?:ALTER|DROP|CREATE OR REPLACE) FUNCTION public.resolve_report_card_actor/);
+  assert.match(sql, /REVOKE greenfield_report_card_authority_owner FROM postgres GRANTED BY postgres/);
+  assert.ok(sql.trimEnd().endsWith('COMMIT;'));
+});

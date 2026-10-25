@@ -78,19 +78,24 @@ END
 $function$;
 ALTER FUNCTION public.resolve_staging_staff_account()
   OWNER TO greenfield_report_card_authority_owner;
-REVOKE ALL ON FUNCTION public.resolve_staging_staff_account() FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.resolve_staging_staff_account() FROM PUBLIC, anon, authenticated, service_role, greenfield_app, greenfield_report_card_runtime;
 GRANT EXECUTE ON FUNCTION public.resolve_staging_staff_account() TO authenticated;
 REVOKE CREATE ON SCHEMA public FROM greenfield_report_card_authority_owner;
 REVOKE greenfield_report_card_authority_owner FROM postgres GRANTED BY postgres;
 -- The module-specific report resolver, its role filter, policies and grants are unchanged.
 DO $checks$
+DECLARE checked_role text;
 BEGIN
  IF EXISTS (SELECT 1 FROM public.resolve_staging_staff_account()) THEN
   RAISE EXCEPTION 'Unbound SQL editor session must resolve no staff actor';
  END IF;
- IF pg_catalog.has_function_privilege('anon','public.resolve_staging_staff_account()','EXECUTE') OR
-    pg_catalog.has_function_privilege('greenfield_app','public.resolve_staging_staff_account()','EXECUTE') THEN
-  RAISE EXCEPTION 'Unexpected staff lookup execution access';
+ FOREACH checked_role IN ARRAY ARRAY['anon','service_role','greenfield_app','greenfield_report_card_runtime'] LOOP
+  IF pg_catalog.has_function_privilege(checked_role,'public.resolve_staging_staff_account()','EXECUTE') THEN
+   RAISE EXCEPTION 'Unexpected staff lookup execution access: %', checked_role;
+  END IF;
+ END LOOP;
+ IF NOT pg_catalog.has_function_privilege('authenticated','public.resolve_staging_staff_account()','EXECUTE') THEN
+  RAISE EXCEPTION 'Missing authenticated staff lookup access';
  END IF;
 END $checks$;
 COMMIT;
