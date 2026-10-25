@@ -20,8 +20,10 @@ if(!url||process.env.REPORT_CARD_TEST_CONFIRM!=='DISPOSABLE_REPORT_CARD_TEST_ONL
  const date=offset=>new Date(Date.parse(today+'T12:00:00Z')-offset*86400000).toISOString().slice(0,10);
  const cmd=(key,offset=1)=>({action:'save_register',classKey:'primary5',date:date(offset),expectedVersion:0,operationKey:key,reason:null,marks:{[ids.pupil1]:'present',[ids.pupil2]:'late'}});
  const run=async(tx,statements)=>{for(const statement of statements)await tx.unsafe(statement);};
- const db=client=>({async begin(work){return client.begin(async tx=>{await tx.unsafe('SET LOCAL ROLE "'+plan.names.worker+'"');return work({unsafe:(sql,params)=>tx.unsafe(sql,params)});});}});
- const save=(client,command,actor=ids.teacherAuth)=>executeAttendanceFixture(db(client),schema,async()=>({authUserId:actor}),command);
+ let lastSqlCode='none';
+ const safeSqlCode=error=>typeof error?.code==='string'&&/^[A-Z0-9]{5}$/.test(error.code)?error.code:'unavailable';
+ const db=client=>({async begin(work){return client.begin(async tx=>{await tx.unsafe('SET LOCAL ROLE "'+plan.names.worker+'"');return work({unsafe:async(sql,params)=>{try{return await tx.unsafe(sql,params);}catch(error){lastSqlCode=safeSqlCode(error);throw error;}}});});}});
+ const save=async(client,command,actor=ids.teacherAuth)=>{lastSqlCode='none';return executeAttendanceFixture(db(client),schema,async()=>({authUserId:actor}),command);};
  const snapshot=async()=>{
   const state={};for(const table of ['attendance_registers','attendance_marks','attendance_audit','attendance_receipts'])state[table]=await admin.unsafe('SELECT to_jsonb(x) AS row FROM '+t(table)+' x ORDER BY to_jsonb(x)::text');return JSON.stringify(state);
  };
@@ -53,18 +55,23 @@ if(!url||process.env.REPORT_CARD_TEST_CONFIRM!=='DISPOSABLE_REPORT_CARD_TEST_ONL
    }
    await tx.unsafe('INSERT INTO '+t('teacher_class_assignments')+' VALUES($1,$2,$3,$4,$5,NULL)',[ids.assignment,ids.school,ids.teacher,ids.klass,ids.session]);
   });
-  phase='save-replay-correction';
+  phase='first-save-apply';
   assert.deepEqual(await save(one,cmd('first-save-01')),{ok:true,kind:'applied',version:1});
+  phase='first-save-replay';
   assert.deepEqual(await save(one,cmd('first-save-01')),{ok:true,kind:'replay',version:1});
   const first=await snapshot();
+  phase='enrollment-binding-constraint';
   const wrongRegister=randomUUID();
   await assert.rejects(admin.begin(async tx=>{await tx.unsafe('INSERT INTO '+t('attendance_registers')+' VALUES($1,$2,$3,$4,$5::date,1)',[wrongRegister,ids.school,ids.otherClass,ids.session,date(12)]);await tx.unsafe('INSERT INTO '+t('attendance_marks')+' VALUES($1,$2,$3,$4,$5,$6,$7::date,\'present\')',[ids.school,wrongRegister,ids.pupil1,ids.enrollment1,ids.otherClass,ids.session,date(12)]);}),error=>error.code==='23503');
   assert.equal(await snapshot(),first);
+  phase='changed-key-and-stale-version';
   assert.deepEqual(await save(one,{...cmd('first-save-01'),marks:{[ids.pupil1]:'absent',[ids.pupil2]:'late'}}),{ok:false,code:'conflict'});
   assert.deepEqual(await save(one,cmd('competing-key')),{ok:false,code:'conflict'});
   assert.equal(await snapshot(),first);
+  phase='reasoned-correction-save';
   const correction={...cmd('correction-01'),expectedVersion:1,reason:'Verified late arrival',marks:{[ids.pupil1]:'late',[ids.pupil2]:'present'}};
   assert.deepEqual(await save(one,correction,ids.adminAuth),{ok:true,kind:'applied',version:2});
+  phase='correction-persisted-history';
   assert.equal((await admin.unsafe('SELECT count(*)::integer AS n FROM '+t('attendance_audit')))[0].n,2);
   const savedMarks=await admin.unsafe('SELECT student_id,status FROM '+t('attendance_marks')+' ORDER BY student_id');
   assert.deepEqual(Object.fromEntries(savedMarks.map(r=>[r.student_id,r.status])),correction.marks);
@@ -104,7 +111,7 @@ if(!url||process.env.REPORT_CARD_TEST_CONFIRM!=='DISPOSABLE_REPORT_CARD_TEST_ONL
   // Pair uses separate physical sessions and a gate held after a completed save.
   phase='independent-session-race';
   const paired=cmd('paired-save-01',10);let release;let signal;const ready=new Promise(resolve=>{signal=resolve;});const held=new Promise(resolve=>{release=resolve;releases.push(resolve);});
-  const firstPair=one.begin(async tx=>{await tx.unsafe('SET LOCAL ROLE "'+plan.names.worker+'"');const rows=await tx.unsafe('SELECT '+t('save_attendance')+'($1::uuid,$2::jsonb) AS outcome',[ids.teacherAuth,JSON.stringify(paired)]);signal();await held;return rows[0].outcome;});
+  const firstPair=one.begin(async tx=>{await tx.unsafe('SET LOCAL ROLE "'+plan.names.worker+'"');const rows=await tx.unsafe('SELECT '+t('save_attendance')+'($1::uuid,$2::text::jsonb) AS outcome',[ids.teacherAuth,JSON.stringify(paired)]);signal();await held;return rows[0].outcome;});
   await deadline(Promise.race([ready,firstPair.then(()=>{throw Error('Pair ended before rendezvous');})]),'first attendance save');const pid=(await two.unsafe('SELECT pg_backend_pid() AS pid'))[0].pid;
   const parentPid=(await parentClient.unsafe('SELECT pg_backend_pid() AS pid'))[0].pid;
   const secondPair=save(two,paired);
@@ -137,7 +144,7 @@ if(!url||process.env.REPORT_CARD_TEST_CONFIRM!=='DISPOSABLE_REPORT_CARD_TEST_ONL
    await assert.rejects(admin.unsafe(query),error=>error.code==='42501');
   }
   console.log('PASS: worker has no direct table or helper access; zero-row audit/receipt mutations and truncate remain denied');
- }catch(error){console.error('FAIL: attendance disposable rehearsal; phase='+phase+'; code='+(typeof error?.code==='string'?error.code:'assertion_or_setup'));process.exitCode=1;
+ }catch(error){console.error('FAIL: attendance disposable rehearsal; phase='+phase+'; code='+(typeof error?.code==='string'?error.code:'assertion_or_setup')+'; sql_code='+lastSqlCode+'; actual_outcome='+(error?.actual?.ok===false&&['invalid','forbidden','conflict','unavailable'].includes(error.actual.code)?error.actual.code:'unavailable'));process.exitCode=1;
  }finally{
   for(const release of releases)release();
   await Promise.allSettled([one.end({timeout:2}),two.end({timeout:2}),parentClient.end({timeout:2})]);

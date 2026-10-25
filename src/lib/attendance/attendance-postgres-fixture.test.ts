@@ -28,3 +28,19 @@ test('malformed SQL successes and safe denials abort the owning transaction',asy
  }
 });
 test('database and identity exceptions expose no raw error detail',async()=>{const f=fixture();assert.deepEqual(await executeAttendanceFixture(f.db,schema,async()=>{throw Error('secret');},command()),{ok:false,code:'unavailable'});const db:AttendanceDatabase={async begin(){throw Error('password');}};assert.deepEqual(await executeAttendanceFixture(db,schema,async()=>({authUserId:auth}),command()),{ok:false,code:'unavailable'});});
+
+
+test('serialized attendance commands use text transport before JSONB decoding',async()=>{
+ // postgres.js uses the inferred parameter type to select its serializer. A
+ // string inferred as JSONB is JSON.stringify-ed again; text preserves it.
+ const received:unknown[]=[];
+ const db:AttendanceDatabase={async begin(work){return work({async unsafe(sql,params){
+  if(sql.includes('current_user'))return[{role:schema+'_worker'}];
+  const serialized=params![1];
+  const wire=sql.includes('$2::text::jsonb')?String(serialized):JSON.stringify(serialized);
+  const parsed:unknown=JSON.parse(wire);received.push(parsed);
+  return[{outcome:typeof parsed==='object'&&parsed!==null?{ok:true,kind:'applied',version:1}:{ok:false,code:'invalid'}}];
+ }});}};
+ assert.deepEqual(await executeAttendanceFixture(db,schema,async()=>({authUserId:auth}),command()),{ok:true,kind:'applied',version:1});
+ assert.deepEqual(received,[command()]);
+});

@@ -32,7 +32,7 @@ export async function executeAttendanceFixture(
   return await db.begin(async tx=>{
    const role=await tx.unsafe('SELECT current_user AS role');
    if(role.length!==1||role[0]!.role!==schema+'_worker')throw new AttendanceAbort({ok:false,code:'forbidden'});
-   const rows=await tx.unsafe('SELECT "'+schema+'"."save_attendance"($1::uuid,$2::jsonb) AS outcome',[authUserId,JSON.stringify(command)]);
+   const rows=await tx.unsafe('SELECT "'+schema+'"."save_attendance"($1::uuid,$2::text::jsonb) AS outcome',[authUserId,JSON.stringify(command)]);
    const outcome=rows.length===1?decode(rows[0]!.outcome):null;
    if(!outcome)throw new AttendanceAbort({ok:false,code:'unavailable'});
    if(!outcome.ok)throw new AttendanceAbort(outcome);
