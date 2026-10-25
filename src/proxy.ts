@@ -7,7 +7,7 @@ export async function proxy(request: NextRequest) {
   if (isStagingPath(request.nextUrl.pathname)) return stagingProxy(request);
   if (stagingUiEnabled(process.env)) {
     const destination = request.nextUrl.clone();
-    destination.pathname = '/staging/report-cards'; destination.search = '';
+    destination.pathname = '/staging/dashboard'; destination.search = '';
     return NextResponse.redirect(destination);
   }
   if (

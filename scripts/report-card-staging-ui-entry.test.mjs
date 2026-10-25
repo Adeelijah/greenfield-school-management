@@ -21,6 +21,7 @@ async function load(path,state){
  const context=`globalThis[Symbol.for(${JSON.stringify(key)})]`,url=new URL('../'+path,import.meta.url);url.searchParams.set('test',token);
  const mocks=new Map([
   ['server-only','export {};'],
+  ['@/lib/supabase/staging-proxy',`export const stagingProxy=request=>${context}.delegate(request);`],
   ['@/lib/academics/staging-staff-account',`export const decodeStagingStaffAccount=${context}.staffDecoder;`],
   ['next/cache',`export function revalidatePath(p){${context}.events.push(['revalidate',p]);}`],
   ['next/navigation',`export function redirect(p){throw Object.assign(new Error('redirect'),{destination:p});} export function notFound(){throw Object.assign(new Error('not-found'),{notFound:true});}`],
@@ -272,4 +273,13 @@ test('actual staff lookup denies provider and RPC errors without querying legacy
   const state={events:[],client:{auth:{async getUser(){return{data:{user:{id:'auth'}},error:mode==='auth'?{}:null};}},async rpc(){state.events.push(['rpc']);return{data:null,error:{}};}}};const f=await load('src/server/accounts/staging-staff-account.ts',state);
   try{await withEnv(async()=>{assert.equal(await f.module.readStagingStaffAccount(),null);assert.equal(state.events.some(e=>e[0]==='rpc'),mode==='rpc');},mode==='disabled'?{GREENFIELD_STAGING_UI:''}:{});}finally{f.close();}
  }
+});
+
+test('actual root proxy sends ordinary local-staging entry paths to dashboard and delegates explicit staging pages',async()=>{
+ const state={Response,events:[],delegate:async req=>{state.events.push(req.nextUrl.pathname);return{delegated:true};}},f=await load('src/proxy.ts',state);
+ try{await withEnv(async()=>{
+  for(const path of ['/', '/login', '/students?next=foreign']){const r=await f.module.proxy(request(path));assert.equal(r.destination,'/staging/dashboard');}
+  for(const path of ['/staging/dashboard','/staging/report-cards','/staging/login'])assert.deepEqual(await f.module.proxy(request(path)),{delegated:true});
+  assert.deepEqual(state.events,['/staging/dashboard','/staging/report-cards','/staging/login']);
+ });}finally{f.close();}
 });
