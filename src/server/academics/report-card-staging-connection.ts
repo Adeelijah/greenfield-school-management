@@ -30,8 +30,16 @@ export function getLocalStagingDatabase(): SqlDatabase {
           await tx.unsafe("SET LOCAL statement_timeout='60s'");
           await tx.unsafe("SET LOCAL lock_timeout='5s'");
           return work({ unsafe: async (query, params) => {
-            const rows = await tx.unsafe(query, params as Parameters<typeof tx.unsafe>[1]);
-            return Array.from(rows);
+            try {
+              const rows = await tx.unsafe(query, params as Parameters<typeof tx.unsafe>[1]);
+              return Array.from(rows);
+            } catch (error) {
+              const code = error && typeof error === 'object' && 'code' in error && typeof error.code === 'string' && /^[A-Za-z0-9_]{1,64}$/.test(error.code) ? error.code : 'unavailable';
+              const relation = /\bFROM\s+(?:"public"\.|public\.)(?:"([a-z_]+)"|([a-z_]+))/.exec(query);
+              const operation = relation?.[1] ?? relation?.[2] ?? (query.includes('pg_catalog.pg_roles') ? 'role_catalog' : 'transaction');
+              console.warn(`Greenfield staging SQL: operation=${operation}; code=${code}`);
+              throw error;
+            }
           } });
         }) as T;
       } finally { await client.end({ timeout: 5 }); }

@@ -100,6 +100,15 @@ test('actual workspace uses verified source and refreshed role, and rejects repo
   assert.deepEqual(await f.module.readLocalStagingWorkspace('primary5'),{ok:false,code:'unavailable'});
  });}finally{f.close();}
 });
+test('actual workspace permits current admin with complete source and no teacher assignment requirement',async()=>{
+ const state=workspaceState();state.lockedRole='admin';
+ const f=await load('src/server/academics/report-card-staging-workspace.ts',state);
+ try{await withEnv(async()=>{
+  const result=await f.module.readLocalStagingWorkspace('primary5');
+  assert.equal(result.ok,true);assert.equal(result.workspace.role,'admin');assert.equal(result.workspace.pupils.length,1);
+  assert.equal(state.events.some(e=>e[0]==='sql'&&e[1].includes('teacher_class_assignments')),false);
+ });}finally{f.close();}
+});
 test('actual workspace fails closed on an unverified source and conflicting live releases',async()=>{
  const state=workspaceState(),f=await load('src/server/academics/report-card-staging-workspace.ts',state);
  try{await withEnv(async()=>{

@@ -91,3 +91,19 @@ No destructive cleanup is provided. Historical reports/releases remain immutable
 Printed result rendering, guardian delivery, real academic entry/finalization,
 performance work, hosted staging configuration and launch checks remain separate
 milestones. This page reports workflow state, not a parent-visible result sheet.
+
+## Browser observations: admin read failure under investigation
+
+Operator screenshots show the teacher Primary 5 workspace with 3 pupils, 2
+finalized subjects and revision 2 in read-only mode. The bursar page correctly
+reports academic access unavailable. The admin screenshot reports unable to load
+report cards: this is an unresolved load failure, not successful admin/browser QA.
+
+Added local server-terminal diagnostics for canonical-source status, row binding,
+release binding, transaction boundary and bounded SQL error codes/relation labels.
+No raw SQL, parameter values, SDK errors, pupil rows, actor IDs or credentials are
+logged or added to page responses. Authorization, source validation, role grants
+and write flags remain unchanged. A new actual-workspace admin case plus the
+other focused UI checks pass (16 checks). Full installed verification remains the
+operator gate; expected allowlist becomes 595 tests. Refresh admin in read-only
+mode and use the bounded terminal code to investigate before enabling writes.
