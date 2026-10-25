@@ -18,10 +18,10 @@ export default async function StagingResultPage({ params }: { params: Promise<{ 
   if (verified.error || !verified.data.user) redirect('/staging/login');
   const { reportId } = await params;
   const result = await readLocalStagingResult(reportId);
-  if (!result.ok) return <main className="content staging-result"><Link href="/staging/report-cards" prefetch={false}>Back to report cards<StagingLinkProgress /></Link><section className="card"><h1>Result unavailable</h1><p>{result.code === 'forbidden' ? 'This report is not approved, has been withdrawn, or your current account does not have access.' : 'The approved result could not be verified. No replacement result has been generated.'}</p></section></main>;
+  if (!result.ok) return <main className="content staging-result"><Link href="/staging/reports" prefetch={false}>Back to report cards<StagingLinkProgress /></Link><section className="card"><h1>Result unavailable</h1><p>{result.code === 'forbidden' ? 'This report is not approved, has been withdrawn, or your current account does not have access.' : 'The approved result could not be verified. No replacement result has been generated.'}</p></section></main>;
   const { view } = result;
   return <main className="content staging-result">
-    <nav className="result-tools" aria-label="Report tools"><Link href="/staging/report-cards" prefetch={false}>Back to report cards<StagingLinkProgress /></Link><StagingReportPrint /></nav>
+    <nav className="result-tools" aria-label="Report tools"><Link href="/staging/reports" prefetch={false}>Back to report cards<StagingLinkProgress /></Link><StagingReportPrint /></nav>
     <article className="card result-paper" aria-label="Approved fictional result">
       <header><p className="result-test-mark">TEST COPY · NOT AN OFFICIAL RESULT</p><h1>Greenfield Staging</h1><h2>Student progress report</h2><p>{view.stage === 'published' ? 'Published in staging' : 'Approved · not published'}</p></header>
       <dl className="result-details"><div><dt>Directory name (current)</dt><dd>{result.directoryName}</dd></div><div><dt>Class</dt><dd>{result.classLabel}</dd></div><div><dt>Academic session</dt><dd>{view.sessionStartsOn} to {view.sessionEndsOn}</dd></div><div><dt>Term dates</dt><dd>{view.termStartsOn} to {view.termEndsOn}</dd></div></dl>

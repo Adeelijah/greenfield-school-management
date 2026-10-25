@@ -1,16 +1,17 @@
-import type { StagingWorkspace } from '../academics/report-card-staging-ui';
-export type DashboardRecord = { id: string; name: string; klass: string; status: string; balance: number | null; attendance: string; reportStatus: string; method: string; amount: number | null; receipt: string };
-export type StagingDashboardData = { records: DashboardRecord[]; metrics: [string, string][]; tasks: string[]; scope: string };
+import type { StagingReportRow, StagingWorkspace } from '../academics/report-card-staging-ui';
+export type DashboardRecord = { id: string; name: string; klass: string; status: string; balance: number | null; attendance: string; reportStatus: string; method: string; amount: number | null; receipt: string; classKey: string; enrollmentId: string; reportId: string | null; reportVersion: number | null; reportStage: StagingReportRow['stage'] | 'none'; returnReason: string | null };
+export type StagingDashboardData = { records: DashboardRecord[]; metrics: [string, string][]; tasks: string[]; scope: string; classes: { key: string; label: string; pupils: number; reports: number; awaitingReview: number; notSubmitted: number; subjects: number; revision: number }[] };
 export const dashboardReportLabels = { draft: 'Draft', submitted: 'Awaiting review', returned: 'Returned', approved: 'Approved', published: 'Published' };
 /** Projection only: caller supplies separately authorized class indexes. This
  * is not a school-wide count or proof of finalized academic content. */
-export function projectStagingDashboard(role: 'admin' | 'teacher', classes: { label: string; workspace: StagingWorkspace }[]): StagingDashboardData | null {
-  const records: DashboardRecord[] = [], seen = new Set<string>();
+export function projectStagingDashboard(role: 'admin' | 'teacher', classes: { key: string; label: string; workspace: StagingWorkspace }[]): StagingDashboardData | null {
+  const records: DashboardRecord[] = [], classSummaries: StagingDashboardData['classes'] = [], seen = new Set<string>();
   let submitted = 0, pending = 0, published = 0;
   for (const c of classes) {
     const w = c.workspace;
-    if (w.role !== role || !c.label || new Set(w.reports.map(r => r.enrollmentId)).size !== w.reports.length) return null;
+    if (w.role !== role || !['primary5', 'creche'].includes(c.key) || classSummaries.some(s => s.key === c.key) || !c.label || new Set(w.reports.map(r => r.enrollmentId)).size !== w.reports.length) return null;
     if (w.reports.some(r => !w.pupils.some(p => p.enrollmentId === r.enrollmentId && p.studentId === r.studentId))) return null;
+    classSummaries.push({ key: c.key, label: c.label, pupils: w.pupils.length, reports: w.reports.length, awaitingReview: w.reports.filter(r => r.stage === 'submitted').length, notSubmitted: w.pupils.length - w.reports.filter(r => !['draft', 'returned'].includes(r.stage)).length, subjects: w.subjectCount, revision: w.assessmentRevision });
     for (const p of w.pupils) {
       if (seen.has(p.studentId)) return null;
       seen.add(p.studentId);
@@ -18,10 +19,10 @@ export function projectStagingDashboard(role: 'admin' | 'teacher', classes: { la
       if (!report || ['draft', 'returned'].includes(report.stage)) pending++;
       if (report?.stage === 'submitted') submitted++;
       if (report?.stage === 'published') published++;
-      records.push({ id: p.studentId, name: p.label, klass: c.label, status: 'Active enrollment', balance: null, attendance: 'Not connected', reportStatus: report ? dashboardReportLabels[report.stage] : 'Not created', method: 'Not connected', amount: null, receipt: '' });
+      records.push({ id: p.studentId, name: p.label, klass: c.label, status: 'Active enrollment', balance: null, attendance: 'Not connected', reportStatus: report ? dashboardReportLabels[report.stage] : 'Not created', method: 'Not connected', amount: null, receipt: '', classKey: c.key, enrollmentId: p.enrollmentId, reportId: report?.reportId ?? null, reportVersion: report?.version ?? null, reportStage: report?.stage ?? 'none', returnReason: report?.returnReason ?? null });
     }
   }
-  return { records, metrics: [[String(records.length), 'Pupils in available test classes'], [String(classes.length), 'Available test classes'], [String(role === 'admin' ? submitted : pending), role === 'admin' ? 'Reports awaiting review' : 'Reports not submitted'], [String(published), 'Published test reports']],
+  return { records, classes: classSummaries, metrics: [[String(records.length), 'Pupils in available test classes'], [String(classes.length), 'Available test classes'], [String(role === 'admin' ? submitted : pending), role === 'admin' ? 'Reports awaiting review' : 'Reports not submitted'], [String(published), 'Published test reports']],
     tasks: role === 'admin' ? [`${submitted} reports awaiting review`, `${published} published test reports`] : [`${pending} reports not submitted`, `${submitted} reports awaiting administrator review`],
     scope: 'Available fictional staging classes · TEST Term 1 · 2026/27. Each class is verified independently; these are not school-wide totals.' };
 }

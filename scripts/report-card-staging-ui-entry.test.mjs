@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import { registerHooks, stripTypeScriptTypes } from 'node:module';
 import { readFileSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
+import * as academicPages from '../src/lib/accounts/staging-academic-pages.ts';
 import { projectStagingDashboard } from '../src/lib/accounts/staging-dashboard.ts';
 import { decodeStagingStaffAccount } from '../src/lib/academics/staging-staff-account.ts';
 import * as policy from '../src/lib/academics/report-card-staging-ui.ts';
@@ -17,11 +18,14 @@ const env={NODE_ENV:'development',GREENFIELD_STAGING_UI:'LOCAL_STAGING_REPORTS_O
 async function withEnv(work,changes={}){const previous=Object.fromEntries(Object.keys(env).map(k=>[k,process.env[k]]));Object.assign(process.env,env,changes);try{return await work();}finally{for(const[k,v]of Object.entries(previous))if(v===undefined)delete process.env[k];else process.env[k]=v;}}
 function form(extra={}){const f=new FormData();for(const[k,v]of Object.entries({action:'submit',operationKey:'intent',reportId:id,expectedVersion:'1',...extra}))f.append(k,v);return f;}
 async function load(path,state){
- state.dashboardProjection=projectStagingDashboard;state.staffDecoder=decodeStagingStaffAccount;state.decoders=fixtureAssessmentDecoders;state.approvedPolicy=approvedPolicy;
+ state.academicPages=academicPages;state.dashboardProjection=projectStagingDashboard;state.staffDecoder=decodeStagingStaffAccount;state.decoders=fixtureAssessmentDecoders;state.approvedPolicy=approvedPolicy;
  const token=randomUUID(),key='greenfield-staging-ui-'+token;globalThis[Symbol.for(key)]=state;
  const context=`globalThis[Symbol.for(${JSON.stringify(key)})]`,url=new URL('../'+path,import.meta.url);url.searchParams.set('test',token);
  const mocks=new Map([
   ['server-only','export {};'],
+  ['@/lib/accounts/staging-academic-pages',`export const canOpenAcademicPage=${context}.academicPages.canOpenAcademicPage;`],
+  ['@/server/accounts/staging-staff-account',`export async function readStagingStaffAccount(){${context}.events.push(['staff-role']);return ${context}.staffRole;}`],
+  ['@/server/accounts/staging-dashboard',`export async function readStagingDashboard(role){${context}.events.push(['academic-data',role]);return ${context}.dashboard;}`],
   ['@/lib/accounts/staging-dashboard',`export const projectStagingDashboard=${context}.dashboardProjection;`],
   ['@/server/academics/report-card-staging-workspace',`export const readLocalStagingWorkspace=choice=>${context}.readWorkspace(choice);`],
   ['@/lib/supabase/staging-proxy',`export const stagingProxy=request=>${context}.delegate(request);`],
@@ -292,5 +296,24 @@ test('actual dashboard adapter excludes bursar academic reads and rejects change
   const state={calls:[],async readWorkspace(choice){state.calls.push(choice);if(mode==='failed')return{ok:false,code:'unavailable'};if(mode==='teacher'&&state.calls.length===1)return{ok:false,code:'forbidden'};return{ok:true,workspace:{role:mode==='changed'?'teacher':mode==='teacher'?'teacher':'admin',pupils:[],reports:[],assessmentRevision:2,subjectCount:1}};}};
   const f=await load('src/server/accounts/staging-dashboard.ts',state);
   try{const r=await f.module.readStagingDashboard(mode==='bursar'?'bursar':mode==='teacher'?'teacher':'admin');if(mode==='teacher'){assert.ok(r);assert.equal(r.metrics[1][0],'1');}else assert.equal(r,null);if(mode==='bursar')assert.deepEqual(state.calls,[]);}finally{f.close();}
+ }
+});
+
+test('actual academic page entry authorizes each direct route before academic data reads',async()=>{
+ for(const role of ['admin','teacher','bursar'])for(const view of ['students','classes','reports']){
+  const state={events:[],staffRole:role,dashboard:{classes:[{key:'primary5'}]},client:{auth:{async getUser(){return{data:{user:{id}},error:null};}}}};
+  const f=await load('src/server/accounts/staging-academic-entry.ts',state);
+  try{await withEnv(async()=>{const r=await f.module.readStagingStaffPage(view);const allowed=academicPages.canOpenAcademicPage(role,view);assert.equal(r.kind,allowed?'ready':'not-found');assert.equal(state.events.some(e=>e[0]==='academic-data'),allowed);});}finally{f.close();}
+ }
+});
+test('actual academic page entry denies missing identities, membership and unowned class selections without role fallback',async()=>{
+ for(const mode of ['disabled','auth','membership','class','unknown-class','data-failure']){
+  const state={events:[],staffRole:mode==='membership'?null:'teacher',dashboard:mode==='data-failure'?null:{classes:[{key:'primary5'}]},client:{auth:{async getUser(){return{data:{user:mode==='auth'?null:{id}},error:null};}}}};
+  const f=await load('src/server/accounts/staging-academic-entry.ts',state);
+  try{await withEnv(async()=>{
+   const r=await f.module.readStagingStaffPage('reports',mode==='class'?'creche':mode==='unknown-class'?'foreign':'all');
+   assert.equal(r.kind,mode==='auth'?'sign-in':mode==='membership'?'unavailable':mode==='data-failure'?'ready':'not-found');
+   if(mode==='data-failure')assert.equal(r.data,null);if(['disabled','auth','membership','unknown-class'].includes(mode))assert.equal(state.events.some(e=>e[0]==='academic-data'),false);
+  },mode==='disabled'?{GREENFIELD_STAGING_UI:''}:{});}finally{f.close();}
  }
 });

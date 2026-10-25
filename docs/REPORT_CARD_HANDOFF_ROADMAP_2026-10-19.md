@@ -648,3 +648,12 @@ Separated workflow navigation from full academic readiness: the index now perfor
 - Sample records/totals are removed from signed-in dashboards. Attendance, finance and activity remain explicitly unconnected. Bursar exits before any academic reader; design-preview sample content remains separate.
 - Added gated dashboard skeleton, pure projection and server adapter. 30 focused tests, non-JSX source parsing and scoped whitespace pass. Full installed verifier and browser/live data checks remain operator-side.
 - See `docs/staging/STAGING_DASHBOARD_DATA_REVIEW.md`. No new SQL, grants, reset or password provisioning is needed. Next verify all three landing views, then continue module-specific integration.
+
+
+### Coordinated academic account-page batch — 2026-10-25
+
+- Operator requested larger batches after approving the dashboard/skeleton. Added real admin Students, teacher My Classes and admin/teacher Report Cards routes, shared server entry and actual sidebar navigation.
+- Reused the existing verified fictional class indexes. Directory/filter/details/class summaries/report pins and workflow/result links are connected; contact/admission/editing, attendance/assessment and finance are not implied. Bursar is rejected before academic reads.
+- Direct-route role checks, missing/ambiguous identity and unknown/unavailable class selection are tested. Sample design remains separate. Directory/class skeleton variants use the approved responsive shell. Workflow/result return navigation connects the new pages.
+- 89 focused offline tests pass; six changed non-JSX TS files parse; scoped whitespace/CSS checks pass. Installed type/lint/full verifier, live staging reads and rendered browser QA remain operator-side.
+- See `docs/staging/STAGING_ACADEMIC_PAGES_BATCH_REVIEW.md` for one consolidated operator check. No SQL/grants/password reset/report reset is needed. Next operations batch still requires reviewed source-writer/finance boundaries; no production launch claim.
