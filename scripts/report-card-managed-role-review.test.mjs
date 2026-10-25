@@ -100,6 +100,7 @@ test('staff lookup candidate clears managed API/application defaults before gran
   const revoke = 'REVOKE ALL ON FUNCTION public.resolve_staging_staff_account() FROM PUBLIC, anon, authenticated, service_role, greenfield_app, greenfield_report_card_runtime;';
   const grant = 'GRANT EXECUTE ON FUNCTION public.resolve_staging_staff_account() TO authenticated;';
   assert.ok(sql.includes(revoke)); assert.ok(sql.indexOf(revoke) < sql.indexOf(grant));
+  assert.ok(sql.indexOf(grant) < sql.indexOf('ALTER FUNCTION public.resolve_staging_staff_account()'));
   assert.match(sql, /ARRAY\['anon','service_role','greenfield_app','greenfield_report_card_runtime'\]/);
   assert.match(sql, /has_function_privilege\(checked_role,'public.resolve_staging_staff_account\(\)','EXECUTE'\)/);
   assert.match(sql, /IF NOT pg_catalog.has_function_privilege\('authenticated'/);

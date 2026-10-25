@@ -76,10 +76,10 @@ BEGIN
       AND s.final_primary_year IN (5, 6);
 END
 $function$;
-ALTER FUNCTION public.resolve_staging_staff_account()
-  OWNER TO greenfield_report_card_authority_owner;
 REVOKE ALL ON FUNCTION public.resolve_staging_staff_account() FROM PUBLIC, anon, authenticated, service_role, greenfield_app, greenfield_report_card_runtime;
 GRANT EXECUTE ON FUNCTION public.resolve_staging_staff_account() TO authenticated;
+ALTER FUNCTION public.resolve_staging_staff_account()
+  OWNER TO greenfield_report_card_authority_owner;
 REVOKE CREATE ON SCHEMA public FROM greenfield_report_card_authority_owner;
 REVOKE greenfield_report_card_authority_owner FROM postgres GRANTED BY postgres;
 -- The module-specific report resolver, its role filter, policies and grants are unchanged.
