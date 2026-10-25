@@ -1,0 +1,15 @@
+# Local staging connection reuse
+
+The measured workspace index now takes 14–15 application queries and roughly 6 seconds inside its transaction. The approved-result view still takes 18 queries, with 1.8–5.5 seconds spent in connection/setup in the latest sample. This change targets repeated connection setup; no live improvement is claimed until measured.
+
+The development-only staging adapter retains one current process-local Postgres.js client, shared across development module reloads. Its configuration key hashes the exact restricted URL and CA bytes and is never logged. Each client allows at most two connections, with a 30-second idle timeout and 300-second maximum connection lifetime. Multiple server processes each have their own pool. Development restarts and idle/lifetime expiry can still require a new physical connection.
+
+Every request starts a fresh transaction. Initial login, role catalog, exact selected role, complete actor authority, current membership and assignment checks remain per transaction. No identity, authorization, query result, canonical source or approved snapshot is cached. Statement and lock timeouts remain transaction-local, set together in one query. TLS certificate verification remains required, and prepared statements remain disabled.
+
+Configuration drift rejects a previously captured adapter. A newly configured request retires the previous pool. Transaction failure retires its pool, and retired pools close exactly once after their final active borrower finishes. Cleanup errors do not mask the original failure. Captured SQL handles expire at callback completion; caught SQL errors and outstanding SQL operations prevent a successful commit.
+
+Timing logs add `pool=new` or `pool=existing`. These describe reuse of the client object, not proof that its physical socket is warm. Setup timing includes acquiring a connection, beginning a transaction and installing local timeouts; it can include pool queue time. A previous actor-lock timeout remains unexplained without blocker evidence. Pooling does not prove contention is fixed.
+
+Validation: ten new pure lifecycle/controlled-driver tests cover reuse, rotation, concurrent borrowers, late failures, factory/cleanup errors, transaction failure, expired SQL handles, TLS options and configuration drift. Together with existing runtime, command, workspace and approved-result tests, 74 focused tests pass under Node's type stripping. The controlled driver is not a real PostgreSQL session. Installed TypeScript, ESLint and browser/live timing checks remain operator-side; no database or credentials were accessed for this change.
+
+Operator check: pull the branch, run the offline verifier, restart the existing local staging launcher in read-only mode, then open the report list and existing approved-result page twice within 30 seconds. Share bounded timing lines, especially `setup_ms` and `pool`. Do not rerun the old empty-report baseline rehearsal or reset the existing published report. No SQL installation, grant, password, deployment or write enablement is part of this change.

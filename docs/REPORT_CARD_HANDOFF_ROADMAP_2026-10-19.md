@@ -597,3 +597,11 @@ The operator supplied workspace measurements (59–64 queries, 29–40 second tr
 Separated workflow navigation from full academic readiness: the index now performs seven scoped data reads for a populated teacher class, after unchanged complete current authority and actor/source locks. It validates school/assignment/placement/active roster metadata, duplicate enrollments, current pupil/report/release bindings and labels its count as subjects in roster. Submit/approve/publish and approved-result/print verification remain unchanged and independently validate complete content. No cached authority, permissive fallback, larger lock timeout, changed actor function or schema/grant deployment is introduced. Class links disable prefetch.
 
 64 focused tests pass; expected full allowlist is 610. Full installed TypeScript/ESLint/test and live query-count/latency comparison remain the operator gate. No database connection/SQL execution/dependency installation or deployment occurred. Restart read-only after verification and capture timing/55P03 lines. The optional read-only lock observation SQL identifies blockers while waiting without query text, termination or extra privileges. See docs/staging/REPORT_CARD_WORKSPACE_INDEX_REVIEW.md.
+
+
+### Local staging connection reuse — 2026-10-25
+
+- Latest operator timings: workspace 14–15 queries, about 6 seconds per transaction; approved result 18 queries, with setup still material. No actor-lock timeout appeared in that sample; the earlier blocker is not identified.
+- Added bounded process-local TLS client reuse with configuration rotation, idle/lifetime caps, transaction failure retirement and expiring SQL leases. Every request still checks login, role catalog and complete authority in a fresh transaction.
+- Ten new lifecycle/controlled-driver tests; 74 focused tests pass. TypeScript source parsing and scoped whitespace checks pass; installed TypeScript/ESLint/full verifier and live timing confirmation remain operator-side.
+- See `docs/staging/REPORT_CARD_CONNECTION_REUSE_REVIEW.md`. Next: pull, offline verifier, restart read-only local staging and compare consecutive list/result timings (`pool`, `setup_ms`). No reset of published data, SQL installation or deployment is authorized by this source change.
