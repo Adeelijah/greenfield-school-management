@@ -35,7 +35,8 @@ export function StagingReportWorkspace({ workspace, selector, intentId, commands
     return <p className="muted">Waiting for the assigned teacher to submit.</p>;
   }
   return <>
-    <section className="card staging-summary"><h2>Current class workspace</h2><p>Signed in as {workspace.role === 'admin' ? 'administrator' : 'assigned teacher'}. {workspace.pupils.length} pupils · {workspace.subjectCount} finalized subjects · assessment revision {workspace.assessmentRevision}.</p>
+    <section className="card staging-summary"><h2>Current class workspace</h2><p>Signed in as {workspace.role === 'admin' ? 'administrator' : 'assigned teacher'}. {workspace.pupils.length} pupils · {workspace.subjectCount} subjects in roster · source revision {workspace.assessmentRevision}.</p>
+      <p className="muted">This list shows report status. Complete results are verified when you submit, approve, publish or open an approved result.</p>
       {!commandsEnabled && <p role="status">Read-only mode. Report actions are disabled.</p>}
       {pending && <p role="status">Saving the test report. This connection can take a few minutes; leave this page open.</p>}
       {result && <p role="status">{result.ok ? `Report ${result.kind === 'replay' ? 'already saved' : 'saved'}: ${labels[result.stage]}.` : result.code === 'forbidden' ? 'Your access has changed or this action is not permitted. Refresh before continuing.' : result.code === 'conflict' ? 'The report changed. Refresh to use the current version.' : result.code === 'invalid' ? 'Check the form details and try again.' : 'Unable to save. Retry this same form safely, or refresh to check the report.'}</p>}
