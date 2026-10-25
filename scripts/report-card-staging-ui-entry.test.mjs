@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import { registerHooks, stripTypeScriptTypes } from 'node:module';
 import { readFileSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
+import { projectStagingDashboard } from '../src/lib/accounts/staging-dashboard.ts';
 import { decodeStagingStaffAccount } from '../src/lib/academics/staging-staff-account.ts';
 import * as policy from '../src/lib/academics/report-card-staging-ui.ts';
 import * as approvedPolicy from '../src/lib/academics/report-card-approved-view.ts';
@@ -16,11 +17,13 @@ const env={NODE_ENV:'development',GREENFIELD_STAGING_UI:'LOCAL_STAGING_REPORTS_O
 async function withEnv(work,changes={}){const previous=Object.fromEntries(Object.keys(env).map(k=>[k,process.env[k]]));Object.assign(process.env,env,changes);try{return await work();}finally{for(const[k,v]of Object.entries(previous))if(v===undefined)delete process.env[k];else process.env[k]=v;}}
 function form(extra={}){const f=new FormData();for(const[k,v]of Object.entries({action:'submit',operationKey:'intent',reportId:id,expectedVersion:'1',...extra}))f.append(k,v);return f;}
 async function load(path,state){
- state.staffDecoder=decodeStagingStaffAccount;state.decoders=fixtureAssessmentDecoders;state.approvedPolicy=approvedPolicy;
+ state.dashboardProjection=projectStagingDashboard;state.staffDecoder=decodeStagingStaffAccount;state.decoders=fixtureAssessmentDecoders;state.approvedPolicy=approvedPolicy;
  const token=randomUUID(),key='greenfield-staging-ui-'+token;globalThis[Symbol.for(key)]=state;
  const context=`globalThis[Symbol.for(${JSON.stringify(key)})]`,url=new URL('../'+path,import.meta.url);url.searchParams.set('test',token);
  const mocks=new Map([
   ['server-only','export {};'],
+  ['@/lib/accounts/staging-dashboard',`export const projectStagingDashboard=${context}.dashboardProjection;`],
+  ['@/server/academics/report-card-staging-workspace',`export const readLocalStagingWorkspace=choice=>${context}.readWorkspace(choice);`],
   ['@/lib/supabase/staging-proxy',`export const stagingProxy=request=>${context}.delegate(request);`],
   ['@/lib/academics/staging-staff-account',`export const decodeStagingStaffAccount=${context}.staffDecoder;`],
   ['next/cache',`export function revalidatePath(p){${context}.events.push(['revalidate',p]);}`],
@@ -282,4 +285,12 @@ test('actual root proxy sends ordinary local-staging entry paths to dashboard an
   for(const path of ['/staging/dashboard','/staging/report-cards','/staging/login'])assert.deepEqual(await f.module.proxy(request(path)),{delegated:true});
   assert.deepEqual(state.events,['/staging/dashboard','/staging/report-cards','/staging/login']);
  });}finally{f.close();}
+});
+
+test('actual dashboard adapter excludes bursar academic reads and rejects changed role or incomplete class reads',async()=>{
+ for(const mode of ['bursar','changed','failed','teacher']){
+  const state={calls:[],async readWorkspace(choice){state.calls.push(choice);if(mode==='failed')return{ok:false,code:'unavailable'};if(mode==='teacher'&&state.calls.length===1)return{ok:false,code:'forbidden'};return{ok:true,workspace:{role:mode==='changed'?'teacher':mode==='teacher'?'teacher':'admin',pupils:[],reports:[],assessmentRevision:2,subjectCount:1}};}};
+  const f=await load('src/server/accounts/staging-dashboard.ts',state);
+  try{const r=await f.module.readStagingDashboard(mode==='bursar'?'bursar':mode==='teacher'?'teacher':'admin');if(mode==='teacher'){assert.ok(r);assert.equal(r.metrics[1][0],'1');}else assert.equal(r,null);if(mode==='bursar')assert.deepEqual(state.calls,[]);}finally{f.close();}
+ }
 });

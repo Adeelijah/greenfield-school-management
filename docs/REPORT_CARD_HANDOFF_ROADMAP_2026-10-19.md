@@ -639,3 +639,12 @@ Separated workflow navigation from full academic readiness: the index now perfor
 - Separate additive `resolve_staging_staff_account` candidate supports all three staff roles without altering the academic-only resolver or module authorization. Complete membership counting, fixed school and signed-in identity are required; no RPC means account unavailable, never fallback.
 - Candidate `docs/staging/STAGING_STAFF_ACCOUNT_INSTALL.review.sql` uses the prior managed temporary ownership-transfer protocol and atomic cleanup. Not executed here. Review/install it on the exact staging project before browser landing checks. See routing review for order and limitations.
 - 32 focused offline tests, changed non-JSX TS parsing and scoped whitespace pass. Full installed verifier, live SQL/RPC and browser checks remain pending. No database reset, password provisioning, production execution or deployment.
+
+
+### First verified admin/teacher dashboard data — 2026-10-25
+
+- Operator confirms staff lookup installation and account landing now work. Source root redirect correction is included in current head.
+- Signed-in admin/teacher dashboards now project the two available fictional class indexes through the existing complete-authority/placement boundary. Pupil/class/report counts are scoped to available test classes, not school-wide totals; class reads are independent.
+- Sample records/totals are removed from signed-in dashboards. Attendance, finance and activity remain explicitly unconnected. Bursar exits before any academic reader; design-preview sample content remains separate.
+- Added gated dashboard skeleton, pure projection and server adapter. 30 focused tests, non-JSX source parsing and scoped whitespace pass. Full installed verifier and browser/live data checks remain operator-side.
+- See `docs/staging/STAGING_DASHBOARD_DATA_REVIEW.md`. No new SQL, grants, reset or password provisioning is needed. Next verify all three landing views, then continue module-specific integration.
