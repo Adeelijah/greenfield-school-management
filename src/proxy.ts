@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { type NextRequest, NextResponse } from 'next/server';
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { isStagingPath, stagingUiEnabled } from '@/lib/academics/report-card-staging-ui';
 import { stagingProxy } from '@/lib/supabase/staging-proxy';
