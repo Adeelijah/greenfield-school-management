@@ -29,3 +29,7 @@ Prepare one additive managed staging SQL package with catalog/ACL preflight, nar
 ## Base attendance SQL proof passed; upgrade/LOGIN integration prepared
 
 The operator has now passed all 665 offline checks and the full original attendance PostgreSQL rehearsal, including final effective privilege/history probes and exact cleanup. The next coordinated candidate is documented in `ATTENDANCE_UPGRADED_LOGIN_REVIEW.md`: actual foundation composite keys, the existing coordinated source gate, separate attendance ownership/execution, saved history and a generated unprivileged LOGIN with distinct backends. The new upgraded rehearsal is not yet database-proven. It supplies no public-schema installer and does not enable Save; real managed auth/service-role and UI integration remain pending.
+
+## Upgraded attendance LOGIN proof passed; managed target review next
+
+The operator passed all 675 offline checks and the upgraded attendance PostgreSQL rehearsal, including real independent unprivileged LOGINs, saved correction history, source/parent coordination and cleanup. `ATTENDANCE_MANAGED_INSTALLATION_PLAN.md` selects a separate attendance LOGIN/runtime/private owner so the existing report LOGIN memberships remain unchanged. `ATTENDANCE_STAGING_TARGET_READ_ONLY.sql` collects the focused current staging catalog/role/report baseline needed before preparing an additive managed installer. It changes nothing and does not enable Save; real identity/managed installation and persisted UI remain outstanding.

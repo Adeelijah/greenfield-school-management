@@ -1,0 +1,27 @@
+# Managed staging attendance — target review and additive installation plan
+
+## Completed proof
+
+The operator passed all 675 offline checks and the full schema-faithful upgraded attendance rehearsal. Actual generated unprivileged LOGIN sessions saved/replayed/corrected and read immutable history, denied a hidden second active membership, serialized independent saves, rolled back receipt failure, respected the existing parent/source gate, denied data/owner/report-role fallback, and removed only generated objects. The earlier reduced fixture's complete failure-injection and history/privilege tests also passed. No managed attendance objects have been installed.
+
+## Service boundary selected
+
+Use three separate attendance roles: `greenfield_attendance_app` (NOINHERIT LOGIN), `greenfield_attendance_runtime` (NOLOGIN execution), and `greenfield_attendance_owner` (NOLOGIN private function/storage ownership). The new LOGIN receives only the SET-only non-admin runtime edge. Keep `greenfield_app` and its existing report runtime membership unchanged. This matches the tested dedicated LOGIN approach and avoids invalidating the working report role inspector or adding attendance/academic DML to the report service.
+
+The eventual local launcher must collect/use the separate attendance credential without saving it in a file. Attendance needs a separate explicitly opted-in connection configuration and process pool; report transport and authority checks must remain independent. There must be no owner-URL fallback, role selected from a request, shared cached authority, or implicit switch when attendance is unavailable. The UI may expose Save only after installed schema/roles and the real server identity boundary are verified.
+
+## Focused target inspection now
+
+Open the SQL editor for Greenfield **staging**, project `hweoqkbgmzycyznrbvng`. Run `ATTENDANCE_STAGING_TARGET_READ_ONLY.sql` and return its one JSON result. The query does not install, take explicit row/advisory locks, call auth/authority helpers, switch roles or change anything. It reports exact usable composite FK targets, protected foundation/source-gate metadata, existing/new role state and edges, private helper ownership/settings/ACLs, restrictive PUBLIC policies, and fixed-school report counts/change markers. No pupil/account rows, passwords or Auth user records are returned. Project selection must be verified in the dashboard; the declared project reference in SQL is a label, not evidence of the connected host.
+
+The query deliberately stops for review if attendance roles/tables already exist, exact keys/protection are missing, `greenfield_app` memberships differ, required helpers are missing or PUBLIC restrictive policies need complete-authority review. An empty `inspection_issues` array means the listed structural checks passed, not that an installer or authenticated workflow has been approved or proven. Function bodies and effective grants still require review; schema CREATE capability alone does not prove managed ownership transfer or auth-schema grant authority. MD5 change markers only detect accidental changes in the same session format/timezone; they do not replace canonical snapshot hashes or cryptographic integrity proof.
+
+## Installation package to prepare from that evidence
+
+Prepare one transactionally rehearsed additive package: verify the exact target/catalog and object absence, acquire the existing coordinated barrier in its established order, create four attendance tables/functions and the three narrow roles, bind real server-verified identity to current complete actor/class authority, reuse the existing source gate/parent protocol, apply owner-scoped storage policy and fixed-school function access, and revoke default PUBLIC/API access before ownership transfer. Use only narrow managed administration/ownership edges and remove only edges introduced by this package. Do not request provider-owned Auth schema grants; review the installed private auth binding and server bridge instead.
+
+Capture report counts/change markers immediately before and after the installer in the same transaction/session format; a change in any existing publication/history aborts. Installer failure must restore catalog, roles/grants/policies and existing report/source state. Rehearse managed privilege failures and exact cleanup locally before preparing a real staging commit. Do not issue IF NOT EXISTS repairs, a reset script, broad schema/function grants, or mutate existing enrollment/score/config/report rows to make the new feature fit.
+
+After the additive package passes rollback rehearsal and is explicitly applied to staging, wire protected read/save/correction actions into `/staging/attendance`: load the persisted version/history, retain the exact current roster, require a correction reason, preserve operation keys through retry, show pending/success/error states, and refresh confirmed database state. Verify admin, assigned teacher and bursar denial plus refresh/history persistence on mobile/desktop. Staging stays unchanged until then. Assessment save/review/finalization is a separate remaining workstream.
+
+Authoring verification: all 37 attendance-focused checks passed, including three static checks for this read-only target query. Scoped whitespace passed. The target SQL has not been executed in authoring and these static checks are not PostgreSQL execution proof. No runtime UI or security behavior changes in this target-review update.

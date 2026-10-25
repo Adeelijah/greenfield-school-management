@@ -686,3 +686,12 @@ The next coordinated integration candidate reuses actual journal/dependency/prop
 Authoring: 128 focused tests passed; changed TS parsed, rehearsal syntax and scoped whitespace checks passed. Full installed TypeScript/ESLint and the new upgraded database assertions remain operator-side. Run `scripts/verify-attendance-disposable.ps1 -Upgrade` for one offline-plus-disposable check with the existing local PostgreSQL credentials. It does not target managed staging.
 
 No public-schema installer, live Next/Supabase identity bridge or enabled Attendance Save is delivered here. Managed ownership/ACL and service-role membership review, real request integration, persisted UI and browser QA remain after the upgraded proof. Assessment save/review/finalization remains outstanding. The current published staging fixture is untouched; the new rehearsal's report history starts empty and does not substitute for preservation testing of a populated publication.
+
+
+## 2026-10-25 — upgraded attendance proof passed; managed target inspection
+
+The operator passed all 675 offline checks and the full schema-faithful attendance PostgreSQL rehearsal. Real generated LOGIN backends, save/replay/correction history, hidden membership denial, rollback/retry, source/parent coordination, role fallback denial and exact cleanup all passed.
+
+Prepared a focused one-SELECT staging inspection, `docs/staging/ATTENDANCE_STAGING_TARGET_READ_ONLY.sql`, plus `ATTENDANCE_MANAGED_INSTALLATION_PLAN.md`. It reads current relation/RLS/FK-target and role/helper metadata and fixed-school report counts/change markers; it changes nothing, invokes no authority helpers and takes no explicit row/advisory locks. Verify the Greenfield staging project in the dashboard before execution, then review its returned JSON before preparing an additive managed installer. The query label does not attest to the connected Supabase project.
+
+Selected a separate attendance LOGIN/runtime/private owner so no new membership is added to the working `greenfield_app` report LOGIN. This is a reviewed plan only; no managed attendance roles, grants, SQL installation or UI Save activation have occurred. The real identity bridge, managed rollback/installation and persisted attendance UI remain pending; assessment save/review/finalization remains outstanding. Existing report/publication data is preserved. Authoring checks: 37 attendance-focused checks and scoped whitespace passed; target SQL has not been executed in authoring.
