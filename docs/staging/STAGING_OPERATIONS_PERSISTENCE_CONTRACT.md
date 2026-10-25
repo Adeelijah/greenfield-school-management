@@ -21,3 +21,7 @@ Teacher review is a separate immutable, version-bound event. Admin finalization 
 ## Required proof before installation / enablement
 
 Prepare one additive managed staging SQL package with catalog/ACL preflight, narrow new roles, RLS, operation guards and cleanup. Rehearse rollback on generated disposable schema first, then exercise actual restricted-login save/replay, stale concurrent edits, membership/assignment loss, grade boundaries, Creche observations, source invalidation and immutable publication history. Preserve the operator's current published fixture. No schema/grants were changed for the read/draft pages, and there is no approved executable installer in this milestone. Do not run older empty-baseline report harnesses or grant broad DML to make the Save buttons work.
+
+## Durable attendance candidate prepared
+
+`ATTENDANCE_DURABLE_FIXTURE_REVIEW.md` now documents the four-table SQL save candidate, fixture-only transaction adapter, isolated-role/RLS guards and opt-in distinct-session rehearsal. The pure command bounds now match PostgreSQL integer storage; first saves have no correction reason, later saves require one. Historical replay checks current authority before returning the immutable receipt, while changed/new requests still require the exact current roster. This candidate has no public-schema installer or live save route; the managed staging and assessment requirements above still apply.
