@@ -1,23 +1,13 @@
 'use client';
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
+import { StagingAttendanceRegister } from './staging-attendance-register';
 import { GreenfieldDropdown } from '@/components/greenfield-dropdown';
-import { validateAttendanceDraft, validateScoreEditorDraft } from '@/lib/accounts/staging-operations';
+import { validateScoreEditorDraft } from '@/lib/accounts/staging-operations';
 import type { AssessmentEditorView } from '@/lib/accounts/staging-operations';
 import type { StagingDashboardData } from '@/lib/accounts/staging-dashboard';
 import './staging-academic-pages.css';
 import './staging-operations-pages.css';
-const attendanceOptions=[{value:'',label:'Choose a mark'},{value:'present',label:'Present'},{value:'absent',label:'Absent'},{value:'late',label:'Late'},{value:'excused',label:'Excused'}];
-function AttendanceDraft({data,classKey}:{data:StagingDashboardData;classKey:string}){
- const pupils=data.records.filter(r=>r.classKey===classKey);
- const parts=new Intl.DateTimeFormat('en-CA',{timeZone:'Africa/Lagos',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date());
- const today=['year','month','day'].map(type=>parts.find(p=>p.type===type)?.value??'').join('-');
- const [date,setDate]=useState(today),[marks,setMarks]=useState<Record<string,string>>({}),[message,setMessage]=useState('');
- function validate(){const checked=validateAttendanceDraft(date,pupils.map(p=>p.id),marks,today);setMessage(checked.ok?'Draft marks are valid. They have not been saved.':checked.message);}
- return <section className="account-panel operations-panel"><header><h2>Class attendance draft</h2><p>Active pupils from the verified staging enrollment roster. No saved attendance history is available yet.</p></header><div className="operations-toolbar"><label>Attendance date<input type="date" value={date} max={today} onChange={e=>{setDate(e.target.value);setMessage('');}} /></label><button onClick={()=>{setMarks(Object.fromEntries(pupils.map(p=>[p.id,'present'])));setMessage('');}} disabled={!pupils.length}>Mark draft all present</button></div>
- <div className="operations-draft-list">{pupils.map(p=><article key={p.enrollmentId}><div><h3>{p.name}</h3><p>{p.id.slice(0,8)}</p></div><GreenfieldDropdown label={'Attendance for '+p.name} value={marks[p.id]??''} options={attendanceOptions} onChange={value=>{setMarks(previous=>({...previous,[p.id]:value}));setMessage('');}} /></article>)}</div>{!pupils.length&&<p className="account-empty">No active pupils in this class.</p>}
- <div className="operations-actions"><button className="account-primary" onClick={validate} disabled={!pupils.length}>Validate draft</button><button disabled>Save attendance · not enabled</button></div>{message&&<p className="operations-message" role="status">{message}</p>}</section>;
-}
 function ScoreDraft({subject}:{subject:AssessmentEditorView['subjects'][number]}){
  const [values,setValues]=useState<Record<string,string>>(()=>Object.fromEntries(subject.pupils.flatMap(p=>subject.components.map(c=>[p.id+':'+c.id,p.values[c.id]??''])))),[message,setMessage]=useState('');
  function set(key:string,value:string){setValues(previous=>({...previous,[key]:value}));setMessage('');}
@@ -26,10 +16,10 @@ function ScoreDraft({subject}:{subject:AssessmentEditorView['subjects'][number]}
  <div className="operations-actions"><button className="account-primary" onClick={()=>{const r=validateScoreEditorDraft(subject,values);setMessage(r.ok?'Draft values pass range/completeness checks. They have not been saved, reviewed or finalized.':r.message);}}>Validate draft</button><button disabled>Save scores · not enabled</button><button disabled>Submit review · not enabled</button><button disabled>Finalize · not enabled</button></div>{message&&<p className="operations-message" role="status">{message}</p>}</section>;
 }
 export function StagingOperationsPages({view,data,editor,classKey}:{view:'attendance'|'assessments';data:StagingDashboardData|null;editor:AssessmentEditorView|null;classKey:string}){
- const router=useRouter(),[pending,startTransition]=useTransition(),[subjectId,setSubjectId]=useState(editor?.subjects[0]?.id??'');
+ const router=useRouter(),[pending,startTransition]=useTransition(),[attendanceBusy,setAttendanceBusy]=useState(false),[subjectId,setSubjectId]=useState(editor?.subjects[0]?.id??'');
  if(!data)return<section className="account-panel account-planned"><h2>Class records unavailable</h2><p>Current access or the staging connection could not be verified. No sample data has been substituted.</p></section>;
  const subject=editor?.subjects.find(s=>s.id===subjectId)??editor?.subjects[0];
- return <div className="operations-workspace"><p className="account-notice">Draft validation only. Attendance storage and assessment source-write permissions are not installed. Nothing on this page saves, reviews or finalizes records. Draft changes are lost when you navigate or reload.</p><div className="operations-selectors"><GreenfieldDropdown label="Available class" value={classKey} options={data.classes.map(c=>({value:c.key,label:c.label}))} disabled={pending} onChange={value=>startTransition(()=>router.push('/staging/'+view+'?class='+value))} />{view==='assessments'&&editor&&<GreenfieldDropdown label="Subject / learning area" value={subject?.id??''} options={editor.subjects.map(s=>({value:s.id,label:s.name}))} onChange={setSubjectId} />}</div>{pending&&<p role="status">Loading verified class data…</p>}
- {view==='attendance'?<AttendanceDraft key={classKey} data={data} classKey={classKey} />:!editor||!subject?<section className="account-panel account-planned"><h2>Assessment source unavailable</h2><p>The complete current source or subject permission could not be verified. No scores or configurations were guessed. Partial/incomplete sources are not supported by this first read boundary.</p></section>:<><p className="account-footnote">Verified current relational source · revision {editor.revision}. This view does not attest teacher review or finalization. Published reports retain their original immutable snapshots.</p><ScoreDraft key={subject.id+':'+editor.revision} subject={subject} /></>}
+ return <div className="operations-workspace"><p className="account-notice">{view==='attendance'?'Fictional staging attendance. Saved registers retain earlier versions and correction reasons.':'Assessment draft validation only. Nothing here saves, reviews or finalizes scores. Draft changes are lost when you navigate or reload.'}</p><div className="operations-selectors"><GreenfieldDropdown label="Available class" value={classKey} options={data.classes.map(c=>({value:c.key,label:c.label}))} disabled={pending||attendanceBusy} onChange={value=>startTransition(()=>router.push('/staging/'+view+'?class='+value))} />{view==='assessments'&&editor&&<GreenfieldDropdown label="Subject / learning area" value={subject?.id??''} options={editor.subjects.map(s=>({value:s.id,label:s.name}))} onChange={setSubjectId} />}</div>{pending&&<p role="status">Loading verified class data…</p>}
+ {view==='attendance'?<StagingAttendanceRegister key={classKey} data={data} classKey={classKey} onBusyChange={setAttendanceBusy} />:!editor||!subject?<section className="account-panel account-planned"><h2>Assessment source unavailable</h2><p>The complete current source or subject permission could not be verified. No scores or configurations were guessed. Partial/incomplete sources are not supported by this first read boundary.</p></section>:<><p className="account-footnote">Verified current relational source · revision {editor.revision}. This view does not attest teacher review or finalization. Published reports retain their original immutable snapshots.</p><ScoreDraft key={subject.id+':'+editor.revision} subject={subject} /></>}
  </div>;
 }

@@ -23,8 +23,8 @@ export type AttendanceTransaction={
  storeReceipt(context:AttendanceContext,key:string,fingerprint:string,nextVersion:number):Promise<void>;
 };
 export type AttendancePort={begin<T>(work:(tx:AttendanceTransaction)=>Promise<T>):Promise<T>};
-/** Managed staging adapter remains absent; the generated SQL fixture is isolated.
- * Never expose a caller-owned actor or memory store as a live save endpoint. */
+/** Pure transaction-port contract. Live staging uses its separate verified SDK
+ * entry and installed private SQL routines; this port accepts no live identity. */
 export async function executeAttendanceCommand(raw:unknown,port:AttendancePort,today:string):Promise<AttendanceOutcome>{
  const c=parseAttendanceCommand(raw);if(!c||!Number.isFinite(Date.parse(c.date))||new Date(c.date).toISOString().slice(0,10)!==c.date||c.date>today)return{ok:false,code:'invalid'};
  const fingerprint=createHash('sha256').update(JSON.stringify({...c,marks:Object.fromEntries(Object.entries(c.marks).sort(([a],[b])=>a.localeCompare(b)))})).digest('hex');

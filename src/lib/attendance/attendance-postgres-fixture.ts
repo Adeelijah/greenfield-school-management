@@ -1,3 +1,5 @@
+// @ts-expect-error Explicit source extension for the offline Node runner.
+import { decodeAttendanceOutcome as decode } from './attendance-staging-policy.ts';
 import type { AttendanceOutcome } from './staging-attendance-command';
 // @ts-expect-error Explicit source extension for the offline Node runner.
 import { parseAttendanceCommand } from './staging-attendance-command.ts';
@@ -7,13 +9,6 @@ const uuid=(value:unknown):value is string=>typeof value==='string'&&/^[a-f0-9]{
 class AttendanceAbort extends Error {
  readonly outcome:AttendanceOutcome;
  constructor(outcome:AttendanceOutcome){super('Attendance fixture transaction rejected');this.outcome=outcome;}
-}
-function decode(value:unknown):AttendanceOutcome|null{
- if(!value||typeof value!=='object'||Array.isArray(value))return null;
- const r=value as Record<string,unknown>;
- if(r.ok===true&&Object.keys(r).length===3&&(r.kind==='applied'||r.kind==='replay')&&Number.isInteger(r.version)&&Number(r.version)>0&&Number(r.version)<=2147483647)return{ok:true,kind:r.kind,version:Number(r.version)};
- if(r.ok===false&&Object.keys(r).length===2&&(r.code==='invalid'||r.code==='forbidden'||r.code==='conflict'))return{ok:false,code:r.code};
- return null;
 }
 /** Fixture-only adapter: no driver, environment lookup or staging server wiring.
  * Identity callback belongs to the trusted test/server boundary, never body data.

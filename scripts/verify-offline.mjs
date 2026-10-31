@@ -5,6 +5,10 @@ import { dirname, resolve } from 'node:path';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const tests = [
+  'scripts/attendance-staging-boundary.test.mjs',
+  'scripts/attendance-staging-connection.test.mjs',
+  'scripts/attendance-staging-policy.test.mjs',
+  'scripts/attendance-staging-login.test.mjs',
   'scripts/attendance-managed-review.test.mjs',
   'scripts/attendance-managed-installation.test.mjs',
   'scripts/attendance-staging-target-review.test.mjs',
