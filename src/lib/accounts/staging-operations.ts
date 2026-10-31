@@ -1,9 +1,9 @@
 import type { CompleteAssessmentSource } from '../academics/assessment-canonical-source';
 import type { StagingDashboardData } from './staging-dashboard';
 export type AssessmentEditorView = {
-  classKey: string; classLabel: string; revision: number;
-  subjects: { id: string; name: string; mode: 'numeric' | 'observational'; configVersion: number; components: { id: string; label: string; maximum: number; weight: number; required: boolean }[]; observations: { value: string; label: string }[]; bands: { min: number; max: number; label: string }[];
-    pupils: { id: string; name: string; values: Record<string,string> }[] }[];
+  classKey: string; classLabel: string; revision: number; canSave?: boolean; readToken?: string;
+  subjects: { id: string; name: string; mode: 'numeric' | 'observational'; configVersion: number; configVersionId: string; rosterVersion: number; components: { id: string; label: string; maximum: number; weight: number; required: boolean }[]; observations: { value: string; label: string }[]; bands: { min: number; max: number; label: string }[];
+    pupils: { id: string; enrollmentId: string; name: string; versions: Record<string,number>; values: Record<string,string> }[] }[];
 };
 /** Source has already passed complete relational materialization in the server
  * transaction; refuse stale directory/enrollment bindings rather than guess. */
@@ -16,11 +16,11 @@ export function projectAssessmentEditor(input: CompleteAssessmentSource, directo
     const catalog = input.catalog.find(c=>c.id===roster.subjectId);
     const config = input.configs.find(c=>c.config.id===roster.configVersionId)?.config;
     if (!catalog || !config) return null;
-    const rows = pupils.map(p=>({id:p.id,name:p.name,values:Object.fromEntries(config.components.map(c=>{
+    const rows = pupils.map(p=>({id:p.id,enrollmentId:p.enrollmentId,name:p.name,versions:Object.fromEntries(config.components.map(c=>[c.id,input.scores.find(s=>s.rosterId===roster.id && s.enrollmentId===p.enrollmentId && s.studentId===p.id && s.componentKey===c.id)?.version??0])),values:Object.fromEntries(config.components.map(c=>{
       const score=input.scores.find(s=>s.rosterId===roster.id && s.studentId===p.id && s.componentKey===c.id);
       return [c.id,score?.numericScore ?? score?.observationKey ?? ''];
     }))}));
-    subjects.push({id:roster.id,name:catalog.name,mode:config.grading.mode,configVersion:config.version,
+    subjects.push({id:roster.id,name:catalog.name,mode:config.grading.mode,configVersion:config.version,configVersionId:config.id,rosterVersion:roster.rosterVersion,
       components:config.components.map(c=>({id:c.id,label:c.label,maximum:c.maximumScore,weight:c.weight,required:c.required})),
       observations:config.grading.mode==='observational'?config.grading.levels.map(l=>({value:l.id,label:l.label})):[],bands:config.grading.mode==='numeric'?config.grading.bands.map(b=>({min:b.min,max:b.max,label:b.label})):[],pupils:rows});
   }

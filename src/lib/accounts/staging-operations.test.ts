@@ -7,7 +7,7 @@ import {createApprovedSnapshotFixture} from '../academics/report-card-canonical-
 // @ts-expect-error Explicit source extension for the offline Node runner.
 import {projectStagingDashboard} from './staging-dashboard.ts';
 import type {AssessmentEditorView} from './staging-operations';
-const subject:AssessmentEditorView['subjects'][number]={id:'subject',name:'English',mode:'numeric',configVersion:1,components:[{id:'exam',label:'Exam',maximum:60,weight:100,required:true}],observations:[],bands:[],pupils:[{id:'pupil',name:'Fixture pupil',values:{exam:'50'}}]};
+const subject:AssessmentEditorView['subjects'][number]={id:'subject',name:'English',mode:'numeric',configVersion:1,configVersionId:'config',rosterVersion:1,components:[{id:'exam',label:'Exam',maximum:60,weight:100,required:true}],observations:[],bands:[],pupils:[{id:'pupil',enrollmentId:'enrollment',name:'Fixture pupil',versions:{exam:1},values:{exam:'50'}}]};
 test('score drafts require complete bounded component values and reject forged pupil/component keys',()=>{
  assert.deepEqual(validateScoreEditorDraft(subject,{'pupil:exam':'60'}),{ok:true});
  for(const values of [{},{'pupil:exam':'61'},{'pupil:exam':'NaN'},{'pupil:exam':'1e2'},{'pupil:exam':'1.12345'},{'foreign:exam':'50'}] as Record<string,string>[])assert.equal(validateScoreEditorDraft(subject,values).ok,false);
@@ -22,5 +22,6 @@ test('assessment projection binds the complete source enrollment set to verified
  const input=createApprovedSnapshotFixture().docs.input;
  const directory=projectStagingDashboard('teacher',[{key:'primary5',label:'Test class',workspace:{role:'teacher',pupils:input.enrollments.map(e=>({studentId:e.studentId,enrollmentId:e.id,label:'Fixture pupil'})),reports:[],assessmentRevision:input.scope.revision,subjectCount:input.roster.length}}]);assert.ok(directory);
  const view=projectAssessmentEditor(input,directory,'primary5');assert.ok(view);assert.equal(view.subjects.length,input.roster.length);assert.equal(view.subjects[0]!.pupils.length,input.enrollments.length);assert.equal(view.subjects[0]!.configVersion,input.configs[0]!.config.version);
+ assert.equal(view.subjects[0]!.configVersionId,input.configs[0]!.config.id);assert.equal(view.subjects[0]!.rosterVersion,input.roster[0]!.rosterVersion);assert.equal(view.subjects[0]!.pupils[0]!.enrollmentId,input.enrollments[0]!.id);assert.ok(Object.values(view.subjects[0]!.pupils[0]!.versions).every(v=>Number.isInteger(v)&&v>=0));
  directory.records[0]!.enrollmentId='foreign';assert.equal(projectAssessmentEditor(input,directory,'primary5'),null);
 });

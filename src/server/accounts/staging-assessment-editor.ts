@@ -1,4 +1,6 @@
 import 'server-only';
+import {randomUUID} from 'node:crypto';
+import {assessmentScoreWritesEnabled} from '@/lib/academics/assessment-score-staging-policy';
 import { resolveVerifiedReportCardIdentity } from '@/server/auth/report-card-identity';
 import { getLocalStagingDatabase, localStagingRuntimeConfig } from '@/server/academics/report-card-staging-connection';
 import { createStagingReportRuntime } from '@/lib/academics/report-card-staging-runtime';
@@ -21,6 +23,6 @@ export async function readStagingAssessmentEditor(role:'admin'|'teacher'|'bursar
    if(!loaded.ok)return{ok:false,code:'unavailable'}as const;
    const view=projectAssessmentEditor(loaded.input,directory,classKey);
    return view?{ok:true,view}as const:{ok:false,code:'unavailable'}as const;
-  }));return result.ok?result.view:null;
+  }));return result.ok?{...result.view,canSave:assessmentScoreWritesEnabled(process.env),readToken:randomUUID()}:null;
  }catch{return null;}
 }

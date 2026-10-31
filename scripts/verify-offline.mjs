@@ -5,6 +5,11 @@ import { dirname, resolve } from 'node:path';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const tests = [
+  'scripts/assessment-score-staging-boundary.test.mjs',
+  'scripts/assessment-score-staging-connection.test.mjs',
+  'scripts/assessment-score-staging-login.test.mjs',
+  'scripts/assessment-score-staging-policy.test.mjs',
+  'scripts/assessment-score-editor.test.mjs',
   'scripts/assessment-score-managed-review.test.mjs',
   'scripts/assessment-score-managed-installation.test.mjs',
   'scripts/assessment-score-staging-target-review.test.mjs',
