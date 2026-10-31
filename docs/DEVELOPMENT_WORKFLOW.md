@@ -109,3 +109,6 @@ The operator passed the complete local score rehearsal after all 726 offline che
 
 
 The fixed-target assessment score managed rollback review adds ten pure composition checks (expected offline total 740 after the four target-review checks and the previously reported 726). The checked-in SQL must exactly match its pure composer. It checks managed default ACL reset, role cleanup, existing security/data preservation and rollback-only fictional score probes. Authoring ran 27 focused checks; no managed SQL was executed. See staging/ASSESSMENT_SCORE_MANAGED_ROLLBACK_REVIEW.md. Operator rollback success is required before preparing a separate committed installer.
+
+
+The committed assessment score installer adds four pure parity/transaction/default tests; expected full offline total is 745 (741 after the ACL regression). Authoring passes 32 focused checks. Operator-provided corrected staging rollback PASS is recorded separately from these tests. All SQL through preservation verification must match that rehearsal exactly; only the final transaction outcome and success result change. See staging/ASSESSMENT_SCORE_MANAGED_INSTALLATION_REVIEW.md. Dedicated LOGIN and app saving remain disabled until separate runtime setup.

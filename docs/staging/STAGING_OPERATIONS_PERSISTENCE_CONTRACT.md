@@ -55,3 +55,6 @@ All 726 offline checks and the complete new assessment score PostgreSQL rehearsa
 
 
 The accepted score target inspection now has a fixed rollback-only managed package. It creates three new assessment roles and one private function transiently, exercises the three fictional subject saves/replays inside rolled-back subtransactions, verifies populated source/report/attendance preservation, and finally rolls back all installation objects. It grants no attendance privileges and preserves existing report/attendance role graphs. This is not a committed installation or application enablement. SDK identity, dedicated LOGIN execution and browser score saving remain later gates. See ASSESSMENT_SCORE_MANAGED_ROLLBACK_REVIEW.md.
+
+
+The operator confirmed the managed assessment score rollback PASS with protected state unchanged and new objects absent. A committed installer now retains the same verified BEGIN-through-verification body; only the final COMMIT/result replace rollback/absence checks. It installs three dedicated roles and the private API/policies/grants while leaving the LOGIN password unconfigured and score saving disabled. Installation success, then SDK-owned runtime and browser correction verification, remain separate gates. See ASSESSMENT_SCORE_MANAGED_INSTALLATION_REVIEW.md.

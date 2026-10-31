@@ -1,0 +1,10 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+import {assessmentScoreManagedInstallation} from './lib/assessment-score-managed-installation.mjs';
+import {assessmentScoreManagedRollbackReview} from './lib/assessment-score-managed-review.mjs';
+const installation=assessmentScoreManagedInstallation().sql,rehearsal=assessmentScoreManagedRollbackReview().sql;
+test('committed score artifact exactly matches its pure fixed-target composer',()=>{assert.equal(readFileSync(new URL('../docs/staging/ASSESSMENT_SCORE_MANAGED_INSTALLATION.sql',import.meta.url),'utf8').replaceAll('\r\n','\n'),installation);});
+test('all SQL through final preservation verification is identical to the passed rollback rehearsal',()=>{assert.equal(installation.slice(installation.indexOf('\nBEGIN;'),installation.indexOf('\nCOMMIT;')),rehearsal.slice(rehearsal.indexOf('\nBEGIN;'),rehearsal.indexOf('\nROLLBACK;')));assert.ok(installation.indexOf('END $verify$')<installation.indexOf('\nCOMMIT;'));});
+test('installation commits once after every probe rollback and omits rollback-only absence checks',()=>{assert.equal(installation.match(/^COMMIT;/gm)?.length,1);assert.ok(!/^ROLLBACK;/m.test(installation));assert.ok(!installation.includes('Score rollback left new objects'));assert.match(installation,/EXCEPTION WHEN SQLSTATE 'ZGS01' THEN NULL/);assert.ok(installation.indexOf('REVOKE greenfield_assessment_owner FROM postgres GRANTED BY postgres')<installation.indexOf('\nCOMMIT;'));});
+test('installed LOGIN remains passwordless, app disabled and existing-role adoption refused',()=>{assert.match(installation,/CREATE ROLE greenfield_assessment_app LOGIN[^\n]*PASSWORD NULL/);assert.match(installation,/'assessment_score_managed_installation','PASS'/);assert.match(installation,/'login_password_configured',false,'assessment_save_enabled',false/);assert.match(installation,/roles\/API must be absent/);assert.equal(installation.match(/^CREATE ROLE /gm)?.length,3);});
