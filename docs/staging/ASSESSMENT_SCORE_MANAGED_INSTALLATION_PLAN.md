@@ -43,3 +43,7 @@ Get-Content .\docs\staging\ASSESSMENT_SCORE_STAGING_TARGET_READ_ONLY.sql -Raw | 
 Paste the complete query into a new **Greenfield staging** SQL Editor query and run once. Send the JSON result, or export/attach it if the catalog evidence exceeds the chat size limit. No database password is needed for this dashboard inspection.
 
 Authoring validation: four new read-only/scope/privilege-boundary tests plus the fifteen score candidate tests passed. The full verifier is updated; no TypeScript or UI source changed in this target-review batch. No database connection or managed SQL execution occurred in authoring. The next managed rollback composer remains to be prepared after the actual target evidence.
+
+## Accepted target and rollback package
+
+The operator subsequently returned the actual fixed-target inspection with no inspection issues. It records existing SELECT access on the private attendance tables, so the rollback package captures their row markers with that existing access, without grants or owner takeover. The fixed composer, sanitized catalog metadata and checked-in `ASSESSMENT_SCORE_MANAGED_ROLLBACK_REHEARSAL.sql` are now prepared. See `ASSESSMENT_SCORE_MANAGED_ROLLBACK_REVIEW.md` for scope, operator steps and validation limits. The earlier inspection-only instructions above remain historical context; the current next gate is the whole rollback rehearsal, not committed installation.
