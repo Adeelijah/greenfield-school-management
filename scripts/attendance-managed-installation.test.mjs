@@ -1,0 +1,10 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+import {attendanceManagedRollbackReview} from './lib/attendance-managed-review.mjs';
+import {attendanceManagedInstallation} from './lib/attendance-managed-installation.mjs';
+const plan=attendanceManagedInstallation();
+test('permanent installation reuses every rehearsed phase without changing any SQL statement',()=>{assert.deepEqual(plan.phases,attendanceManagedRollbackReview().phases);for(const phase of plan.phases)for(const statement of phase.statements)assert.ok(plan.sql.includes(statement+';'));});
+test('all preservation and empty storage checks precede the single commit',()=>{assert.equal(plan.sql.match(/^COMMIT;/gm)?.length,1);assert.ok(!/^ROLLBACK;/m.test(plan.sql));const commit=plan.sql.indexOf('\nCOMMIT;');assert.ok(plan.sql.indexOf("Existing report/source/role/helper/guard state changed")<commit);assert.ok(plan.sql.indexOf('New attendance storage must be empty: attendance_receipts')<plan.sql.indexOf('-- Phase: deferred-ownership-and-cleanup'));assert.ok(plan.sql.indexOf('$committed_attendance$')>commit);assert.ok(plan.sql.indexOf("'attendance_managed_installation','PASS'")>commit);});
+test('installer leaves passwords and UI activation untouched and refuses existing attendance objects',()=>{assert.match(plan.sql,/PASSWORD NULL/);assert.match(plan.sql,/Attendance roles must be absent; no adoption/);assert.match(plan.sql,/'login_password_configured',false,'attendance_save_enabled',false/);assert.ok(!/ALTER ROLE|CREATE OR REPLACE|DROP SCHEMA|DROP ROLE/.test(plan.sql));assert.equal(plan.sql.match(/^CREATE TABLE /gm)?.length,4);});
+test('checked-in permanent SQL equals canonical composer output across Windows line endings',()=>{assert.equal(readFileSync(new URL('../docs/staging/ATTENDANCE_MANAGED_INSTALLATION.sql',import.meta.url),'utf8').replaceAll('\r\n','\n'),plan.sql);});
