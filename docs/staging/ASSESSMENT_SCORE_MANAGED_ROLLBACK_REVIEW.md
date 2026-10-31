@@ -25,3 +25,9 @@ A successful operator rehearsal precedes preparation of the separate committed i
 ## Authoring validation
 
 Ten new pure composition tests and seventeen existing score parser/target/upgrade-plan checks pass. They check generated text and actual adapter behavior with recorders; they do not parse or execute PostgreSQL. The verifier includes the new test file. No TypeScript/UI source changed in this batch. Full TypeScript/ESLint/offline verification is run in the operator checkout. The managed SQL has not been executed during authoring.
+
+## Empty ACL correction
+
+The first operator attempt stopped with SQLSTATE 22023, `ACL arrays must be one-dimensional`. The column snapshot had synthesized an ordinary empty `aclitem[]` for a missing column ACL; PostgreSQL's ACL decoder rejects that array representation. The snapshot now leaves absent column ACLs null and passes an ACL array to `aclexplode` only when its cardinality is positive. Relation, function and schema defaults remain the real `acldefault` values. Explicit grantees and grant options remain compared. No grant, policy, role or writer logic changes in this correction.
+
+Eleven managed composition checks and seventeen existing focused score checks pass (28 total), including coverage that all four snapshot ACL sources guard empty arrays and preserve real object defaults. This is authoring validation, not a successful managed PostgreSQL run. Clear the failed transaction with `ROLLBACK;` in the same SQL session, then pull and rerun the complete corrected rehearsal.
