@@ -39,3 +39,8 @@ A successful rehearsal precedes a separate committed installer. Then dedicated L
 ## Authoring validation
 
 Ten new composition/parity/privilege/preservation checks and 27 existing target/restricted-writer/probe checks pass (37 focused). The full offline allowlist is updated (expected 804 tests). MJS syntax checks pass. No TypeScript or UI source changed. No PostgreSQL connection or managed SQL execution occurred in authoring; the pure checks do not prove PostgreSQL parsing or target execution. The operator checkout runs the full compiler/lint/offline gate before this rehearsal.
+
+
+## Sequence-check evaluation correction
+
+The first managed run stopped with SQLSTATE 42809 because the optimizer evaluated `has_sequence_privilege` for a non-sequence catalog row before the separate schema/kind AND filters. The privilege call is now inside a CASE arm guarded by both public namespace and sequence relation kind. The verification scope/permissions are unchanged; no grants are broadened and no index or Auth object is altered. The checked-in SQL is regenerated from the composer. Eleven composition checks plus the prior 27 focused checks pass (38 total); expected full offline count is 805. No managed SQL execution occurred during authoring. Clear the failed SQL transaction with ROLLBACK in the same session and rerun the whole corrected batch. The focused managed-review test can be run directly for this MJS/SQL-only correction; no TypeScript or application behavior changed.

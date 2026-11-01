@@ -100,7 +100,7 @@ END $review_role_probes$`,'RESET ROLE'];
  IF has_column_privilege(role_name,'public.'||column_row.relname,column_row.attname,permission_name) IS DISTINCT FROM allowed THEN RAISE EXCEPTION 'Unexpected review column privilege';END IF;
  END LOOP;
  END LOOP;
- IF EXISTS(SELECT 1 FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='public' AND c.relkind='S' AND has_sequence_privilege(role_name,c.oid,'USAGE,SELECT,UPDATE')) THEN RAISE EXCEPTION 'Unexpected review sequence access';END IF;
+ IF EXISTS(SELECT 1 FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n ON n.oid=c.relnamespace WHERE CASE WHEN n.nspname='public' AND c.relkind='S' THEN has_sequence_privilege(role_name,c.oid,'USAGE,SELECT,UPDATE') ELSE false END) THEN RAISE EXCEPTION 'Unexpected review sequence access';END IF;
  FOREACH signature_name IN ARRAY ARRAY[${list(target.helpers.map(h=>h.signature))}] LOOP
  allowed:=role_name='${roles.runtime}' AND signature_name='public.lock_report_card_actor(uuid)';
  IF has_function_privilege(role_name,signature_name,'EXECUTE') IS DISTINCT FROM allowed THEN RAISE EXCEPTION 'Unexpected review helper/API privilege';END IF;
