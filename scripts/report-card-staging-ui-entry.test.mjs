@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import { registerHooks, stripTypeScriptTypes } from 'node:module';
 import { readFileSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
+import * as scorePolicy from '../src/lib/academics/assessment-score-staging-policy.ts';
 import * as assessmentOperations from '../src/lib/accounts/staging-operations.ts';
 import * as academicPages from '../src/lib/accounts/staging-academic-pages.ts';
 import { projectStagingDashboard } from '../src/lib/accounts/staging-dashboard.ts';
@@ -15,15 +16,16 @@ import { createApprovedSnapshotFixture } from '../src/lib/academics/report-card-
 import { buildApprovedReportSnapshot } from '../src/lib/academics/report-card-approved-snapshot.ts';
 import { materializeAssessmentSource } from '../src/lib/academics/assessment-canonical-source.ts';
 const schoolId=policy.stagingSchoolId, id='00000000-0000-4000-8000-000000000001';
-const env={NODE_ENV:'development',GREENFIELD_STAGING_UI:'LOCAL_STAGING_REPORTS_ONLY',NEXT_PUBLIC_SUPABASE_URL:policy.stagingProjectUrl,NEXT_PUBLIC_SUPABASE_ANON_KEY:'sb_publishable_test',GREENFIELD_STAGING_COMMANDS:'FICTIONAL_STAGING_WRITES_ONLY'};
+const env={NODE_ENV:'development',GREENFIELD_STAGING_UI:'LOCAL_STAGING_REPORTS_ONLY',NEXT_PUBLIC_SUPABASE_URL:policy.stagingProjectUrl,NEXT_PUBLIC_SUPABASE_ANON_KEY:'sb_publishable_test',GREENFIELD_STAGING_COMMANDS:'FICTIONAL_STAGING_WRITES_ONLY',GREENFIELD_STAGING_ASSESSMENT_SCORES:'DISABLED'};
 async function withEnv(work,changes={}){const previous=Object.fromEntries(Object.keys(env).map(k=>[k,process.env[k]]));Object.assign(process.env,env,changes);try{return await work();}finally{for(const[k,v]of Object.entries(previous))if(v===undefined)delete process.env[k];else process.env[k]=v;}}
 function form(extra={}){const f=new FormData();for(const[k,v]of Object.entries({action:'submit',operationKey:'intent',reportId:id,expectedVersion:'1',...extra}))f.append(k,v);return f;}
 async function load(path,state){
- state.assessmentOperations=assessmentOperations;state.academicPages=academicPages;state.dashboardProjection=projectStagingDashboard;state.staffDecoder=decodeStagingStaffAccount;state.decoders=fixtureAssessmentDecoders;state.approvedPolicy=approvedPolicy;
+ state.scorePolicy=scorePolicy;state.assessmentOperations=assessmentOperations;state.academicPages=academicPages;state.dashboardProjection=projectStagingDashboard;state.staffDecoder=decodeStagingStaffAccount;state.decoders=fixtureAssessmentDecoders;state.approvedPolicy=approvedPolicy;
  const token=randomUUID(),key='greenfield-staging-ui-'+token;globalThis[Symbol.for(key)]=state;
  const context=`globalThis[Symbol.for(${JSON.stringify(key)})]`,url=new URL('../'+path,import.meta.url);url.searchParams.set('test',token);
  const mocks=new Map([
   ['server-only','export {};'],
+  ['@/lib/academics/assessment-score-staging-policy',`export const assessmentScoreWritesEnabled=${context}.scorePolicy.assessmentScoreWritesEnabled;`],
   ['@/lib/accounts/staging-operations',`export const projectAssessmentEditor=${context}.assessmentOperations.projectAssessmentEditor;`],
   ['@/server/accounts/staging-assessment-editor',`export async function readStagingAssessmentEditor(){${context}.events.push(['assessment-editor']);return null;}`],
   ['@/lib/accounts/staging-academic-pages',`export const canOpenAcademicPage=${context}.academicPages.canOpenAcademicPage;`],
@@ -50,7 +52,7 @@ async function load(path,state){
   ['@/lib/academics/report-card-staging-command-boundary',`export async function executeStagingReportBoundary(_runtime,_identity,work){${context}.events.push(['locked-boundary']);if(${context}.denied)return{ok:false,code:'forbidden'};return work({begin:callback=>callback({unsafe:${context}.query})},async()=>({authUserId:'verified'}),{role:${context}.lockedRole,membershipId:'teacher',finalPrimaryYear:5});}`],
  ]);
  const prefix='greenfield-ui-test-'+token+':';
- const hooks=registerHooks({resolve(s,c,next){if(c.parentURL!==url.href)return next(s,c);if(s==='@/lib/academics/report-card-staging-ui')return{url:new URL('../src/lib/academics/report-card-staging-ui.ts',import.meta.url).href,shortCircuit:true};if(mocks.has(s))return{url:prefix+encodeURIComponent(s),shortCircuit:true};throw Error('Unexpected UI entry dependency: '+s);},load(u,c,next){if(u===url.href){const file=new URL(u);file.search='';return{format:'module',source:stripTypeScriptTypes(readFileSync(file,'utf8')),shortCircuit:true};}if(u.startsWith(prefix))return{format:'module',source:mocks.get(decodeURIComponent(u.slice(prefix.length))),shortCircuit:true};return next(u,c);}});
+ const hooks=registerHooks({resolve(s,c,next){if(c.parentURL!==url.href)return next(s,c);if(s==='node:crypto')return next(s,c);if(s==='@/lib/academics/report-card-staging-ui')return{url:new URL('../src/lib/academics/report-card-staging-ui.ts',import.meta.url).href,shortCircuit:true};if(mocks.has(s))return{url:prefix+encodeURIComponent(s),shortCircuit:true};throw Error('Unexpected UI entry dependency: '+s);},load(u,c,next){if(u===url.href){const file=new URL(u);file.search='';return{format:'module',source:stripTypeScriptTypes(readFileSync(file,'utf8')),shortCircuit:true};}if(u.startsWith(prefix))return{format:'module',source:mocks.get(decodeURIComponent(u.slice(prefix.length))),shortCircuit:true};return next(u,c);}});
  try{return{module:await import(url.href),close(){hooks.deregister();delete globalThis[Symbol.for(key)];}};}catch(e){hooks.deregister();delete globalThis[Symbol.for(key)];throw e;}
 }
 test('actual server action checks both gates and closed form before connection configuration or dispatch',async()=>{
@@ -327,4 +329,15 @@ test('actual assessment editor wrapper denies bursar, missing class and identity
   const f=await load('src/server/accounts/staging-assessment-editor.ts',state);
   try{await withEnv(async()=>{const r=await f.module.readStagingAssessmentEditor(mode==='bursar'?'bursar':'admin','primary5',{classes:mode==='missing-class'?[]:[{key:'primary5'}]});assert.equal(r,null);assert.equal(state.events.some(e=>e[0]==='complete-candidate'),mode==='candidate');});}finally{f.close();}
  }
+});
+
+test('assessment editor exposes the independent save gate and a fresh read token only after a successful locked source read',async()=>{
+ const input=createApprovedSnapshotFixture().docs.input;
+ const directory={classes:[{key:'primary5',label:'Fixture class'}],records:input.enrollments.map(e=>({id:e.studentId,enrollmentId:e.id,classKey:'primary5',name:'Fixture pupil'}))};
+ const state={events:[],identity:{schoolId,role:'teacher'},lockedRole:'teacher',candidate:{ok:true,input}};
+ const f=await load('src/server/accounts/staging-assessment-editor.ts',state);
+ try{
+  await withEnv(async()=>{const r=await f.module.readStagingAssessmentEditor('teacher','primary5',directory);assert.ok(r);assert.equal(r.canSave,false);assert.match(r.readToken,/^[a-f0-9-]{36}$/);});
+  await withEnv(async()=>{const first=await f.module.readStagingAssessmentEditor('teacher','primary5',directory),second=await f.module.readStagingAssessmentEditor('teacher','primary5',directory);assert.equal(first.canSave,true);assert.equal(second.canSave,true);assert.notEqual(first.readToken,second.readToken);assert.equal(first.revision,second.revision);},{GREENFIELD_STAGING_ASSESSMENT_SCORES:'FICTIONAL_STAGING_SCORE_WRITES_ONLY'});
+ }finally{f.close();}
 });
