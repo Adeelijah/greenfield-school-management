@@ -5,6 +5,7 @@ import { dirname, resolve } from 'node:path';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const tests = [
+  'scripts/assessment-review-staging-target-review.test.mjs',
   'scripts/assessment-review-security.test.mjs',
   'scripts/assessment-review-writer.test.mjs',
   'scripts/assessment-review-upgrade-probe.test.mjs',
