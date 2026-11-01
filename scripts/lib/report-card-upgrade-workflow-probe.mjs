@@ -1,10 +1,11 @@
 // Opt-in workload on the upgraded generated schema and actual restricted LOGIN.
 // Fixture identity callbacks are not SDK authentication or request credentials.
 import assert from 'node:assert/strict';
+import {probeAssessmentReviewUpgrade} from './assessment-review-upgrade-probe.mjs';
 import { randomUUID } from 'node:crypto';
 import { upgradeFixtureSchema } from './report-card-upgrade-plan.mjs';
 import { disposableSessionRendezvous } from './disposable-session-rendezvous.mjs';
-import { loadFixtureCompleteAssessment, readFixtureVerifiedCanonicalAssessment } from '../../src/lib/academics/assessment-postgres-canonical-reader.ts';
+import { readFixtureVerifiedCanonicalAssessment } from '../../src/lib/academics/assessment-postgres-canonical-reader.ts';
 import { executeCompleteFixtureReport } from '../../src/lib/academics/report-card-complete-fixture-boundary.ts';
 import { executeFixtureReportWorkflow } from '../../src/lib/academics/report-card-postgres-workflow-writer.ts';
 import { executeFixtureCanonicalReportCommand } from '../../src/lib/academics/report-card-postgres-canonical-writer.ts';
@@ -44,19 +45,9 @@ export async function probeUpgradeWorkflow(db, restricted, schema, schoolId, adm
       await insert(tx, 'enrollments', { id: pupil.enrollment, school_id: schoolId, student_id: pupil.student, class_id: ids.class, session_id: ids.session });
       await insert(tx, 'assessment_scores', { id: pupil.score, school_id: schoolId, roster_id: ids.roster, config_version_id: ids.config, enrollment_id: pupil.enrollment, student_id: pupil.student, component_key: 'exam', numeric_score: pupil.mark, updated_by: ids.teacher });
     }
-    // Seed writer owns the EXCLUSIVE source gate before the candidate reader.
-    await tx.unsafe('SELECT id FROM ' + table('fixture_source_write_gate') + ' WHERE id=1 FOR UPDATE');
-    const loaded = await loadFixtureCompleteAssessment(tx, schema, selector, async () => ({ authUserId: adminAuth }));
-    assert.equal(loaded.ok, true, JSON.stringify(loaded));
-    assert.equal(loaded.input.students.length, 3);
-    const sourceId = randomUUID();
-    await insert(tx, 'assessment_source_versions', { id: sourceId, school_id: schoolId, scope_id: ids.scope, revision: loaded.input.scope.revision, source_manifest: JSON.parse(loaded.materialized.manifest.canonicalJson), content_hash: loaded.materialized.manifest.sha256 });
-    for (const subject of loaded.materialized.subjects) {
-      const reviewId = randomUUID();
-      await insert(tx, 'assessment_teacher_reviews', { id: reviewId, school_id: schoolId, scope_id: ids.scope, roster_id: subject.rosterId, source_version_id: sourceId, reviewer_membership_id: ids.teacher });
-      await insert(tx, 'assessment_finalizations', { id: randomUUID(), school_id: schoolId, scope_id: ids.scope, roster_id: subject.rosterId, source_version_id: sourceId, teacher_review_id: reviewId, finalized_by: adminMembershipId, results: JSON.parse(subject.results.canonicalJson), content_hash: subject.results.sha256 });
-    }
   });
+  await probeAssessmentReviewUpgrade(db,schema,selector,{schoolId,scopeId:ids.scope,rosterId:ids.roster,teacherAuth:ids.teacherAuth,adminAuth});
+
   const asWriter = work => restricted.begin(async tx => {
     await tx.unsafe('SET LOCAL ROLE "' + schema + '_writer"');
     await tx.unsafe("SET LOCAL statement_timeout='5s'");
@@ -185,6 +176,10 @@ export async function probeUpgradeWorkflow(db, restricted, schema, schoolId, adm
   const firstRelease = (await db.unsafe('SELECT id FROM ' + table('report_card_releases') + ' WHERE report_id=$1::uuid AND revoked_at IS NULL', [created.reportId]))[0].id;
   const revokeCommand = change('revoke', created.reportId, 4, 'upgrade-stale-revoke', { releaseId: firstRelease, reason: 'Withdraw stale fictional publication' });
   await pair(admin, revokeCommand);
+  await probeAssessmentReviewUpgrade(db,schema,selector,{schoolId,scopeId:ids.scope,rosterId:ids.roster,teacherAuth:ids.teacherAuth,adminAuth});
+  const recovered=await asWriter(tx=>readFixtureVerifiedCanonicalAssessment(tx,schema,selector,async()=>({authUserId:adminAuth})));
+  assert.equal(recovered.ok,true,JSON.stringify(recovered));
+  console.log('PASS: actual re-review and independent finalization recover a changed source while prior documents and published snapshots remain immutable');
   await db.unsafe('UPDATE ' + table('teacher_class_assignments') + ' SET ended_at=now() WHERE id=$1::uuid', [ids.assignment]);
   const beforeDenied = await history();
   assert.deepEqual(await run(teacher, submitCommand), { ok: false, code: 'forbidden' });
