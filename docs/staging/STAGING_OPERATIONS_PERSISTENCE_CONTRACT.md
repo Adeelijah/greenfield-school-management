@@ -76,3 +76,6 @@ Accepted target evidence now has a fixed managed review rollback rehearsal. It a
 
 
 The operator confirmed corrected managed review rollback PASS. Its committed counterpart now preserves the identical verified transaction body and retains only the intended two-role/guard/policy/grant installation after COMMIT. Temporary operator SET edges are removed and existing report/score/attendance state is checked before commit; LOGIN password and review/finalization enablement remain false. Installation success precedes dedicated LOGIN/TLS and SDK-owned browser actions. Existing seeded canonical history is preserved. See ASSESSMENT_REVIEW_MANAGED_INSTALLATION_REVIEW.md.
+
+
+Installed review catalog/permission verification is now operator-confirmed. A separate dedicated review LOGIN setup checks strict CA TLS, exact managed two-role graph, denied LOGIN data/helper access, approved runtime SELECT/UPDATE(id)/history INSERT privileges, school RLS and role reset. Explicit provisioning changes only its fixed LOGIN password; neither diagnostic nor runtime preparation enables SDK actions or canonical workload writes. Existing report/score/attendance graphs remain unchanged. The new runtime is not yet connected to application routes or the fixture-only writer; subsequent issued-scope/SDK/UI proof is still required. See ASSESSMENT_REVIEW_LOGIN_SETUP_REVIEW.md.
