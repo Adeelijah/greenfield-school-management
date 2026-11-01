@@ -9,6 +9,7 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'Offline checks failed; no database credentials requested.' }
     Write-Host 'Assessment review rehearsal targets localhost/greenfield_report_cards_disposable only.'
     Write-Host 'Runs the upgraded report and assessment review rehearsal in one generated local fixture; exact temporary roles are cleaned up.'
+    Write-Host 'Includes a separate review LOGIN, independent sessions, privilege denials and authority-lock probes.'
     Write-Host 'Greenfield staging attendance, scores and published reports are untouched.'
     $scorePgUser = Read-Host 'Authorized LOCAL disposable PostgreSQL superuser (usually postgres)'
     $scoreSecure = Read-Host 'LOCAL disposable PostgreSQL password (not a staging password)' -AsSecureString

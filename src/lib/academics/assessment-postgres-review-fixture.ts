@@ -1,11 +1,12 @@
 // Generated upgraded schemas ONLY. No public adapter, SDK, env, connection or grants.
 import {createHash,randomUUID} from 'node:crypto';
+import type {ReportSqlScope} from './report-card-sql-scope';
 import type {SqlDatabase,SqlClient} from './report-card-postgres-disposable-adapter';
 import type {AssessmentReviewOutcome} from './assessment-review-command';
 // @ts-expect-error Explicit source extension for the offline Node runner.
 import {parseAssessmentReviewCommand,decodeAssessmentReviewSuccess} from './assessment-review-command.ts';
 // @ts-expect-error Explicit source extension for the offline Node runner.
-import {fixtureReportSqlScope} from './report-card-sql-scope.ts';
+import {fixtureReportSqlScope,fixtureAssessmentReviewSqlScope,lockReportSqlScopeAuthority} from './report-card-sql-scope.ts';
 // @ts-expect-error Explicit source extension for the offline Node runner.
 import {lockReportActorInScope} from './report-card-postgres-command-context.ts';
 // @ts-expect-error Explicit source extension for the offline Node runner.
@@ -18,11 +19,12 @@ const abort=(code:ReviewAbort['code']):never=>{throw new ReviewAbort(code);};
  * Every row belongs to this outer transaction; failures must escape db.begin.
  * Fixture owner transport is not evidence of a deployable restricted service role.
  */
-export async function executeFixtureAssessmentReview(db:SqlDatabase,schema:string,verifiedIdentity:()=>Promise<{authUserId:string}|null>,raw:unknown):Promise<AssessmentReviewOutcome>{
- const scope=fixtureReportSqlScope(schema),cmd=parseAssessmentReviewCommand(raw);if(!scope||!cmd)return{ok:false,code:'invalid'};
+async function executeInFixtureScope(db:SqlDatabase,scope:ReportSqlScope|null,verifiedIdentity:()=>Promise<{authUserId:string}|null>,raw:unknown):Promise<AssessmentReviewOutcome>{
+ const cmd=parseAssessmentReviewCommand(raw);if(!scope||!cmd)return{ok:false,code:'invalid'};const schema=scope.schema;
  const table=(name:string)=>'"'+schema+'"."'+name+'"';
  const fingerprint=createHash('sha256').update(canonicalizeSnapshotValue(cmd)).digest('hex');
  try{return await db.begin(async(tx:SqlClient)=>{
+  if(!scope.reviewRuntime){const operator=await tx.unsafe('SELECT session_user AS login,current_user AS execution,r.rolsuper AS superuser FROM pg_catalog.pg_roles r WHERE r.rolname=current_user');if(operator.length!==1||operator[0]!.superuser!==true||operator[0]!.login!==operator[0]!.execution)return abort('forbidden');}
   if((await tx.unsafe('SELECT id FROM '+table('fixture_source_write_gate')+' WHERE id=1 FOR UPDATE')).length!==1)return abort('unavailable');
   const actor=await lockReportActorInScope(tx,scope,verifiedIdentity);if(!actor.ok)return abort('forbidden');
   const schoolId=actor.identity.school.id,member=actor.identity.membership;
@@ -63,6 +65,8 @@ export async function executeFixtureAssessmentReview(db:SqlDatabase,schema:strin
    if(reviews.length!==1)return abort('review_required');const reviewer=reviews[0]!.reviewer;
    const members=await tx.unsafe('SELECT m.id,m.user_id AS "userId",u.auth_user_id AS "authUserId" FROM '+table('memberships')+' m JOIN '+table('school_users')+' u ON u.id=m.user_id WHERE m.school_id=$1::uuid AND m.id=$2::uuid AND m.status=\'active\' AND m.role=\'teacher\' FOR SHARE OF m,u',[schoolId,reviewer]);
    if(members.length!==1||members[0]!.authUserId===actor.authUserId||reviewer===member.id||!await permission(String(reviewer)))return abort('forbidden');
+   const reviewAuthority=await lockReportSqlScopeAuthority(tx,scope,String(members[0]!.authUserId));
+   if(reviewAuthority===false||reviewAuthority&&(reviewAuthority.membershipId!==reviewer||reviewAuthority.role!=='teacher'||reviewAuthority.schoolId!==schoolId))return abort('forbidden');
    const active=await tx.unsafe('SELECT id FROM '+table('memberships')+' WHERE user_id=$1::uuid AND status=\'active\' ORDER BY id FOR SHARE',[members[0]!.userId]);if(active.length!==1||active[0]!.id!==reviewer)return abort('forbidden');
    const prior=await tx.unsafe('SELECT id FROM '+table('assessment_finalizations')+' WHERE school_id=$1::uuid AND source_version_id=$2::uuid AND roster_id=$3::uuid FOR SHARE',[schoolId,sourceId,cmd.rosterId]);if(prior.length)return abort('conflict');
    reviewId=cmd.teacherReviewId;finalizationId=randomUUID();await tx.unsafe('INSERT INTO '+table('assessment_finalizations')+' (id,school_id,scope_id,roster_id,source_version_id,teacher_review_id,finalized_by,results,content_hash) VALUES($1::uuid,$2::uuid,$3::uuid,$4::uuid,$5::uuid,$6::uuid,$7::uuid,$8::text::jsonb,$9)',[finalizationId,schoolId,selected.id,cmd.rosterId,sourceId,reviewId,member.id,subject.results.canonicalJson,subject.results.sha256]);
@@ -73,3 +77,6 @@ export async function executeFixtureAssessmentReview(db:SqlDatabase,schema:strin
   return result;
  });}catch(e){return{ok:false,code:e instanceof ReviewAbort?e.code:'unavailable'};}
 }
+
+export function executeFixtureAssessmentReview(db:SqlDatabase,schema:string,identity:()=>Promise<{authUserId:string}|null>,raw:unknown){return executeInFixtureScope(db,fixtureReportSqlScope(schema),identity,raw);}
+export function executeRestrictedFixtureAssessmentReview(db:SqlDatabase,schema:string,schoolId:string,identity:()=>Promise<{authUserId:string}|null>,raw:unknown){return executeInFixtureScope(db,fixtureAssessmentReviewSqlScope(schema,schoolId),identity,raw);}

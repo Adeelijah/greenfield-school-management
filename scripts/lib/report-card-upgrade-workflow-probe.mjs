@@ -12,7 +12,7 @@ import { executeFixtureCanonicalReportCommand } from '../../src/lib/academics/re
 import { executeFixtureReportRevocation } from '../../src/lib/academics/report-card-postgres-revoke-writer.ts';
 import { probeUpgradeServerEntry } from './report-card-upgrade-server-entry-probe.mjs';
 
-export async function probeUpgradeWorkflow(db, restricted, schema, schoolId, adminUserId, adminMembershipId) {
+export async function probeUpgradeWorkflow(db, restricted, schema, schoolId, adminUserId, adminMembershipId,reviewRuntime) {
   const q = upgradeFixtureSchema(schema), table = name => q + '."' + name + '"';
   const ids = Object.fromEntries(['teacherUser', 'teacherAuth', 'teacher', 'session', 'term', 'level', 'section', 'class', 'assignment', 'subject', 'config', 'scope', 'roster'].map(key => [key, randomUUID()]));
   const pupils = [0, 1, 2].map(index => ({ student: randomUUID(), enrollment: randomUUID(), score: randomUUID(), mark: ['86.0000', '69.9950', '55.0000'][index] }));
@@ -46,7 +46,7 @@ export async function probeUpgradeWorkflow(db, restricted, schema, schoolId, adm
       await insert(tx, 'assessment_scores', { id: pupil.score, school_id: schoolId, roster_id: ids.roster, config_version_id: ids.config, enrollment_id: pupil.enrollment, student_id: pupil.student, component_key: 'exam', numeric_score: pupil.mark, updated_by: ids.teacher });
     }
   });
-  await probeAssessmentReviewUpgrade(db,schema,selector,{schoolId,scopeId:ids.scope,rosterId:ids.roster,teacherAuth:ids.teacherAuth,adminAuth});
+  await probeAssessmentReviewUpgrade(db,schema,selector,{schoolId,scopeId:ids.scope,rosterId:ids.roster,teacherAuth:ids.teacherAuth,adminAuth},reviewRuntime);
 
   const asWriter = work => restricted.begin(async tx => {
     await tx.unsafe('SET LOCAL ROLE "' + schema + '_writer"');
@@ -176,7 +176,7 @@ export async function probeUpgradeWorkflow(db, restricted, schema, schoolId, adm
   const firstRelease = (await db.unsafe('SELECT id FROM ' + table('report_card_releases') + ' WHERE report_id=$1::uuid AND revoked_at IS NULL', [created.reportId]))[0].id;
   const revokeCommand = change('revoke', created.reportId, 4, 'upgrade-stale-revoke', { releaseId: firstRelease, reason: 'Withdraw stale fictional publication' });
   await pair(admin, revokeCommand);
-  await probeAssessmentReviewUpgrade(db,schema,selector,{schoolId,scopeId:ids.scope,rosterId:ids.roster,teacherAuth:ids.teacherAuth,adminAuth});
+  await probeAssessmentReviewUpgrade(db,schema,selector,{schoolId,scopeId:ids.scope,rosterId:ids.roster,teacherAuth:ids.teacherAuth,adminAuth},reviewRuntime);
   const recovered=await asWriter(tx=>readFixtureVerifiedCanonicalAssessment(tx,schema,selector,async()=>({authUserId:adminAuth})));
   assert.equal(recovered.ok,true,JSON.stringify(recovered));
   console.log('PASS: actual re-review and independent finalization recover a changed source while prior documents and published snapshots remain immutable');

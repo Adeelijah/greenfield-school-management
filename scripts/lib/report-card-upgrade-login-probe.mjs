@@ -1,5 +1,6 @@
 // Opt-in generated LOGIN probes. No application request/SDK/production connection.
 import assert from 'node:assert/strict';
+import {withAssessmentReviewFixture} from './assessment-review-restricted-fixture.mjs';
 import { randomBytes, randomUUID } from 'node:crypto';
 import postgres from 'postgres';
 import { disposableLoginURL, inspectDisposableLogin } from './disposable-login-plan.mjs';
@@ -114,6 +115,6 @@ export async function probeUpgradeLogin(db, adminURL, schema, schoolId, userId, 
     await db.unsafe('UPDATE ' + table('memberships') + " SET status='active' WHERE id=$1::uuid", [memberId]);
     assert.equal((await complete()).length, 1);
     console.log('PASS: upgraded LOGIN authority locks block suspension before discovery and later requests recheck committed membership');
-    await probeUpgradeWorkflow(db, restricted, schema, schoolId, userId, memberId);
+    await withAssessmentReviewFixture(db,adminURL,schema,schoolId,review=>probeUpgradeWorkflow(db, restricted, schema, schoolId, userId, memberId,review));
   } finally { await restricted.end(); }
 }

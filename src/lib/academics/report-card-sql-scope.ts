@@ -11,12 +11,17 @@ import { isReportCardUuid } from './report-card-request-command.ts';
 export type ReportSqlScope = Readonly<{
   schema: string; schoolId: string | null;
   sourceGate: 'fixture_source_write_gate' | 'assessment_source_write_gate';
+  reviewRuntime?: true;
 }>;
 const issued = new WeakSet<object>();
 function issue(scope: ReportSqlScope): ReportSqlScope { issued.add(scope); return Object.freeze(scope); }
 export function fixtureReportSqlScope(schema: string): ReportSqlScope | null {
   return typeof schema === 'string' && /^rc_it_[a-f0-9]{16}$/.test(schema)
     ? issue({ schema, schoolId: null, sourceGate: 'fixture_source_write_gate' }) : null;
+}
+/** Restricted review fixture only; role/helper names are never caller-selected. */
+export function fixtureAssessmentReviewSqlScope(schema:string,schoolId:string):ReportSqlScope|null{
+ return /^rc_it_[a-f0-9]{16}$/.test(schema)&&isReportCardUuid(schoolId)?issue({schema,schoolId:schoolId.toLowerCase(),sourceGate:'fixture_source_write_gate',reviewRuntime:true}):null;
 }
 export function stagingReportSqlScope(config: StagingReportRuntimeConfig): ReportSqlScope {
   if (!config || config.mode !== 'isolated-staging-review' || config.schema !== 'public' ||
@@ -36,9 +41,11 @@ export async function lockReportSqlScopeAuthority(tx: SqlClient, scope: ReportSq
   if (!isReportSqlScope(scope)) return false;
   if (scope.schoolId === null) return null;
   const session = await tx.unsafe('SELECT session_user AS "loginRole",current_user AS "executionRole"');
-  if (session.length !== 1 || session[0]!.loginRole !== 'greenfield_app' || session[0]!.executionRole !== 'greenfield_report_card_runtime') return false;
-  if ((await tx.unsafe('SELECT id FROM public.assessment_source_write_gate WHERE id=1 FOR SHARE')).length !== 1) return false;
-  const authority = decodeReportCardActorAuthority(authUserId, await tx.unsafe('SELECT * FROM public.lock_report_card_actor($1::uuid)', [authUserId]));
+  if (session.length !== 1 || session[0]!.loginRole !== (scope.reviewRuntime?scope.schema+'_review_login':'greenfield_app') || session[0]!.executionRole !== (scope.reviewRuntime?scope.schema+'_review_runtime':'greenfield_report_card_runtime')) return false;
+  const gate=scope.reviewRuntime?'"'+scope.schema+'"."fixture_source_write_gate"':'public.assessment_source_write_gate';
+  const helper=scope.reviewRuntime?'"'+scope.schema+'"."lock_report_card_actor"':'public.lock_report_card_actor';
+  if ((await tx.unsafe('SELECT id FROM '+gate+' WHERE id=1 FOR SHARE')).length !== 1) return false;
+  const authority = decodeReportCardActorAuthority(authUserId, await tx.unsafe('SELECT * FROM '+helper+'($1::uuid)', [authUserId]));
   return authority && authority.schoolId === scope.schoolId ? authority : false;
 }
 export function matchesReportSqlAuthority(authority: ReportCardActorAuthority | null | false, identity: MappedReportIdentity, schoolUserId: unknown): boolean {
