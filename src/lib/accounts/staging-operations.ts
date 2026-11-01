@@ -1,8 +1,9 @@
+import type {AssessmentSubjectReviewStatus} from '../academics/assessment-review-status';
 import type { CompleteAssessmentSource } from '../academics/assessment-canonical-source';
 import type { StagingDashboardData } from './staging-dashboard';
 export type AssessmentEditorView = {
-  classKey: string; classLabel: string; revision: number; canSave?: boolean; readToken?: string;
-  subjects: { id: string; name: string; mode: 'numeric' | 'observational'; configVersion: number; configVersionId: string; rosterVersion: number; components: { id: string; label: string; maximum: number; weight: number; required: boolean }[]; observations: { value: string; label: string }[]; bands: { min: number; max: number; label: string }[];
+  classKey: string; classLabel: string; revision: number; canSave?: boolean; canReview?:boolean; reviewRole?:'teacher'|'admin'; readToken?: string;
+  subjects: { review?:AssessmentSubjectReviewStatus; id: string; name: string; mode: 'numeric' | 'observational'; configVersion: number; configVersionId: string; rosterVersion: number; components: { id: string; label: string; maximum: number; weight: number; required: boolean }[]; observations: { value: string; label: string }[]; bands: { min: number; max: number; label: string }[];
     pupils: { id: string; enrollmentId: string; name: string; versions: Record<string,number>; values: Record<string,string> }[] }[];
 };
 /** Source has already passed complete relational materialization in the server

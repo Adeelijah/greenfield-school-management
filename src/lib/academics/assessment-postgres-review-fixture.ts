@@ -1,4 +1,5 @@
-// Generated upgraded schemas ONLY. No public adapter, SDK, env, connection or grants.
+// Issued-scope canonical transaction core plus generated-fixture compatibility entries.
+// No SDK, environment, connection or grants.
 import {createHash,randomUUID} from 'node:crypto';
 import type {ReportSqlScope} from './report-card-sql-scope';
 import type {SqlDatabase,SqlClient} from './report-card-postgres-disposable-adapter';
@@ -6,7 +7,7 @@ import type {AssessmentReviewOutcome} from './assessment-review-command';
 // @ts-expect-error Explicit source extension for the offline Node runner.
 import {parseAssessmentReviewCommand,decodeAssessmentReviewSuccess} from './assessment-review-command.ts';
 // @ts-expect-error Explicit source extension for the offline Node runner.
-import {fixtureReportSqlScope,fixtureAssessmentReviewSqlScope,lockReportSqlScopeAuthority} from './report-card-sql-scope.ts';
+import {fixtureReportSqlScope,fixtureAssessmentReviewSqlScope,isReportSqlScope,lockReportSqlScopeAuthority} from './report-card-sql-scope.ts';
 // @ts-expect-error Explicit source extension for the offline Node runner.
 import {lockReportActorInScope} from './report-card-postgres-command-context.ts';
 // @ts-expect-error Explicit source extension for the offline Node runner.
@@ -19,13 +20,13 @@ const abort=(code:ReviewAbort['code']):never=>{throw new ReviewAbort(code);};
  * Every row belongs to this outer transaction; failures must escape db.begin.
  * Fixture owner transport is not evidence of a deployable restricted service role.
  */
-async function executeInFixtureScope(db:SqlDatabase,scope:ReportSqlScope|null,verifiedIdentity:()=>Promise<{authUserId:string}|null>,raw:unknown):Promise<AssessmentReviewOutcome>{
- const cmd=parseAssessmentReviewCommand(raw);if(!scope||!cmd)return{ok:false,code:'invalid'};const schema=scope.schema;
+export async function executeAssessmentReviewInScope(db:Pick<SqlDatabase,'begin'>,scope:ReportSqlScope|null,verifiedIdentity:()=>Promise<{authUserId:string}|null>,raw:unknown):Promise<AssessmentReviewOutcome>{
+ const cmd=parseAssessmentReviewCommand(raw);if(!scope||!isReportSqlScope(scope)||!cmd)return{ok:false,code:'invalid'};const schema=scope.schema;
  const table=(name:string)=>'"'+schema+'"."'+name+'"';
  const fingerprint=createHash('sha256').update(canonicalizeSnapshotValue(cmd)).digest('hex');
  try{return await db.begin(async(tx:SqlClient)=>{
   if(!scope.reviewRuntime){const operator=await tx.unsafe('SELECT session_user AS login,current_user AS execution,r.rolsuper AS superuser FROM pg_catalog.pg_roles r WHERE r.rolname=current_user');if(operator.length!==1||operator[0]!.superuser!==true||operator[0]!.login!==operator[0]!.execution)return abort('forbidden');}
-  if((await tx.unsafe('SELECT id FROM '+table('fixture_source_write_gate')+' WHERE id=1 FOR UPDATE')).length!==1)return abort('unavailable');
+  if((await tx.unsafe('SELECT id FROM '+table(scope.sourceGate)+' WHERE id=1 FOR UPDATE')).length!==1)return abort('unavailable');
   const actor=await lockReportActorInScope(tx,scope,verifiedIdentity);if(!actor.ok)return abort('forbidden');
   const schoolId=actor.identity.school.id,member=actor.identity.membership;
   if(member.role!==(cmd.action==='review_subject'?'teacher':'admin'))return abort('forbidden');
@@ -78,5 +79,5 @@ async function executeInFixtureScope(db:SqlDatabase,scope:ReportSqlScope|null,ve
  });}catch(e){return{ok:false,code:e instanceof ReviewAbort?e.code:'unavailable'};}
 }
 
-export function executeFixtureAssessmentReview(db:SqlDatabase,schema:string,identity:()=>Promise<{authUserId:string}|null>,raw:unknown){return executeInFixtureScope(db,fixtureReportSqlScope(schema),identity,raw);}
-export function executeRestrictedFixtureAssessmentReview(db:SqlDatabase,schema:string,schoolId:string,identity:()=>Promise<{authUserId:string}|null>,raw:unknown){return executeInFixtureScope(db,fixtureAssessmentReviewSqlScope(schema,schoolId),identity,raw);}
+export function executeFixtureAssessmentReview(db:SqlDatabase,schema:string,identity:()=>Promise<{authUserId:string}|null>,raw:unknown){return executeAssessmentReviewInScope(db,fixtureReportSqlScope(schema),identity,raw);}
+export function executeRestrictedFixtureAssessmentReview(db:SqlDatabase,schema:string,schoolId:string,identity:()=>Promise<{authUserId:string}|null>,raw:unknown){return executeAssessmentReviewInScope(db,fixtureAssessmentReviewSqlScope(schema,schoolId),identity,raw);}

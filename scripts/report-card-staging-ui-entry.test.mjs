@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import { registerHooks, stripTypeScriptTypes } from 'node:module';
 import { readFileSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
+import * as reviewPolicy from '../src/lib/academics/assessment-review-staging-policy.ts';
 import * as scorePolicy from '../src/lib/academics/assessment-score-staging-policy.ts';
 import * as assessmentOperations from '../src/lib/accounts/staging-operations.ts';
 import * as academicPages from '../src/lib/accounts/staging-academic-pages.ts';
@@ -16,15 +17,17 @@ import { createApprovedSnapshotFixture } from '../src/lib/academics/report-card-
 import { buildApprovedReportSnapshot } from '../src/lib/academics/report-card-approved-snapshot.ts';
 import { materializeAssessmentSource } from '../src/lib/academics/assessment-canonical-source.ts';
 const schoolId=policy.stagingSchoolId, id='00000000-0000-4000-8000-000000000001';
-const env={NODE_ENV:'development',GREENFIELD_STAGING_UI:'LOCAL_STAGING_REPORTS_ONLY',NEXT_PUBLIC_SUPABASE_URL:policy.stagingProjectUrl,NEXT_PUBLIC_SUPABASE_ANON_KEY:'sb_publishable_test',GREENFIELD_STAGING_COMMANDS:'FICTIONAL_STAGING_WRITES_ONLY',GREENFIELD_STAGING_ASSESSMENT_SCORES:'DISABLED'};
+const env={NODE_ENV:'development',GREENFIELD_STAGING_UI:'LOCAL_STAGING_REPORTS_ONLY',NEXT_PUBLIC_SUPABASE_URL:policy.stagingProjectUrl,NEXT_PUBLIC_SUPABASE_ANON_KEY:'sb_publishable_test',GREENFIELD_STAGING_COMMANDS:'FICTIONAL_STAGING_WRITES_ONLY',GREENFIELD_STAGING_ASSESSMENT_SCORES:'DISABLED',GREENFIELD_STAGING_ASSESSMENT_REVIEW:'DISABLED'};
 async function withEnv(work,changes={}){const previous=Object.fromEntries(Object.keys(env).map(k=>[k,process.env[k]]));Object.assign(process.env,env,changes);try{return await work();}finally{for(const[k,v]of Object.entries(previous))if(v===undefined)delete process.env[k];else process.env[k]=v;}}
 function form(extra={}){const f=new FormData();for(const[k,v]of Object.entries({action:'submit',operationKey:'intent',reportId:id,expectedVersion:'1',...extra}))f.append(k,v);return f;}
 async function load(path,state){
- state.scorePolicy=scorePolicy;state.assessmentOperations=assessmentOperations;state.academicPages=academicPages;state.dashboardProjection=projectStagingDashboard;state.staffDecoder=decodeStagingStaffAccount;state.decoders=fixtureAssessmentDecoders;state.approvedPolicy=approvedPolicy;
+ state.reviewPolicy=reviewPolicy;state.scorePolicy=scorePolicy;state.assessmentOperations=assessmentOperations;state.academicPages=academicPages;state.dashboardProjection=projectStagingDashboard;state.staffDecoder=decodeStagingStaffAccount;state.decoders=fixtureAssessmentDecoders;state.approvedPolicy=approvedPolicy;
  const token=randomUUID(),key='greenfield-staging-ui-'+token;globalThis[Symbol.for(key)]=state;
  const context=`globalThis[Symbol.for(${JSON.stringify(key)})]`,url=new URL('../'+path,import.meta.url);url.searchParams.set('test',token);
  const mocks=new Map([
   ['server-only','export {};'],
+  ['@/lib/academics/assessment-review-staging-policy',`export const assessmentReviewWritesEnabled=${context}.reviewPolicy.assessmentReviewWritesEnabled;`],
+  ['@/lib/academics/assessment-review-status',`export async function readAssessmentReviewStatus(){${context}.events.push(['review-status']);return ${context}.reviewStatus??null;}`],
   ['@/lib/academics/assessment-score-staging-policy',`export const assessmentScoreWritesEnabled=${context}.scorePolicy.assessmentScoreWritesEnabled;`],
   ['@/lib/accounts/staging-operations',`export const projectAssessmentEditor=${context}.assessmentOperations.projectAssessmentEditor;`],
   ['@/server/accounts/staging-assessment-editor',`export async function readStagingAssessmentEditor(){${context}.events.push(['assessment-editor']);return null;}`],
@@ -339,5 +342,16 @@ test('assessment editor exposes the independent save gate and a fresh read token
  try{
   await withEnv(async()=>{const r=await f.module.readStagingAssessmentEditor('teacher','primary5',directory);assert.ok(r);assert.equal(r.canSave,false);assert.match(r.readToken,/^[a-f0-9-]{36}$/);});
   await withEnv(async()=>{const first=await f.module.readStagingAssessmentEditor('teacher','primary5',directory),second=await f.module.readStagingAssessmentEditor('teacher','primary5',directory);assert.equal(first.canSave,true);assert.equal(second.canSave,true);assert.notEqual(first.readToken,second.readToken);assert.equal(first.revision,second.revision);},{GREENFIELD_STAGING_ASSESSMENT_SCORES:'FICTIONAL_STAGING_SCORE_WRITES_ONLY'});
+ }finally{f.close();}
+});
+
+test('assessment editor loads current review status only behind its independent gate and disables actions when status is unavailable',async()=>{
+ const input=createApprovedSnapshotFixture().docs.input;
+ const directory={classes:[{key:'primary5',label:'Fixture class'}],records:input.enrollments.map(e=>({id:e.studentId,enrollmentId:e.id,classKey:'primary5',name:'Fixture pupil'}))};
+ const state={events:[],identity:{schoolId,role:'teacher'},lockedRole:'teacher',candidate:{ok:true,input},reviewStatus:Object.fromEntries(input.roster.map(r=>[r.id,{state:'unreviewed',reviewId:null,finalizationId:null}]))};
+ const f=await load('src/server/accounts/staging-assessment-editor.ts',state);
+ try{
+  await withEnv(async()=>{const r=await f.module.readStagingAssessmentEditor('teacher','primary5',directory);assert.ok(r);assert.equal(r.canReview,undefined);assert.ok(!state.events.some(e=>e[0]==='review-status'));});
+  await withEnv(async()=>{const r=await f.module.readStagingAssessmentEditor('teacher','primary5',directory);assert.equal(r.canReview,true);assert.equal(r.reviewRole,'teacher');assert.equal(r.subjects[0].review.state,'unreviewed');state.reviewStatus=null;const denied=await f.module.readStagingAssessmentEditor('teacher','primary5',directory);assert.equal(denied.canReview,false);assert.equal(denied.subjects[0].review,undefined);},{GREENFIELD_STAGING_ASSESSMENT_REVIEW:'FICTIONAL_STAGING_REVIEW_WRITES_ONLY'});
  }finally{f.close();}
 });

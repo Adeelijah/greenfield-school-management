@@ -1,5 +1,7 @@
 import 'server-only';
 import {randomUUID} from 'node:crypto';
+import {assessmentReviewWritesEnabled} from '@/lib/academics/assessment-review-staging-policy';
+import {readAssessmentReviewStatus} from '@/lib/academics/assessment-review-status';
 import {assessmentScoreWritesEnabled} from '@/lib/academics/assessment-score-staging-policy';
 import { resolveVerifiedReportCardIdentity } from '@/server/auth/report-card-identity';
 import { getLocalStagingDatabase, localStagingRuntimeConfig } from '@/server/academics/report-card-staging-connection';
@@ -22,6 +24,11 @@ export async function readStagingAssessmentEditor(role:'admin'|'teacher'|'bursar
    const loaded=await loadCompleteAssessmentInScope(tx,scope,selector,verified);
    if(!loaded.ok)return{ok:false,code:'unavailable'}as const;
    const view=projectAssessmentEditor(loaded.input,directory,classKey);
+   if(view&&assessmentReviewWritesEnabled(process.env)){
+    const status=await readAssessmentReviewStatus(tx,stagingSchoolId,loaded.input.scope.id,loaded.input.scope.revision,loaded.materialized,authority.role,authority.membershipId);
+    view.canReview=!!status;view.reviewRole=authority.role;
+    if(status)view.subjects=view.subjects.map(s=>({...s,review:status[s.id]}));
+   }
    return view?{ok:true,view}as const:{ok:false,code:'unavailable'}as const;
   }));return result.ok?{...result.view,canSave:assessmentScoreWritesEnabled(process.env),readToken:randomUUID()}:null;
  }catch{return null;}
