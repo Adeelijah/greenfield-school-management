@@ -28,11 +28,20 @@ function decode(raw: unknown, command: FinanceCommand): FinanceFixtureOutcome | 
 /** The trusted server/fixture callback supplies the verified identity, never the request. */
 export async function executeFinancePostingFixture(db: FinanceFixtureDatabase, schema: string, identity: () => Promise<{ authUserId: string } | null>, raw: unknown): Promise<FinanceFixtureOutcome> {
   if (!/^fi_it_[a-f0-9]{16}$/.test(schema)) return { ok: false, code: 'invalid' };
+  return executePosting(db, schema, schema, identity, raw);
+}
+
+export async function executeFinanceUpgradePostingFixture(db: FinanceFixtureDatabase, schema: string, identity: () => Promise<{ authUserId: string } | null>, raw: unknown): Promise<FinanceFixtureOutcome> {
+  if (!/^rc_it_[a-f0-9]{16}$/.test(schema)) return { ok: false, code: 'invalid' };
+  return executePosting(db, schema, schema + '_finance', identity, raw);
+}
+
+async function executePosting(db: FinanceFixtureDatabase, schema: string, prefix: string, identity: () => Promise<{ authUserId: string } | null>, raw: unknown): Promise<FinanceFixtureOutcome> {
   const command = parseFinanceCommand(raw);
   if (!command) return { ok: false, code: 'invalid' };
   const payload = JSON.stringify(command);
-  const login = schema + '_login';
-  const worker = schema + '_worker';
+  const login = prefix + '_login';
+  const worker = prefix + '_worker';
   try {
     const principal = await identity();
     if (!principal || !uuid(principal.authUserId)) return { ok: false, code: 'forbidden' };

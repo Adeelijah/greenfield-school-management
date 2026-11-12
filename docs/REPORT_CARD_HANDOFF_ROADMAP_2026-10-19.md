@@ -795,3 +795,8 @@ The operator confirmed 865/865 offline checks. The new local finance rehearsal c
 ### Finance storage passed; restricted posting rehearsal prepared
 
 The operator reported all seven finance storage PostgreSQL checks passing. The next generated fixture adds a private payment/reversal routine, exact SET-only worker, complete membership lookup before replay, atomic posting and two independent local login sessions. Twelve new offline tests bring the expected full total to 887; 71 focused checks passed in authoring. Run `scripts/verify-finance-posting-disposable.ps1` to verify the actual PostgreSQL behavior. No managed SQL, upgraded-schema integration, live invoice issuance, SDK finance session or finance UI has been enabled. See `FINANCE_POSTING_DISPOSABLE_REVIEW.md`.
+
+
+### Restricted finance posting passed; upgraded-schema rehearsal prepared
+
+The operator reported all PostgreSQL posting checks passing on `ef5bd60`. Upgraded mode now composes the real academic/report fixture with finance storage, keeps existing parent/report guards and uses the shared source gate ahead of the finance lock. Six new offline tests bring the expected total to 893; 77 focused checks passed in authoring. Run `scripts/verify-finance-posting-disposable.ps1 -Upgraded` to verify database behavior and cross-module isolation. No managed SQL, live issuance, SDK finance session or UI is enabled. See `FINANCE_POSTING_UPGRADE_REVIEW.md`.

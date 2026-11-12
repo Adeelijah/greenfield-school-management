@@ -1,9 +1,13 @@
 // Storage-constraint candidate only. No role grants, SDK, environment or managed SQL.
-export function financeStorageFixturePlan(schema){
- if(typeof schema!=='string'||!/^fi_it_[a-f0-9]{16}$/.test(schema))throw Error('Exact generated finance fixture required');
+export function financeStorageFixturePlan(schema){return storagePlan(schema,false);}
+export function financeUpgradeStorageFixturePlan(schema){return storagePlan(schema,true);}
+function storagePlan(schema,upgraded){
+ const pattern=upgraded?/^rc_it_[a-f0-9]{16}$/:/^fi_it_[a-f0-9]{16}$/;
+ if(typeof schema!=='string'||!pattern.test(schema))throw Error('Exact generated finance fixture required');
  const q='"'+schema+'"',t=name=>q+'."'+name+'"';
  const amount='BETWEEN 0 AND 999999999999';
- const parents=[
+ const termBinding=upgraded?'FOREIGN KEY(school_id,session_id,term_id) REFERENCES '+t('terms')+'(school_id,session_id,id)':'FOREIGN KEY(school_id,term_id,session_id) REFERENCES '+t('terms')+'(school_id,id,session_id)';
+ const parents=upgraded?[]:[
   `CREATE TABLE ${t('schools')}(id uuid PRIMARY KEY)`,
   `CREATE TABLE ${t('school_users')}(id uuid PRIMARY KEY,auth_user_id uuid NOT NULL UNIQUE)`,
   `CREATE TABLE ${t('memberships')}(id uuid PRIMARY KEY,school_id uuid NOT NULL REFERENCES ${t('schools')},user_id uuid NOT NULL REFERENCES ${t('school_users')},role text NOT NULL CHECK(role IN ('admin','bursar','teacher')),status text NOT NULL CHECK(status IN ('active','suspended')),UNIQUE(school_id,id))`,
@@ -14,7 +18,7 @@ export function financeStorageFixturePlan(schema){
   `CREATE TABLE ${t('enrollments')}(id uuid PRIMARY KEY,school_id uuid NOT NULL,student_id uuid NOT NULL,class_id uuid NOT NULL,session_id uuid NOT NULL,FOREIGN KEY(school_id,student_id) REFERENCES ${t('students')}(school_id,id),FOREIGN KEY(school_id,class_id) REFERENCES ${t('classes')}(school_id,id),FOREIGN KEY(school_id,session_id) REFERENCES ${t('academic_sessions')}(school_id,id),UNIQUE(school_id,id,student_id,class_id,session_id))`,
  ];
  const tables=[
-  `CREATE TABLE ${t('finance_schedules')}(id uuid PRIMARY KEY,school_id uuid NOT NULL,class_id uuid NOT NULL,session_id uuid NOT NULL,term_id uuid NOT NULL,active_version integer NOT NULL CHECK(active_version BETWEEN 1 AND 2147483646),FOREIGN KEY(school_id,class_id) REFERENCES ${t('classes')}(school_id,id),FOREIGN KEY(school_id,session_id) REFERENCES ${t('academic_sessions')}(school_id,id),FOREIGN KEY(school_id,term_id,session_id) REFERENCES ${t('terms')}(school_id,id,session_id),UNIQUE(school_id,class_id,session_id,term_id),UNIQUE(school_id,id,class_id,session_id,term_id),UNIQUE(school_id,id))`,
+  `CREATE TABLE ${t('finance_schedules')}(id uuid PRIMARY KEY,school_id uuid NOT NULL,class_id uuid NOT NULL,session_id uuid NOT NULL,term_id uuid NOT NULL,active_version integer NOT NULL CHECK(active_version BETWEEN 1 AND 2147483646),FOREIGN KEY(school_id,class_id) REFERENCES ${t('classes')}(school_id,id),FOREIGN KEY(school_id,session_id) REFERENCES ${t('academic_sessions')}(school_id,id),${termBinding},UNIQUE(school_id,class_id,session_id,term_id),UNIQUE(school_id,id,class_id,session_id,term_id),UNIQUE(school_id,id))`,
   `CREATE TABLE ${t('finance_schedule_versions')}(school_id uuid NOT NULL,schedule_id uuid NOT NULL,version integer NOT NULL CHECK(version BETWEEN 1 AND 2147483646),class_id uuid NOT NULL,session_id uuid NOT NULL,term_id uuid NOT NULL,total_kobo bigint NOT NULL CHECK(total_kobo BETWEEN 1 AND 999999999999),PRIMARY KEY(school_id,schedule_id,version),FOREIGN KEY(school_id,schedule_id,class_id,session_id,term_id) REFERENCES ${t('finance_schedules')}(school_id,id,class_id,session_id,term_id),UNIQUE(school_id,schedule_id,version,class_id,session_id,term_id,total_kobo))`,
   `CREATE TABLE ${t('finance_schedule_items')}(school_id uuid NOT NULL,schedule_id uuid NOT NULL,schedule_version integer NOT NULL,fee_id uuid NOT NULL,label text NOT NULL CHECK(label=btrim(label) AND length(label) BETWEEN 1 AND 160),amount_kobo bigint NOT NULL CHECK(amount_kobo ${amount}),PRIMARY KEY(school_id,schedule_id,schedule_version,fee_id),FOREIGN KEY(school_id,schedule_id,schedule_version) REFERENCES ${t('finance_schedule_versions')}(school_id,schedule_id,version),UNIQUE(school_id,schedule_id,schedule_version,fee_id,label,amount_kobo))`,
   `CREATE TABLE ${t('finance_invoices')}(id uuid PRIMARY KEY,school_id uuid NOT NULL,student_id uuid NOT NULL,enrollment_id uuid NOT NULL,class_id uuid NOT NULL,session_id uuid NOT NULL,term_id uuid NOT NULL,schedule_id uuid NOT NULL,schedule_version integer NOT NULL,total_kobo bigint NOT NULL,currency text NOT NULL CHECK(currency='NGN'),issued_on date NOT NULL,version integer NOT NULL CHECK(version BETWEEN 1 AND 2147483646),FOREIGN KEY(school_id,enrollment_id,student_id,class_id,session_id) REFERENCES ${t('enrollments')}(school_id,id,student_id,class_id,session_id),FOREIGN KEY(school_id,schedule_id,schedule_version,class_id,session_id,term_id,total_kobo) REFERENCES ${t('finance_schedule_versions')}(school_id,schedule_id,version,class_id,session_id,term_id,total_kobo),UNIQUE(school_id,enrollment_id,term_id),UNIQUE(school_id,id),UNIQUE(school_id,id,schedule_id,schedule_version))`,

@@ -145,3 +145,6 @@ The finance storage rehearsal adds ten offline composition and safety tests (exp
 
 
 The finance posting wrapper runs the full offline verifier (887 expected tests), then requests local disposable credentials. The separately confirmed rehearsal creates one nonce-marked generated schema and three generated roles, including a passworded fixture LOGIN used in two independent sessions. It does not target staging, expose a live route or change existing data. See `FINANCE_POSTING_DISPOSABLE_REVIEW.md`.
+
+
+Use `scripts/verify-finance-posting-disposable.ps1 -Upgraded` for the generated academic/report plus finance rehearsal. It runs the 893-test offline verifier before requesting local credentials and uses nonce-acknowledged cleanup of one generated schema and five roles. Without the switch the prior minimal-parent mode is preserved. See `FINANCE_POSTING_UPGRADE_REVIEW.md`.

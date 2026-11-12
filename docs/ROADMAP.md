@@ -72,3 +72,6 @@ After the operator's 865-test pass, a guarded local rehearsal was prepared for t
 
 
 The local finance storage rehearsal passed. The restricted posting candidate now adds payment, receipt, reversal and replay under fixture authority with a two-session PostgreSQL rehearsal. Run the local rehearsal before advancing to actual upgraded-schema integration. See `FINANCE_POSTING_DISPOSABLE_REVIEW.md`.
+
+
+Restricted finance posting passed its minimal local PostgreSQL rehearsal. The upgraded-schema candidate now reuses the existing parent gate and checks that academic/report data and reader permissions are preserved. Upgraded PostgreSQL verification, authenticated invoice issuance, managed installation and finance UI remain pending. See `FINANCE_POSTING_UPGRADE_REVIEW.md`.

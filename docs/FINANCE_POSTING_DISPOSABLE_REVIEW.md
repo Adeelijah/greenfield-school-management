@@ -15,3 +15,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\verify-finance-pos
 ```
 
 The wrapper runs the full offline verifier before requesting local PostgreSQL credentials. Expected offline total: 887. Authoring passed 71 focused checks; this new PostgreSQL rehearsal has not yet been run. This is a minimal-parent fixture with a trusted UUID callback, no SDK session, no managed installation and no live finance UI. Its fixture-wide lock is intentionally coarse; integration with the upgraded schema and its existing parent locks, live issuance and SDK authority remain separate work.
+
+## Operator result
+
+The operator reported all restricted posting checks passing on `ef5bd60`. The same workload is now prepared for the upgraded academic/report fixture; see `FINANCE_POSTING_UPGRADE_REVIEW.md`.

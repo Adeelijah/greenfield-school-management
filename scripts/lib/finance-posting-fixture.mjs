@@ -1,13 +1,17 @@
-import {financeStorageFixturePlan} from './finance-storage-fixture.mjs';
+import {financeStorageFixturePlan,financeUpgradeStorageFixturePlan} from './finance-storage-fixture.mjs';
 
 // Exact generated schema/roles only. The trusted fixture caller supplies an auth UUID.
-export function financePostingFixturePlan(schema){
- const storage=financeStorageFixturePlan(schema),q='"'+schema+'"',t=name=>q+'."'+name+'"';
- const roles={owner:schema+'_owner',worker:schema+'_worker',login:schema+'_login'};
+export function financePostingFixturePlan(schema){return postingPlan(schema,false);}
+export function financeUpgradePostingFixturePlan(schema){return postingPlan(schema,true);}
+function postingPlan(schema,upgraded){
+ const storage=(upgraded?financeUpgradeStorageFixturePlan:financeStorageFixturePlan)(schema),q='"'+schema+'"',t=name=>q+'."'+name+'"';
+ const prefix=schema+(upgraded?'_finance':'');
+ const roles={owner:prefix+'_owner',worker:prefix+'_worker',login:prefix+'_login'};
  const owner='"'+roles.owner+'"',worker='"'+roles.worker+'"',login='"'+roles.login+'"';
  const gate=`pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended('${schema}:finance-fixture',0))`;
  const parents=['schools','school_users','memberships','academic_sessions','terms','classes','students','enrollments'];
- const relations=[...parents,...storage.financeRelations];
+ const relations=upgraded?storage.financeRelations:[...parents,...storage.financeRelations];
+ const parentGate=upgraded?`PERFORM id FROM ${t('fixture_source_write_gate')} WHERE id=1 FOR SHARE; IF NOT FOUND THEN RAISE EXCEPTION 'Missing shared parent source gate'; END IF;`:'';
  const post=`CREATE FUNCTION ${t('post_finance')}(verified_auth uuid,cmd jsonb) RETURNS jsonb
  LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $post$
  DECLARE
@@ -37,6 +41,7 @@ export function financePostingFixturePlan(schema){
    v_payment:=(cmd->>'paymentId')::uuid;
   END IF;
 
+  ${parentGate}
   PERFORM ${gate};
   IF (SELECT count(*) FROM ${t('school_users')} u WHERE u.auth_user_id=verified_auth)<>1 OR (SELECT count(*) FROM ${t('memberships')} m JOIN ${t('school_users')} u ON u.id=m.user_id WHERE u.auth_user_id=verified_auth AND m.status='active')<>1 THEN RETURN '{"ok":false,"code":"forbidden"}'; END IF;
   SELECT m.id,m.school_id,m.role INTO actor FROM ${t('memberships')} m JOIN ${t('school_users')} u ON u.id=m.user_id WHERE u.auth_user_id=verified_auth AND m.status='active';
@@ -75,7 +80,7 @@ export function financePostingFixturePlan(schema){
   RETURN jsonb_build_object('ok',true,'kind','applied','result',v_outcome);
  END $post$`;
  const functions=[
-  `CREATE FUNCTION ${t('lock_finance_discovery')}() RETURNS trigger LANGUAGE plpgsql SET search_path=pg_catalog AS $gate$ BEGIN PERFORM ${gate}; RETURN NULL; END $gate$`,post,
+  `CREATE FUNCTION ${t('lock_finance_discovery')}() RETURNS trigger LANGUAGE plpgsql SET search_path=pg_catalog AS $gate$ BEGIN ${parentGate} PERFORM ${gate}; RETURN NULL; END $gate$`,post,
   `ALTER FUNCTION ${t('check_finance_storage')}() SECURITY DEFINER`,
   `ALTER FUNCTION ${t('check_finance_storage')}() OWNER TO ${owner}`,
   `ALTER FUNCTION ${t('post_finance')}(uuid,jsonb) OWNER TO ${owner}`,
@@ -87,14 +92,25 @@ export function financePostingFixturePlan(schema){
    `CREATE POLICY finance_private_owner ON ${t(name)} TO ${owner} USING (true) WITH CHECK (true)`,
    `CREATE TRIGGER finance_discovery BEFORE INSERT OR UPDATE OR DELETE OR TRUNCATE ON ${t(name)} FOR EACH STATEMENT EXECUTE FUNCTION ${t('lock_finance_discovery')}()`,
   ]),
-  `REVOKE ALL ON SCHEMA ${q} FROM PUBLIC`,
-  `REVOKE ALL ON ALL TABLES IN SCHEMA ${q} FROM PUBLIC,${worker},${login}`,
-  `REVOKE ALL ON ALL FUNCTIONS IN SCHEMA ${q} FROM PUBLIC,${worker},${login}`,
+  ...(upgraded?[]:[`REVOKE ALL ON SCHEMA ${q} FROM PUBLIC`]),
+  ...(upgraded?[
+   `REVOKE ALL ON ${storage.financeRelations.map(t).join(',')} FROM PUBLIC,${worker},${login}`,
+   ...['post_finance(uuid,jsonb)','check_finance_storage()','lock_finance_discovery()','deny_finance_history_change()','freeze_finance_anchor()'].map(sig=>{const [name,args]=sig.split('(');return `REVOKE ALL ON FUNCTION ${t(name)}(${args} FROM PUBLIC,${worker},${login}`;}),
+  ]:[`REVOKE ALL ON ALL TABLES IN SCHEMA ${q} FROM PUBLIC,${worker},${login}`,`REVOKE ALL ON ALL FUNCTIONS IN SCHEMA ${q} FROM PUBLIC,${worker},${login}`]),
   `GRANT USAGE ON SCHEMA ${q} TO ${owner},${worker}`,
-  `GRANT SELECT ON ALL TABLES IN SCHEMA ${q} TO ${owner}`,
+  ...(upgraded?[
+   `GRANT SELECT ON ${['school_users','memberships','fixture_source_write_gate',...storage.financeRelations].map(t).join(',')} TO ${owner}`,
+   `GRANT UPDATE(id) ON ${t('fixture_source_write_gate')} TO ${owner}`,
+   ...['school_users','memberships','fixture_source_write_gate'].map(name=>`CREATE POLICY finance_owner_read ON ${t(name)} FOR SELECT TO ${owner} USING (${name==='fixture_source_write_gate'?'id=1':'true'})`),
+   `CREATE POLICY finance_owner_gate_lock ON ${t('fixture_source_write_gate')} FOR UPDATE TO ${owner} USING (id=1) WITH CHECK (false)`,
+  ]:[`GRANT SELECT ON ALL TABLES IN SCHEMA ${q} TO ${owner}`]),
   `GRANT INSERT ON ${['finance_payments','finance_receipts','finance_reversals','finance_audit','finance_operation_receipts'].map(t).join(',')} TO ${owner}`,
   `GRANT UPDATE(version) ON ${t('finance_invoices')} TO ${owner}`,
   `GRANT EXECUTE ON FUNCTION ${t('post_finance')}(uuid,jsonb) TO ${worker}`,
  ];
- return {storage,roles,relations,post,statements:[...functions,...security]};
+ const preflight=upgraded?[`DO $finance$ BEGIN
+  IF (SELECT count(*) FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='${schema}' AND c.relname IN ('school_users','memberships','fixture_source_write_gate') AND c.relrowsecurity AND c.relforcerowsecurity)<>3 THEN RAISE EXCEPTION 'Finance requires the restricted upgraded parent layout'; END IF;
+  IF (SELECT count(*) FROM pg_catalog.pg_trigger tr WHERE tr.tgrelid IN ('${schema}.school_users'::regclass,'${schema}.memberships'::regclass) AND tr.tgname='fixture_authority_gate' AND tr.tgenabled='O' AND tr.tgfoid='${schema}.fixture_lock_source_write()'::regprocedure)<>2 OR NOT EXISTS(SELECT 1 FROM ${t('fixture_source_write_gate')} WHERE id=1) THEN RAISE EXCEPTION 'Finance requires the existing parent gate'; END IF;
+ END $finance$`]:[];
+ return {storage,roles,relations,post,statements:[...preflight,...functions,...security]};
 }
