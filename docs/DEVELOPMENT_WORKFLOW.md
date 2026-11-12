@@ -142,3 +142,6 @@ The operator reported the managed review/finalization browser flow working after
 
 
 The finance storage rehearsal adds ten offline composition and safety tests (expected full total: 875). The wrapper runs the full offline verifier before requesting local disposable credentials. The owner-run rehearsal creates one generated schema, creates no roles and checks exact acknowledgement before cleanup. It tests storage constraints and rollback, not authenticated finance posting, RLS or independent-session concurrency. See `FINANCE_STORAGE_DISPOSABLE_REVIEW.md`.
+
+
+The finance posting wrapper runs the full offline verifier (887 expected tests), then requests local disposable credentials. The separately confirmed rehearsal creates one nonce-marked generated schema and three generated roles, including a passworded fixture LOGIN used in two independent sessions. It does not target staging, expose a live route or change existing data. See `FINANCE_POSTING_DISPOSABLE_REVIEW.md`.

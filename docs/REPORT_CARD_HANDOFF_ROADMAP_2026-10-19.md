@@ -790,3 +790,8 @@ After the 8628d3a local-launch/browser instructions, the operator reported "all 
 ### Finance policy gate passed; storage rehearsal prepared
 
 The operator confirmed 865/865 offline checks. The new local finance rehearsal covers pinned invoice/enrollment and fee versions, receipts, once-only reversals, exact audit/operation history, deferred balance checks, immutable rows and rollback after each write. It uses ten finance relations and eight minimal fictional parents in a nonce-acknowledged generated schema. No roles or live finance routes are added. Ten new offline checks bring the expected full total to 875; 59 focused checks passed in authoring. Run `scripts/verify-finance-storage-disposable.ps1` to verify PostgreSQL behavior locally. After that, implement complete finance authority and a restricted writer against the upgraded schema. See `FINANCE_STORAGE_DISPOSABLE_REVIEW.md`.
+
+
+### Finance storage passed; restricted posting rehearsal prepared
+
+The operator reported all seven finance storage PostgreSQL checks passing. The next generated fixture adds a private payment/reversal routine, exact SET-only worker, complete membership lookup before replay, atomic posting and two independent local login sessions. Twelve new offline tests bring the expected full total to 887; 71 focused checks passed in authoring. Run `scripts/verify-finance-posting-disposable.ps1` to verify the actual PostgreSQL behavior. No managed SQL, upgraded-schema integration, live invoice issuance, SDK finance session or finance UI has been enabled. See `FINANCE_POSTING_DISPOSABLE_REVIEW.md`.

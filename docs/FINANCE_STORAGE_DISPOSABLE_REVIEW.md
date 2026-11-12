@@ -39,3 +39,7 @@ Send bounded PASS/FAIL lines only. This command does not use any staging passwor
 ## Authoring checks
 
 Ten new pure composition/safety checks plus sixteen finance policy and 33 review regressions pass: **59 focused checks**. Expected full offline count: **875**. JavaScript syntax/import and whitespace checks are offline. No SQL parser, database connection, PostgreSQL execution, full compiler/lint run, managed installation, finance UI or browser result is claimed. The owner-run PostgreSQL groups above are prepared and require the operator command before claiming the storage candidate passed.
+
+## Operator result
+
+The operator reported all seven PostgreSQL storage checks passing, including rollback and cleanup. The next candidate is documented in `FINANCE_POSTING_DISPOSABLE_REVIEW.md`.

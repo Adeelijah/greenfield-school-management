@@ -69,3 +69,6 @@ The next MVP priority is bursar finance. src/lib/finance/finance.ts now provides
 ### Finance storage milestone
 
 After the operator's 865-test pass, a guarded local rehearsal was prepared for ten finance tables covering fee versions, pinned invoices, payments, receipts, reversals and audit history. Authoring passed 59 focused checks. PostgreSQL verification is pending the local disposable run. Complete admin/bursar authority, restricted posting, upgraded-schema integration and live finance UI remain to be built. See `FINANCE_STORAGE_DISPOSABLE_REVIEW.md`.
+
+
+The local finance storage rehearsal passed. The restricted posting candidate now adds payment, receipt, reversal and replay under fixture authority with a two-session PostgreSQL rehearsal. Run the local rehearsal before advancing to actual upgraded-schema integration. See `FINANCE_POSTING_DISPOSABLE_REVIEW.md`.
